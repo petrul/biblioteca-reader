@@ -290,7 +290,12 @@ function loadChapterContent(chapter: Chapter): void {
   const cached = chapterCache.get(chapter.workId, chapter.id);
   if (cached) {
     Object.assign(chapter, cached);
-    notify();
+    // Not notify() right away: this runs inside getChapter(), which
+    // ReaderView calls while rendering, and a synchronous notify sets App's
+    // state mid-render (React's "Cannot update a component while rendering
+    // a different component" on every page turn to a prefetched chapter).
+    // The current render already sees the content assigned above.
+    queueMicrotask(notify);
     return;
   }
 
