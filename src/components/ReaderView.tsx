@@ -651,7 +651,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       // the settings button in particular lives in the navbar, outside
       // this component's own DOM subtree entirely, so it needs its own
       // explicit check rather than falling out of the panel's own markup.
-      if (!target.closest('#settings-dropdown') && !target.closest('button[title="Reader Display Preferences"]')) {
+      // Matched by id, not its title: the tooltip text changes (it gained
+      // the "(s)" shortcut hint), which silently broke the button.
+      if (!target.closest('#settings-dropdown') && !target.closest('#nav-reader-settings-btn')) {
         setShowSettings(false);
       }
       if (!target.closest('#download-dropdown') && !target.closest('#btn-reader-download-toggle')) {
