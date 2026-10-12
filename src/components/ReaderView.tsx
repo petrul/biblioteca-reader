@@ -48,6 +48,8 @@ import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
 import { useReaderScrollPosition } from '../hooks/useReaderScrollPosition';
 import { useSpeechReader } from '../hooks/useSpeechReader';
 import { useSwipeNavigate } from '../hooks/useSwipeNavigate';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { FootnoteSheet } from './FootnoteSheet';
 import { PaymentCheckoutModal } from './PaymentCheckoutModal';
 import { bibliotecaExternalUrl, chapterContentUrl, ENDING_ORNAMENT_IMAGE } from '../services/serversideApi';
 import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
@@ -248,6 +250,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // did nothing on mobile. This surfaces the same text as a dismissible
   // popover for both input types.
   const [footnote, setFootnote] = useState<{ text: string; x: number; y: number } | null>(null);
+  // Phones (below Tailwind's sm) get the footnote as a bottom sheet instead
+  // of the popover anchored at its chip - see FootnoteSheet.
+  const footnoteAsSheet = useMediaQuery('(max-width: 639px)');
   // Handles notes in the incoming HTML, including its chapter heading.
   const handleNoteClick = (e: React.MouseEvent) => {
     const chip = (e.target as HTMLElement).closest<HTMLElement>('.note');
@@ -523,7 +528,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       const target = event.target as HTMLElement | null;
       if (target?.matches('input, textarea, select, [contenteditable="true"]') &&
           !(showTocMenu && target.id === 'reader-toc-search')) return;
-      if (showSettings) setShowSettings(false);
+      if (footnote) setFootnote(null);
+      else if (showSettings) setShowSettings(false);
       else if (showTocMenu) setShowTocMenu(false);
       else if (showDownload) setShowDownload(false);
       else if (showShareMenu) setShowShareMenu(false);
@@ -532,10 +538,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     };
     window.addEventListener('keydown', handleEscapeKey);
     return () => window.removeEventListener('keydown', handleEscapeKey);
-  }, [showStats, showSettings, showTocMenu, showDownload, showShareMenu]);
+  }, [footnote, showStats, showSettings, showTocMenu, showDownload, showShareMenu]);
 
-  // Land back on the reading face when moving to a different chapter.
-  useEffect(() => { setShowStats(false); }, [chapter?.id]);
+  // Land back on the reading face when moving to a different chapter, and
+  // drop an open footnote popover with the page it belongs to - keyboard
+  // page turns (arrow keys) never pass through the outside-click close.
+  useEffect(() => { setShowStats(false); setFootnote(null); }, [chapter?.id]);
 
   // The download dropdown lives on the back face: flipping back to reading
   // closes it, so it is not still open on the next flip.
@@ -645,7 +653,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           setSelectionCoords(null);
         }
       }
-      if (!target.closest('#footnote-popover') && !target.closest('.note')) {
+      if (!target.closest('#footnote-popover') && !target.closest('#footnote-sheet-root') && !target.closest('.note')) {
         setFootnote(null);
       }
       // Settings/download/share dropdowns: close on a genuine tap outside
@@ -1537,8 +1545,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </div>
       </main>
 
-      {/* Footnote content on tap/click - see the .note chip's onClick above */}
-      {footnote && (
+      {/* Footnote content on tap/click - see the .note chip's onClick above:
+          a bottom sheet on phones, a popover at the chip elsewhere */}
+      {footnote && footnoteAsSheet && (
+        <FootnoteSheet key={`${footnote.x},${footnote.y},${footnote.text}`} text={footnote.text} onClose={() => setFootnote(null)} />
+      )}
+      {footnote && !footnoteAsSheet && (
         <div
           id="footnote-popover"
           style={{

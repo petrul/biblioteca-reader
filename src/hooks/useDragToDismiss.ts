@@ -8,41 +8,57 @@ import React, { useRef, useState } from 'react';
  * the way via its own closing-transition state) or snaps back to 0 if the
  * drag didn't pass the threshold.
  *
- * Consumer is expected to apply `transform: translateX(${dragX}px)` (and
- * skip the CSS transition while isDragging is true, so the drag tracks
- * 1:1 with no lag) whenever it isn't itself in a separate "closing"
- * animation state.
+ * Consumer is expected to apply `transform: translateX(${dragX}px)` - or
+ * `translateY(${dragY}px)` for a bottom sheet dragged 'down' - (and skip
+ * the CSS transition while isDragging is true, so the drag tracks 1:1 with
+ * no lag) whenever it isn't itself in a separate "closing" animation state.
  */
-export function useDragToDismiss(direction: 'left' | 'right', onDismiss: () => void, threshold = 80) {
-  const [dragX, setDragX] = useState(0);
+export function useDragToDismiss(direction: 'left' | 'right' | 'down', onDismiss: () => void, threshold = 80) {
+  const [offset, setOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const startX = useRef<number | null>(null);
+  const start = useRef<number | null>(null);
+  // The live offset for onTouchEnd: the state above may not have re-rendered
+  // since the last touchmove (continuous events are batched), and a stale
+  // read made a long drag snap back instead of dismissing.
+  const latest = useRef(0);
+  const vertical = direction === 'down';
+  const coordinate = (touch: React.Touch) => (vertical ? touch.clientY : touch.clientX);
 
   const onTouchStart = (e: React.TouchEvent) => {
-    startX.current = e.touches[0].clientX;
+    start.current = coordinate(e.touches[0]);
+    latest.current = 0;
     setIsDragging(true);
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
-    if (startX.current === null) return;
-    const dx = e.touches[0].clientX - startX.current;
+    if (start.current === null) return;
+    const delta = coordinate(e.touches[0]) - start.current;
     // Only track movement in the dismiss direction - the opposite
     // direction clamps to 0 rather than overshooting past "fully open".
-    setDragX(direction === 'left' ? Math.min(0, dx) : Math.max(0, dx));
+    latest.current = direction === 'left' ? Math.min(0, delta) : Math.max(0, delta);
+    setOffset(latest.current);
   };
 
   const onTouchEnd = () => {
     setIsDragging(false);
-    const passedThreshold = direction === 'left' ? dragX < -threshold : dragX > threshold;
+    const passedThreshold = direction === 'left' ? latest.current < -threshold : latest.current > threshold;
     if (passedThreshold) {
       onDismiss();
-      // Leave dragX where it is - the panel's own closing-transition state
-      // takes over from this exact position once isDragging flips off.
+      // Leave the offset where it is - the panel's own closing-transition
+      // state takes over from this exact position once isDragging flips off.
     } else {
-      setDragX(0);
+      latest.current = 0;
+      setOffset(0);
     }
-    startX.current = null;
+    start.current = null;
   };
 
-  return { dragX, isDragging, onTouchStart, onTouchMove, onTouchEnd };
+  return {
+    dragX: vertical ? 0 : offset,
+    dragY: vertical ? offset : 0,
+    isDragging,
+    onTouchStart,
+    onTouchMove,
+    onTouchEnd,
+  };
 }
