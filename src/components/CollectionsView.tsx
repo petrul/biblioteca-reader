@@ -229,7 +229,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
         {/* Right Main Panel: Collection Details and Saved Items */}
         <div className="lg:col-span-3 space-y-6">
           {currentCollection && (
-            // Same card as the work page's (bg-scriptorium-blue: index.css's --scriptorium-theme-blue).
+            // Same card as the work page's (bg-scriptorium-blue: index.css's --scriptorium-card-blue).
             <div className="bg-scriptorium-blue rounded-2xl border border-emerald-500/20 p-6 sm:p-8 shadow-xl">
               {/* Collection Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-emerald-500/15">

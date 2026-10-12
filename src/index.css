@@ -4,10 +4,12 @@
 @layer base {
   :root {
     --scriptorium-blue: #044a6f;
-    /* THE card blue - work cards and collection cards (bg-scriptorium-blue).
-       Change it here. It equals the mobile browser's colour (index.html's
-       <meta name="theme-color">); keep the two in sync. */
+    /* The mobile browser's colour (index.html's <meta name="theme-color">);
+       keep the two in sync. */
     --scriptorium-theme-blue: #024063;
+    /* THE card blue - work cards and collection cards (bg-scriptorium-blue):
+       the TOC modal's deep blue. Change it here. */
+    --scriptorium-card-blue: #061d28;
     --font-serif: "Newsreader", "Lora", Georgia, serif;
     --font-display: "Cinzel", "Newsreader", serif;
     --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
@@ -279,7 +281,7 @@
 }
 
 .bg-scriptorium-blue {
-  background-color: var(--scriptorium-theme-blue);
+  background-color: var(--scriptorium-card-blue);
 }
 
 .bg-scriptorium-gradient {
