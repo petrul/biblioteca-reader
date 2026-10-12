@@ -1,6 +1,7 @@
 # Biblioteca Reader
 
-Textbase Reader is the browser UI for the canonical TEI corpus exposed by `textbase-server`. It keeps the existing discovery, scholarly reader, collections, search, admin, and payment designs while presenting live server records first and the original demonstration corpus afterward for comparison.
+Textbase Reader is the browser UI for the TEI corpus exposed by `textbase-server`. 
+It keeps the existing discovery, scholarly reader, collections, search, admin, and payment designs while presenting live server records first and the original demonstration corpus afterward for comparison.
 
 ## Run locally
 
