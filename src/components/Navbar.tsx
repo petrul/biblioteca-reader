@@ -282,7 +282,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="w-full relative flex items-center"
               >
                 <div className="relative w-full flex items-center">
-                  <Search className="w-4 h-4 text-[#f59e0b] absolute left-3.5 pointer-events-none" />
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={handleCloseSearch}
+                    aria-label="Close search"
+                    title="Close search"
+                    className="absolute left-2 p-1.5 rounded-md text-[#f59e0b] hover:text-white hover:bg-emerald-500/20 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                   <input
                     ref={searchInputRef}
                     type="text"

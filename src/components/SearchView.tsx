@@ -374,8 +374,22 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
       {/* Search Input Box with Mode-Specific Controls (Translucent White Matte Glass) */}
       <div className="bg-white/[0.12] backdrop-blur-xl rounded-2xl border border-white/30 p-5 shadow-[0_8px_32px_0_rgba(0,0,0,0.25)] mb-8 space-y-4">
-        <div className="relative flex items-center">
-          <Search className="w-5 h-5 absolute left-4 text-white/60 pointer-events-none" />
+        <form
+          className="relative flex items-center"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setPage(1);
+            setDebouncedQuery(query);
+          }}
+        >
+          <button
+            type="submit"
+            aria-label="Search"
+            title="Search"
+            className="absolute left-2.5 p-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/15 cursor-pointer transition-all"
+          >
+            <Search className="w-5 h-5" />
+          </button>
           <input
             id="input-search-query"
             type="text"
@@ -392,6 +406,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
           {query && (
             <button
               id="btn-search-clear-query"
+              type="button"
               onClick={() => {
                 setQuery('');
                 setPage(1);
@@ -402,7 +417,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
               <X className="w-4 h-4" />
             </button>
           )}
-        </div>
+        </form>
 
         {/* Mode-Specific Fine-tuning Toggles */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/15 text-xs">
