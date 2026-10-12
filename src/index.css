@@ -1,0 +1,343 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@layer base {
+  :root {
+    --scriptorium-blue: #044a6f;
+    /* THE card blue - work cards and collection cards (bg-scriptorium-blue).
+       Change it here. It equals the mobile browser's colour (index.html's
+       <meta name="theme-color">); keep the two in sync. */
+    --scriptorium-theme-blue: #024063;
+    --font-serif: "Newsreader", "Lora", Georgia, serif;
+    --font-display: "Cinzel", "Newsreader", serif;
+    --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: linear-gradient(90deg, rgba(2, 64, 99, 1) 0%, rgba(60, 168, 63, 1) 22%, var(--scriptorium-blue) 100%);
+    background-attachment: fixed;
+    color: #e4efe9;
+    min-height: 100vh;
+  }
+}
+
+.font-serif-reading {
+  font-family: var(--font-serif);
+}
+
+/* Chapter body typography, ported from the old Spring MVC reader
+   (teidiv.css: `p { font-family: Alegreya, "Times New Roman", Times, serif;
+   text-align: justify; hyphens: auto; }`) - scoped to the reader's own
+   content container rather than replacing --font-serif app-wide, since
+   that class is also used for unrelated chrome (nav, cards, quote UI). */
+.font-alegreya-reading {
+  font-family: "Alegreya", "Times New Roman", Times, serif;
+}
+
+/* The "gentium" typeface choice - Gentium Book Plus (Google Fonts), with
+   the locally installed Gentium fallback and Georgia behind it. Scoped
+   like .font-alegreya-reading, app-wide fonts stay untouched. */
+.font-gentium-reading {
+  font-family: "Gentium Book Plus", "Gentium Fallback", Georgia, serif;
+}
+
+/* The "sans" typeface choice for the reading surface - Fira Sans, scoped
+   like .font-alegreya-reading so the app-wide --font-sans (Plus Jakarta
+   Sans, used by all the chrome) stays untouched. */
+.font-fira-reading {
+  font-family: "Fira Sans", "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+/* The reading surface's own typography, mirroring teidiv.css exactly so
+   the reader page is set the same as the original server page. Identical
+   under all three themes on purpose: themes own the colors, this owns the
+   type. Tailwind's preflight resets paragraph margins to 0, so the
+   browser-default 1em paragraph spacing teidiv.css relies on must be
+   restored explicitly; the section headings, stanza lines and notes are
+   the old stylesheet's own rules verbatim. */
+.reader-text-container {
+  /* div.body-of-text { padding-bottom: 3em; } */
+  padding-bottom: 3em;
+  /* Numbering for the footnote markers (.note) below. */
+  counter-reset: note-mark;
+}
+.reader-text-container p {
+  text-align: justify;
+  hyphens: auto;
+  /* p { font-size: 16pt; font-family: Alegreya, ...; } relied on the
+     browser's default paragraph spacing - 1em block margins. */
+  margin-block: 1em;
+}
+.reader-text-container p.subtitle {
+  /* p.subtitle: italic, centered, pulled toward the heading above it */
+  font-style: italic;
+  text-align: center;
+  margin-top: -1em;
+  margin-bottom: 2em;
+}
+/* A standalone subtitle has no preceding heading to pull toward. */
+.reader-text-container .subtitle:first-child {
+  margin-top: 0;
+}
+/* Keep the server's headings in place with the original reader title-block
+   typography and spacing, independent of the body font-size preference. */
+.reader-text-container :is(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  text-align: center;
+  margin-block: 0 2.5rem;
+  padding-block: 0 2rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+.reader-text-container .head-label {
+  display: block;
+  font-variant: small-caps;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5rem;
+  letter-spacing: normal;
+  opacity: 0.7;
+  margin-bottom: 0.375rem;
+}
+@media (min-width: 640px) {
+  .reader-text-container :is(h1, h2, h3, h4, h5, h6) {
+    font-size: 2.25rem;
+  }
+  .reader-text-container .head-label {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+  }
+}
+.reader-text-container hr {
+  margin-block: 2rem;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+.reader-text-container .lg {
+  /* .lg { width: max-content; margin-left: auto; margin-right: auto; } -
+     the pre-alignment baseline; poemAlignment's inline margins/widths
+     take over from here exactly like the original page's own JS. */
+  width: max-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+.reader-text-container .l {
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  width: max-content;
+}
+.reader-text-container .l:last-child {
+  margin-bottom: 1em;
+}
+.reader-text-container img.illustration {
+  /* teidiv.css: `.illustration { max-width: 100%; display: block;
+     margin: auto; }` - server content wraps each chapter illustration
+     in a bare p.justify, so without this the inline img sits at the
+     left edge of the justified line instead of centered. */
+  max-width: 100%;
+  display: block;
+  margin-inline: auto;
+}
+.reader-text-container .note {
+  /* teidiv.css had `.note { padding: 3px; background-color: yellow;
+     color: black; }` - carried over verbatim, this rendered as a 6x6px
+     yellow blob: the TEI note's marker text never survives into the
+     button's <sup> here, so the only visible thing was padding. Replace
+     the yellow with the site's emerald and synthesize the missing
+     marker as a numbered chip; the note's full text stays in the title
+     tooltip (and the old server page's Bootstrap tooltip). */
+  counter-increment: note-mark;
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 0.35em;
+  margin: 0 0.1em;
+  border: none;
+  border-radius: 9999px;
+  background-color: #059669;
+  color: #ffffff;
+  font-size: 0.6em;
+  line-height: 1.7;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: super;
+  cursor: help;
+}
+.reader-text-container .note::before {
+  content: counter(note-mark);
+}
+/* The empty <sup> the TEI transformation leaves inside the button would
+   otherwise stretch the chip; the counter provides the visible mark. */
+.reader-text-container .note sup {
+  display: none;
+}
+
+/* Selected text on the reading surface. The app root's selection:
+   utilities tint selected text pale amber app-wide, which on the light
+   paper/parch cards renders the text invisible. Scope the site's emerald
+   here (same green as the footnote chips) with white text - a solid,
+   legible pairing under all three themes, and specific enough to win
+   over the root's *::selection rules. */
+.reader-text-container ::selection {
+  background-color: #059669;
+  color: #ffffff;
+}
+
+/* The Random Discovery buttons' dice-tumble: a quick tumbling wiggle on
+   the Sparkles icon, class-added on click (removed on animationend) and
+   restarted via the reflow trick so rapid re-clicks replay it. Paired
+   with the buttons' active:scale-95 press dip. */
+@keyframes shuffle-tumble {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-90deg) translateY(-2px) scale(0.8); }
+  50% { transform: rotate(90deg) translateY(1px) scale(1.15); }
+  75% { transform: rotate(-45deg) scale(0.9); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+.shuffle-tumble { animation: shuffle-tumble 0.45s ease-in-out; }
+
+/* The bottom tabs' selected-icon pop: plays when the class is applied to
+   the newly active tab's icon. */
+@keyframes tab-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.tab-pop { animation: tab-pop 0.3s ease-out; }
+
+/* The prev/next buttons' visual "tapped" flash when navigation is driven
+   by the ArrowLeft/ArrowRight keys instead of a mouse/finger - same
+   press-dip as the buttons' own active:scale-95 active:brightness-90,
+   applied to BOTH the bottom and the top buttons for the pressed key. */
+@keyframes key-tap {
+  0% { transform: scale(1); filter: brightness(1); }
+  35% { transform: scale(0.95); filter: brightness(0.9); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.key-tapped { animation: key-tap 200ms ease-out; }
+
+.font-display-title {
+  font-family: var(--font-display);
+}
+
+@keyframes works-page-enter-next {
+  from { opacity: 1; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes works-page-enter-previous {
+  from { opacity: 1; transform: translateX(-100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.works-page-enter-next { animation: works-page-enter-next 1400ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.works-page-enter-previous { animation: works-page-enter-previous 1400ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .works-page-enter-next, .works-page-enter-previous { animation: none; }
+}
+
+/* The reader's chapter turn: the text column swings in like a card turned
+   on its edge - hinged on the left for the next chapter, on the right for
+   the previous one. The free edge starts in front of the screen and comes
+   down onto the page (from above), not up from behind it. A one-shot class (ReaderView), only for next/previous
+   navigation (buttons, arrow keys, swipes), never for a TOC jump.
+   Reserved for opening a book - in-book turns play the slide below. */
+@keyframes chapter-turn-next {
+  from { transform: perspective(1500px) rotateY(-75deg); opacity: 0.2; }
+  to { transform: perspective(1500px) rotateY(0deg); opacity: 1; }
+}
+@keyframes chapter-turn-prev {
+  from { transform: perspective(1500px) rotateY(75deg); opacity: 0.2; }
+  to { transform: perspective(1500px) rotateY(0deg); opacity: 1; }
+}
+.chapter-turn-next { transform-origin: left center; animation: chapter-turn-next 550ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.chapter-turn-prev { transform-origin: right center; animation: chapter-turn-prev 550ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* The turn used for every in-book next/previous navigation: the new
+   chapter slides in from the direction of travel, as if it were following
+   the old page off the screen - in from the right going forward, in from
+   the left going back. The slight fade keeps the incoming sheet from
+   flashing over the old text. */
+@keyframes chapter-slide-next {
+  from { transform: translateX(100%); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes chapter-slide-prev {
+  from { transform: translateX(-100%); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.chapter-slide-next { animation: chapter-slide-next 450ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.chapter-slide-prev { animation: chapter-slide-prev 450ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .chapter-turn-next, .chapter-turn-prev, .chapter-slide-next, .chapter-slide-prev { animation: none; }
+}
+
+.font-mono-tei {
+  font-family: var(--font-mono);
+}
+
+.bg-scriptorium-blue {
+  background-color: var(--scriptorium-theme-blue);
+}
+
+.bg-scriptorium-gradient {
+  background: linear-gradient(90deg, rgba(2, 64, 99, 1) 0%, rgba(60, 168, 63, 1) 22%, var(--scriptorium-blue) 100%);
+}
+
+.bg-scriptorium-subtle {
+  background: linear-gradient(90deg, rgba(2, 64, 99, 0.94) 0%, rgba(60, 168, 63, 0.88) 22%, color-mix(in srgb, var(--scriptorium-blue) 94%, transparent) 100%);
+}
+
+.border-glass {
+  border-color: rgba(52, 211, 153, 0.18);
+}
+
+.bg-surface {
+  background-color: rgba(2, 42, 60, 0.85);
+}
+
+.bg-surface-elevated {
+  background-color: rgba(3, 55, 78, 0.9);
+}
+
+.bg-surface-active {
+  background-color: rgba(6, 73, 98, 0.95);
+}
+
+.text-accent {
+  color: #f59e0b;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #022a3c;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(60, 168, 63, 0.4);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.6);
+}
+
+/* Drop cap for rich reading */
+.chapter-content p:first-of-type::first-letter {
+  font-family: var(--font-display);
+  float: left;
+  font-size: 3.6em;
+  line-height: 0.8;
+  padding-top: 4px;
+  padding-right: 10px;
+  padding-bottom: 2px;
+  font-weight: 700;
+  color: var(--drop-cap-color, #f59e0b);
+}

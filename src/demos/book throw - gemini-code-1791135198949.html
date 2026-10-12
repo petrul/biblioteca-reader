@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Library Desk - 12 Volume Infinite Slam</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes bookSlam {
+      0% {
+        opacity: 0;
+        transform: translate3d(-150%, -200%, 400px) rotate(-45deg) rotateY(25deg) scale(1.8);
+      }
+      60% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotate(var(--settle-rotate, 6deg)) scale(0.97);
+      }
+      75% {
+        transform: translate3d(0, -10px, 25px) rotate(calc(var(--settle-rotate, 6deg) - 2deg)) scale(1.02);
+      }
+      88% {
+        transform: translate3d(-2px, 2px, 0) rotate(calc(var(--settle-rotate, 6deg) + 1deg)) scale(1);
+      }
+      100% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotate(var(--settle-rotate, 2deg)) scale(1);
+      }
+    }
+
+    @keyframes deskThud {
+      0%, 100% { transform: translateY(0); }
+      25% { transform: translateY(4px); }
+      50% { transform: translateY(-1px); }
+    }
+
+    .animate-book-slam {
+      animation: bookSlam 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .animate-desk-thud {
+      animation: deskThud 0.35s ease-out;
+    }
+
+    /* Rich Oak Wood Grain */
+    .wood-desk {
+      background-color: #231203;
+      background-image: 
+        radial-gradient(ellipse at 50% 30%, rgba(68, 38, 12, 0.5) 0%, rgba(15, 7, 1, 0.9) 100%),
+        repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0, 0, 0, 0.18) 3px, rgba(0, 0, 0, 0.18) 6px),
+        linear-gradient(90deg, #381f08 0%, #231203 25%, #42250b 50%, #1c0e02 75%, #301a06 100%);
+      background-attachment: fixed;
+    }
+
+    /* Leather Spine and Depth */
+    .book-3d {
+      box-shadow: 
+        -5px 10px 20px rgba(0, 0, 0, 0.75),
+        inset -3px 0 8px rgba(0, 0, 0, 0.5),
+        inset 3px 0 8px rgba(255, 255, 255, 0.15);
+    }
+  </style>
+</head>
+<body class="wood-desk min-h-screen p-6 text-amber-100 select-none overflow-x-hidden">
+
+  <!-- Fixed Top Control Bar -->
+  <header class="fixed top-0 left-0 right-0 z-50 bg-black/60 backdrop-blur-md border-b border-amber-900/40 p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-serif font-bold text-amber-200 tracking-wider">BIBLIOTECA IMPERIALIS</h1>
+      <p class="text-xs text-amber-400/60 font-mono">12-Volume Grid • Infinite Desk Scroll</p>
+    </div>
+    <div class="flex items-center gap-4">
+      <span id="volumeCounter" class="text-xs font-mono text-amber-300/80 bg-amber-950/80 px-3 py-1.5 rounded-full border border-amber-800/40">
+        Volumes Loaded: 12
+      </span>
+      <button id="resetBtn" class="px-5 py-2 bg-amber-800 hover:bg-amber-700 active:scale-95 text-amber-100 font-serif font-semibold text-sm rounded-lg border border-amber-600/40 transition">
+        ↺ Clear & Re-Slam
+      </button>
+    </div>
+  </header>
+
+  <!-- Desk Workspace -->
+  <main class="mt-24 max-w-6xl mx-auto">
+    <div id="deskSurface" class="w-full p-8 bg-amber-950/30 rounded-3xl border-4 border-amber-900/40 shadow-2xl [perspective:1200px]">
+      
+      <!-- 4x3 Grid (4 Columns, N Rows) -->
+      <div id="bookGrid" class="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8"></div>
+
+      <!-- Infinite Scroll Trigger Sentinel -->
+      <div id="infiniteSentinel" class="h-24 flex items-center justify-center mt-12">
+        <div class="flex items-center gap-3 text-amber-400/50 text-sm font-serif italic">
+          <span class="animate-spin text-lg">⏳</span> Unrolling more manuscripts down the desk...
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    const bookTemplates = [
+      { title: 'BIBLIOTECA', author: 'C. V. Vol I', bg: 'bg-red-950', border: 'border-amber-700/50', text: 'text-amber-300' },
+      { title: 'HISTORIA', author: 'Chronicles', bg: 'bg-emerald-950', border: 'border-emerald-600/50', text: 'text-emerald-200' },
+      { title: 'POESIA', author: 'Antologia', bg: 'bg-indigo-950', border: 'border-indigo-500/50', text: 'text-indigo-200' },
+      { title: 'ARCHITECTURA', author: 'Codex 1590', bg: 'bg-amber-900', border: 'border-amber-500/50', text: 'text-amber-200' },
+      { title: 'PHILOSOPHIA', author: 'Dicta', bg: 'bg-slate-900', border: 'border-slate-600/50', text: 'text-slate-200' },
+      { title: 'ASTRONOMIA', author: 'Siderius', bg: 'bg-blue-950', border: 'border-blue-500/50', text: 'text-blue-200' },
+      { title: 'MEDICINA', author: 'Herbarium', bg: 'bg-teal-950', border: 'border-teal-600/50', text: 'text-teal-200' },
+      { title: 'ALCHEMY', author: 'Magnum Opus', bg: 'bg-purple-950', border: 'border-purple-500/50', text: 'text-purple-200' },
+    ];
+
+    let totalLoaded = 0;
+    let isBatchLoading = false;
+    const grid = document.getElementById('bookGrid');
+    const desk = document.getElementById('deskSurface');
+    const resetBtn = document.getElementById('resetBtn');
+    const volumeCounter = document.getElementById('volumeCounter');
+
+    // Audio synth for heavy book thud
+    function playSlamSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(100, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(28, ctx.currentTime + 0.22);
+        gain.gain.setValueAtTime(0.7, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.22);
+      } catch (e) {}
+    }
+
+    function appendBookBatch(count = 12) {
+      if (isBatchLoading) return;
+      isBatchLoading = true;
+
+      for (let i = 0; i < count; i++) {
+        totalLoaded++;
+        const template = bookTemplates[(totalLoaded - 1) % bookTemplates.length];
+        const randomRotate = (Math.random() * 12 - 6).toFixed(1) + 'deg'; // -6deg to +6deg
+        const delayMs = (i % 4) * 120; // Stagger per row batch
+
+        const card = document.createElement('div');
+        card.className = 'animate-book-slam opacity-0 cursor-pointer hover:rotate-0 hover:scale-105 transition-transform duration-300';
+        card.style.setProperty('--settle-rotate', randomRotate);
+        card.style.animationDelay = `${delayMs}ms`;
+
+        card.innerHTML = `
+          <div class="book-3d relative w-full aspect-[3/4] ${template.bg} rounded-r-lg rounded-l-sm border-y border-r ${template.border} p-4 flex flex-col justify-between overflow-hidden">
+            <div class="absolute left-0 top-0 bottom-0 w-3 bg-black/40 border-r border-amber-500/20"></div>
+            <div class="pl-2 border-l-2 border-amber-500/30 h-full flex flex-col justify-between">
+              <div>
+                <p class="text-[9px] uppercase tracking-widest ${template.text} opacity-60 font-mono">Vol. #${totalLoaded}</p>
+                <h2 class="text-base md:text-lg font-serif font-bold ${template.text} tracking-wider mt-1 border-b border-amber-500/20 pb-1">${template.title}</h2>
+              </div>
+              <div class="text-center my-2">
+                <span class="text-xl ${template.text} opacity-40">❦</span>
+              </div>
+              <div>
+                <p class="text-[10px] font-serif ${template.text} opacity-75 italic">${template.author}</p>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Sound + desk thud trigger
+        setTimeout(() => {
+          if (i % 2 === 0) playSlamSound();
+          desk.classList.remove('animate-desk-thud');
+          void desk.offsetWidth;
+          desk.classList.add('animate-desk-thud');
+        }, delayMs + 450);
+
+        grid.appendChild(card);
+      }
+
+      volumeCounter.textContent = `Volumes Loaded: ${totalLoaded}`;
+
+      setTimeout(() => {
+        isBatchLoading = false;
+      }, (count / 4) * 120 + 600);
+    }
+
+    // IntersectionObserver for Infinite Scroll
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !isBatchLoading) {
+        appendBookBatch(12); // Load next 4x3 deck
+      }
+    }, { rootMargin: '200px' });
+
+    observer.observe(document.getElementById('infiniteSentinel'));
+
+    resetBtn.addEventListener('click', () => {
+      grid.innerHTML = '';
+      totalLoaded = 0;
+      appendBookBatch(12);
+    });
+
+    // Initial 12-book load
+    appendBookBatch(12);
+  </script>
+</body>
+</html>

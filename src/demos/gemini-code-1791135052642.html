@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Slamming Desk Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes bookSlam {
+      0% {
+        opacity: 0;
+        transform: translate3d(-180%, -220%, 500px) rotate(-50deg) rotateY(30deg) scale(1.9);
+      }
+      60% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotate(var(--settle-rotate, 8deg)) scale(0.97);
+      }
+      75% {
+        transform: translate3d(0, -12px, 30px) rotate(calc(var(--settle-rotate, 8deg) - 2deg)) scale(1.02);
+      }
+      88% {
+        transform: translate3d(-3px, 3px, 0) rotate(calc(var(--settle-rotate, 8deg) + 1deg)) scale(1);
+      }
+      100% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) rotate(var(--settle-rotate, 2deg)) scale(1);
+      }
+    }
+
+    @keyframes deskThud {
+      0%, 100% { transform: translateY(0) scale(1); }
+      20% { transform: translateY(6px) scale(0.998); }
+      40% { transform: translateY(-2px) scale(1.001); }
+      60% { transform: translateY(1px); }
+    }
+
+    .animate-book-slam {
+      animation: bookSlam 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .animate-desk-thud {
+      animation: deskThud 0.4s ease-out;
+    }
+
+    /* Wooden Desk Grain Background */
+    .wood-desk {
+      background-color: #2b1704;
+      background-image: 
+        radial-gradient(ellipse at 50% 50%, rgba(68, 38, 12, 0.4) 0%, rgba(20, 10, 2, 0.8) 100%),
+        repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0, 0, 0, 0.15) 3px, rgba(0, 0, 0, 0.15) 6px),
+        linear-gradient(90deg, #3d230b 0%, #2a1605 25%, #4a2c11 50%, #221203 75%, #381f08 100%);
+    }
+
+    /* Leather Texture & Spine 3D Effect */
+    .book-3d {
+      box-shadow: 
+        -6px 12px 25px rgba(0, 0, 0, 0.7),
+        inset -3px 0 8px rgba(0, 0, 0, 0.4),
+        inset 3px 0 8px rgba(255, 255, 255, 0.15);
+    }
+  </style>
+</head>
+<body class="wood-desk min-h-screen flex flex-col items-center justify-center p-6 text-amber-100 select-none overflow-hidden">
+
+  <!-- Header & Controls -->
+  <div class="mb-8 text-center">
+    <h1 class="text-3xl font-serif font-bold text-amber-200 tracking-wide drop-shadow-md">The Grand Library Desk</h1>
+    <p class="text-xs text-amber-400/70 font-mono mt-1">3D CSS Physics Slam Animation</p>
+    <button id="slamBtn" class="mt-4 px-6 py-2.5 bg-amber-800 hover:bg-amber-700 active:scale-95 text-amber-100 font-serif font-semibold rounded-lg shadow-lg border border-amber-600/40 transition">
+      📚 Slam Books on Desk
+    </button>
+  </div>
+
+  <!-- Desk Surface Surface / Perspective Container -->
+  <div id="deskSurface" class="w-full max-w-5xl p-10 bg-amber-950/40 rounded-2xl border-4 border-amber-900/60 shadow-2xl [perspective:1100px] transition-transform">
+    
+    <!-- 4-Book Grid -->
+    <div id="bookGrid" class="grid grid-cols-2 md:grid-cols-4 gap-8"></div>
+
+  </div>
+
+  <script>
+    const books = [
+      { id: 1, title: 'BIBLIOTECA', author: 'C. V. Vol I', bg: 'bg-red-950', border: 'border-amber-700/50', text: 'text-amber-300', rotate: '-5deg', delay: '0ms' },
+      { id: 2, title: 'HISTORIA', author: 'Chronicles', bg: 'bg-emerald-950', border: 'border-emerald-600/50', text: 'text-emerald-200', rotate: '4deg', delay: '180ms' },
+      { id: 3, title: 'POESIA', author: 'Antologia', bg: 'bg-indigo-950', border: 'border-indigo-500/50', text: 'text-indigo-200', rotate: '-3deg', delay: '360ms' },
+      { id: 4, title: 'ARCHITECTURA', author: 'Codex 1590', bg: 'bg-amber-900', border: 'border-amber-500/50', text: 'text-amber-200', rotate: '6deg', delay: '540ms' },
+    ];
+
+    const grid = document.getElementById('bookGrid');
+    const desk = document.getElementById('deskSurface');
+    const btn = document.getElementById('slamBtn');
+
+    // Web Audio Synthesizer for Heavy Book Slam Sound
+    function playSlamSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Low impact thud
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(110, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.8, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+
+        // Leather noise slap
+        const bufferSize = ctx.sampleRate * 0.1;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        const noiseGain = ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.3, ctx.currentTime);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        noise.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        noise.start();
+      } catch (e) {}
+    }
+
+    function renderBooks() {
+      grid.innerHTML = '';
+      
+      books.forEach((b) => {
+        const card = document.createElement('div');
+        card.className = 'animate-book-slam opacity-0 cursor-pointer hover:rotate-0 hover:scale-105 transition-transform duration-300';
+        card.style.setProperty('--settle-rotate', b.rotate);
+        card.style.animationDelay = b.delay;
+
+        card.innerHTML = `
+          <div class="book-3d relative w-full aspect-[3/4] ${b.bg} rounded-r-lg rounded-l-sm border-y border-r ${b.border} p-4 flex flex-col justify-between overflow-hidden">
+            <!-- Spine Binding Impression -->
+            <div class="absolute left-0 top-0 bottom-0 w-3 bg-black/40 border-r border-amber-500/20"></div>
+            
+            <!-- Book Gold Foil Trim -->
+            <div class="pl-2 border-l-2 border-amber-500/30 h-full flex flex-col justify-between">
+              <div>
+                <p class="text-[9px] uppercase tracking-widest ${b.text} opacity-60 font-mono">Vol. Ex Libris</p>
+                <h2 class="text-lg font-serif font-bold ${b.text} tracking-wider mt-1 border-b border-amber-500/20 pb-1">${b.title}</h2>
+              </div>
+              <div class="text-center my-2">
+                <span class="text-2xl ${b.text} opacity-40">❦</span>
+              </div>
+              <div>
+                <p class="text-[10px] font-serif ${b.text} opacity-75 italic">${b.author}</p>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Trigger thud audio and desk vibration when each book hits
+        const delayMs = parseInt(b.delay, 10);
+        setTimeout(() => {
+          playSlamSound();
+          desk.classList.remove('animate-desk-thud');
+          void desk.offsetWidth; // Trigger reflow
+          desk.classList.add('animate-desk-thud');
+        }, delayMs + 500);
+
+        grid.appendChild(card);
+      });
+    }
+
+    btn.addEventListener('click', renderBooks);
+    window.addEventListener('DOMContentLoaded', renderBooks);
+  </script>
+</body>
+</html>

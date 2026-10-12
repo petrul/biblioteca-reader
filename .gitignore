@@ -1,0 +1,15 @@
+node_modules/
+build/
+dist/
+coverage/
+.vite/
+/.git.old/
+*.tmp.*
+.DS_Store
+*.log
+*.tsbuildinfo
+.env*
+!.env.example
+test-results/
+playwright-report/
+blob-report/

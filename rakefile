@@ -1,0 +1,259 @@
+require 'json'
+require 'shellwords'
+require 'open3'
+require 'socket'
+
+PACKAGE = JSON.parse(File.read(File.expand_path('package.json', __dir__))).freeze
+puts "#{PACKAGE.fetch('name')} version #{PACKAGE.fetch('version')}"
+
+desc 'Print the package version from package.json'
+task :version do
+    puts PACKAGE.fetch('version')
+end
+
+# Same mechanism as biblioteca-server's and biblioteca-nestjs's rakefiles:
+# source the pass store's own load-env.sh for biblioteca/<profile> - both
+# the encrypted secrets and the plain stage config - straight into the
+# environment. The store is authoritative (it deliberately overwrites
+# pre-existing values); a local override means launching the process in a
+# shell that has not loaded the profile (see the store's own README.md).
+def load_profile!(profile)
+    store_dir = ENV.fetch('PASSWORD_STORE_DIR', File.expand_path('~/.password-store'))
+    loader = File.join(store_dir, 'load-env.sh')
+    abort "Password-store environment loader not found: #{loader}" unless File.file?(loader)
+    profile_path = "biblioteca/#{profile}"
+    output, status = Open3.capture2('bash', '-c', "source #{Shellwords.escape(loader)} #{Shellwords.escape(profile_path)} && env -0")
+    abort "Could not load biblioteca/#{profile} from pass store" unless status.success?
+    output.split("\0").each do |entry|
+        key, value = entry.split('=', 2)
+        ENV[key] = value if key && value && !key.start_with?('_')
+    end
+    # The reader's Google One Tap id must equal biblioteca-server's own
+    # google.oauth.client-id (its GoogleTokenInfoVerifier rejects a
+    # credential minted for a different client), so it maps straight from
+    # the shared pass-store value instead of being a separate variable to
+    # keep in sync. Vite bakes VITE_* into the client bundle at BUILD time,
+    # so this mapping matters for rake build / docker:build, not just the
+    # dev server.
+    ENV['VITE_GOOGLE_CLIENT_ID'] = ENV['GOOGLE_OAUTH_CLIENT_ID'] if ENV['GOOGLE_OAUTH_CLIENT_ID']
+    # The client links to the server's own page for a chapter (ReaderView's
+    # stats back face) through the same advertised URL the proxy targets -
+    # one value, never a second copy to keep in sync. Same build-time
+    # VITE_* reasoning as the One Tap id above.
+    ENV['VITE_BIBLIOTECA_EXTERNAL_URL'] = ENV['BIBLIOTECA_EXTERNAL_URL'] if ENV['BIBLIOTECA_EXTERNAL_URL']
+    puts "> Loaded biblioteca/#{profile} from #{loader}"
+end
+
+def selected_profile(args)
+    args[:profile] || ENV['PROFILE'] || Socket.gethostname.split('.').first
+end
+
+# Mirrors biblioteca-server's and biblioteca-nestjs's check-env tasks. The
+# reader itself has no hard required()-style boot-time check (server.ts's
+# own env reads all fall back to a default instead of throwing), but
+# BIBLIOTECA_EXTERNAL_URL and GOOGLE_OAUTH_CLIENT_ID are still
+# functionally required for correct prod behavior (a wrong/missing
+# GOOGLE_OAUTH_CLIENT_ID ships Google One Tap silently dead - see the
+# docker:build task's own separate guard for exactly that) and are the two
+# reader-specific keys that live in the pass store, so it's still worth
+# catching their absence explicitly rather than only failing much later
+# further down the docker:build pipeline or in a browser at runtime.
+desc 'Verify required environment variables are available from the pass store'
+task :'check-env', [:profile] do |_task, args|
+    profile = selected_profile(args)
+    load_profile!(profile)
+
+    required = ['BIBLIOTECA_EXTERNAL_URL', 'GOOGLE_OAUTH_CLIENT_ID']
+    missing = required.reject { |key| ENV[key] && !ENV[key].strip.empty? }
+    unless missing.empty?
+        abort "Missing required #{profile} environment value(s) from pass store: #{missing.join(', ')}"
+    end
+    # No "unused pass-store key" warning here, same reasoning as
+    # biblioteca-nestjs's check-env: biblioteca/<profile> is one flat
+    # store shared with biblioteca-server and biblioteca-nestjs, so most
+    # keys present legitimately belong to a sibling app, not this one.
+    puts "> #{profile} environment is complete (#{required.length} required value(s) present)"
+end
+
+desc 'Remove generated build artifacts'
+task :clean do
+    sh 'npm run clean'
+end
+
+desc 'Install exactly the dependencies recorded in package-lock.json'
+task :npminstall do
+    sh 'npm ci'
+end
+
+# rake clean / a fresh checkout can leave node_modules absent; running or
+# testing then dies with tsx-not-found - install on demand only when they
+# are actually missing.
+desc 'npminstall, but only when node_modules is absent'
+task :ensure_deps do
+    Rake::Task[:npminstall].invoke unless File.directory?('node_modules')
+end
+
+desc 'Build the production bundle'
+task :build, [:profile] => [:ensure_deps] do |_task, args|
+    # Profile-scoped on purpose: the Vite client bundle bakes
+    # VITE_GOOGLE_CLIENT_ID (mapped in load_profile!) at build time.
+    load_profile!(selected_profile(args))
+    sh 'npm run build'
+end
+
+desc 'Typecheck and run the test suite with a profile (dev by default)'
+task :test, [:profile] => [:ensure_deps] do |_task, args|
+    profile = selected_profile(args)
+    Rake::Task[:'check-env'].invoke(profile)
+    sh 'npm run lint'
+    sh 'npm test'
+end
+
+desc 'Run the dev server (Vite + Express) using a profile (dev by default)'
+task :run, [:profile] => [:ensure_deps] do |_task, args|
+    load_profile!(selected_profile(args))
+    sh 'npm run dev'
+end
+task :start, [:profile] do |_task, args|
+    Rake::Task[:run].invoke(selected_profile(args))
+end
+
+# Downloads an OpenAPI json from a running server; the callers treat it as
+# transient (regenerated .d.ts files are checked in, the downloaded specs
+# are not). openapi-typescript (not nestjs's swagger-typescript-api) is
+# this repo's generator and a devDependency here, so npx resolves it
+# locally without prompting.
+def fetch_openapi_spec(url, spec)
+    sh 'curl', '--fail', '--silent', '--show-error', url, '-H', 'Accept: application/json', '-o', spec
+end
+
+# Three running upstream services, three typed clients, one rake gen-client:
+#
+# biblioteca-server (localhost:8080) --raw spec--> biblioteca-server-api.d.ts
+# biblioteca-nestjs (localhost:3334) --raw spec--> biblioteca-nestjs-api.d.ts
+# biblioteca-covers (localhost:3335) --raw spec--> biblioteca-covers-api.d.ts
+#
+# The generated .d.ts files are checked in; downloaded spec jsons are
+# transient and removed after generation. openapi-typescript (not
+# biblioteca-nestjs's swagger-typescript-api) is this repo's generator and
+# a devDependency here, so npx resolves it locally without prompting.
+def fetch_openapi_spec(url, spec)
+    sh 'curl', '--fail', '--silent', '--show-error', url, '-H', 'Accept: application/json', '-o', spec
+end
+
+# The raw biblioteca-server spec, used directly - same shape as
+# biblioteca-nestjs's own rakefile gen-client for its biblioteca.api.ts.
+# Nothing imports this client yet; it exists so a direct server-side call
+# from server.ts (or anything else) can be typed against the real thing
+# instead of hand-guessed DTOs.
+desc 'Regenerate the biblioteca-server typed client (src/generated/biblioteca-server-api.d.ts) from the running server'
+task :'gen-biblioteca-client', [:profile] => [:ensure_deps] do |_task, args|
+    load_profile!(selected_profile(args))
+    base = ENV.fetch('BIBLIOTECA_EXTERNAL_URL').sub(%r{/$}, '')
+    spec = 'biblioteca-server-api.json'
+    fetch_openapi_spec("#{base}/api/docs", spec)
+    sh 'npx', 'openapi-typescript', spec, '-o', 'src/generated/biblioteca-server-api.d.ts'
+    rm_f spec
+end
+
+# The client of THIS app's own server-side express component - the one
+# serversideApi.ts is typed against. It is NOT generated from
+# biblioteca-server's raw spec: the reader's real client describes its own
+# public API, whose shapes are pulled from the running biblioteca-server
+# but filtered through the reviewed allowlist in
+# scripts/build-openapi-public.mjs (see biblioteca-server's "Public vs
+# internal REST endpoints"). server.ts serves that contract at /api/docs
+# (Swagger UI at /api/ui). `npm run openapi:update` runs the whole
+# pipeline: public:build (shapes from the running biblioteca-server) ->
+# sync (route list from THIS app's own running dev server on READER_URL,
+# default localhost:3333 - start it first, e.g. rake run, and after the
+# latest openapi:public:build, since server.ts imports openapi-public.json
+# at startup) -> openapi:generate (openapi-typescript into
+# src/generated/same-origin-api.d.ts).
+desc "Regenerate this app's own server-side API client (src/generated/same-origin-api.d.ts) via the allowlist pipeline"
+task :'gen-serverside-client', [:profile] => [:ensure_deps] do |_task, args|
+    load_profile!(selected_profile(args))
+    # build-openapi-public.mjs reads BIBLIOTECA_SERVER_URL; map it from the
+    # profile's BIBLIOTECA_EXTERNAL_URL (its own localhost:8080 default is
+    # already right for local profiles, this makes other stages work too).
+    ENV['BIBLIOTECA_SERVER_URL'] ||= ENV['BIBLIOTECA_EXTERNAL_URL']
+    sh 'npm', 'run', 'openapi:update'
+end
+
+# biblioteca-nestjs serves its live document via SwaggerModule at api/ui
+# (src/main.ts), so the raw json is at /api/ui-json. Same env var and
+# default as server.ts's own vectorizing passthrough. This one IS the raw
+# spec, used directly: the vectorizer's admin surface is small and has no
+# allowlist/proxy layer of its own.
+desc 'Regenerate the biblioteca-nestjs (vectorizer) typed client (src/generated/biblioteca-nestjs-api.d.ts) from the running server'
+task :'gen-vectorizer-client', [:profile] => [:ensure_deps] do |_task, args|
+    load_profile!(selected_profile(args))
+    base = (ENV['NESTJS_URL'] || 'http://localhost:3334').sub(%r{/$}, '')
+    spec = 'biblioteca-nestjs-api.json'
+    fetch_openapi_spec("#{base}/api/ui-json", spec)
+    sh 'npx', 'openapi-typescript', spec, '-o', 'src/generated/biblioteca-nestjs-api.d.ts'
+    rm_f spec
+end
+
+# biblioteca-covers serves its own OpenAPI document at /api/docs. Keep its
+# contract separate from the reader gateway contract: the browser still calls
+# only /api/covers/work, while this typed client is available to server-side
+# integrations and makes the covers API drift reviewable.
+desc 'Regenerate the biblioteca-covers typed client (src/generated/biblioteca-covers-api.d.ts) from the running server'
+task :'gen-cover-api', [:profile] => [:ensure_deps] do |_task, args|
+    load_profile!(selected_profile(args))
+    base = (ENV['COVERS_API_URL'] || 'http://localhost:3335').sub(%r{/$}, '')
+    spec = 'biblioteca-covers-api.json'
+    fetch_openapi_spec("#{base}/api/docs", spec)
+    sh 'npx', 'openapi-typescript', spec, '-o', 'src/generated/biblioteca-covers-api.d.ts'
+    rm_f spec
+end
+
+desc 'Regenerate the three upstream service clients from the running services'
+task :'gen-client', [:profile] do |_task, args|
+    profile = selected_profile(args)
+    Rake::Task[:'gen-biblioteca-client'].invoke(profile)
+    Rake::Task[:'gen-vectorizer-client'].invoke(profile)
+    Rake::Task[:'gen-cover-api'].invoke(profile)
+end
+
+namespace :docker do
+    IMAGE_NAME = "editii/#{PACKAGE.fetch('name')}"
+    LOCAL_REGISTRY = 'mini.local:5000'
+    LOCAL_TAG = "#{IMAGE_NAME}:#{PACKAGE.fetch('version')}"
+    TARGET_TAG = "#{LOCAL_REGISTRY}/#{IMAGE_NAME}:#{PACKAGE.fetch('version')}"
+
+    desc 'Build and tag the versioned Docker image'
+    task :build do
+        # Same build-time VITE_GOOGLE_CLIENT_ID reasoning as rake build.
+        load_profile!(ENV.fetch('PROFILE', 'ci'))
+        # Vite bakes the client id into the bundle at build time and there
+        # is no runtime override, so an image built without it ships Google
+        # One Tap silently dead (observed in the wild: the 0.1.5 image had
+        # zero occurrences of the id in its bundle, and One Tap never
+        # showed on prod). Fail the build loudly instead of ever
+        # publishing another such image.
+        if ENV['VITE_GOOGLE_CLIENT_ID'].to_s.empty?
+            abort 'VITE_GOOGLE_CLIENT_ID is empty (pass store GOOGLE_OAUTH_CLIENT_ID missing?) ' \
+                  '- refusing to build an image with Google One Tap silently disabled'
+        end
+        sh 'docker', 'build',
+            '--build-arg', "VITE_GOOGLE_CLIENT_ID=#{ENV['VITE_GOOGLE_CLIENT_ID']}",
+            '--tag', LOCAL_TAG, '--tag', TARGET_TAG, '.'
+        puts "Built #{TARGET_TAG}"
+    end
+
+    desc 'Build and publish the versioned Docker image to mini.local:5000'
+    task publish: :build do
+        sh 'docker', 'push', TARGET_TAG
+        puts "Published #{TARGET_TAG}"
+    end
+end
+
+desc 'Run the complete CI pipeline: clean, install, typecheck+test, build, build and publish the Docker image'
+task ci: [:clean, :npminstall] do
+    load_profile!('ci')
+    Rake::Task[:test].invoke('ci')
+    Rake::Task[:build].invoke('ci')
+    Rake::Task['docker:publish'].invoke
+end

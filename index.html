@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="__PAGE_LANG__">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#024063" />
+    <!-- Every __PLACEHOLDER__ below is replaced per request by server.ts
+         (buildPageSeo/renderIndexHtml in src/seo.ts) with page-specific
+         values resolved from biblioteca-server - a real work/author/chapter
+         title and description, a per-work generated cover or author
+         portrait, and the request's own host for canonical/og:url. This
+         matters because Facebook/Twitter/Slack/etc. crawlers never run the
+         client bundle - they only ever see this static shell, so whatever
+         server.ts fills in here IS the link preview. The literal text below
+         is only what ships if a route falls through to the generic default
+         (home, admin, or an unresolvable id). -->
+    <title>__PAGE_TITLE__</title>
+    <meta name="description" content="__PAGE_DESCRIPTION__" />
+    <meta name="robots" content="__ROBOTS__" />
+    <link rel="canonical" href="__CANONICAL_URL__" />
+    <meta property="og:title" content="__PAGE_TITLE__" />
+    <meta property="og:description" content="__PAGE_DESCRIPTION__" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="__CANONICAL_URL__" />
+    <meta property="og:image" content="__OG_IMAGE_URL__" />
+    <meta property="og:image:type" content="__OG_IMAGE_TYPE__" />
+    <meta property="og:image:alt" content="__OG_IMAGE_ALT__" />
+    <meta property="og:site_name" content="Biblioteca" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="__PAGE_TITLE__" />
+    <meta name="twitter:description" content="__PAGE_DESCRIPTION__" />
+    <meta name="twitter:image" content="__OG_IMAGE_URL__" />
+    <meta name="twitter:image:alt" content="__OG_IMAGE_ALT__" />
+    __JSON_LD__
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400..700;1,400..700&family=Alegreya:ital,wght@0,400;0,700;1,400;1,700&family=Fira+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Gentium+Book+Plus:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#051a14] text-[#d8e6e0] antialiased selection:bg-amber-500/30 selection:text-amber-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

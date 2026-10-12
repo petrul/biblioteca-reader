@@ -1,0 +1,6 @@
+{
+  "name": "Textbase Reader",
+  "description": "An elegant, comprehensive reader client for textbase-server with 5 search modes, chapter reader, TEI format viewer, quote fragment sharing, personal collections, and admin dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
