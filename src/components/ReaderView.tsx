@@ -537,6 +537,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // Land back on the reading face when moving to a different chapter.
   useEffect(() => { setShowStats(false); }, [chapter?.id]);
 
+  // The download dropdown lives on the back face: flipping back to reading
+  // closes it, so it is not still open on the next flip.
+  useEffect(() => { if (!showStats) setShowDownload(false); }, [showStats]);
+
   // Warm the localStorage chapter cache for both TOC neighbors once the
   // current chapter's own content has landed (readerService.
   // prefetchChapterNeighbors) - Next/Previous then serves from the cache
@@ -870,76 +874,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-[#f59e0b]" />
               <span>More Like This</span>
             </button>
-
-            {/* Download the chapter being read: the four export formats
-                (the settings popup's old in-page format switchers) */}
-            {!isChapterLocked && chapter?.htmlContent && (
-              <div className="relative">
-                <button
-                  id="btn-reader-download-toggle"
-                  onClick={() => {
-                    setShowDownload(!showDownload);
-                    setShowSettings(false);
-                  }}
-                  className={`p-2 rounded-lg transition-colors cursor-pointer ${
-                    showDownload ? 'bg-[#f59e0b] text-black' : 'hover:bg-black/5 dark:hover:bg-white/10'
-                  }`}
-                  title="Download this chapter"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
-
-                {showDownload && (
-                  // Plain (unrounded) outer wrapper matching the panel's own
-                  // footprint exactly - see the settings panel's own note on
-                  // why this exists (border-radius corner fall-through).
-                  // e.target===e.currentTarget so only a direct hit on this
-                  // wrapper's own corners closes it - bubbled clicks from
-                  // the real controls inside don't.
-                  <div
-                    id="download-dropdown"
-                    className="absolute right-0 mt-2 w-56 z-50"
-                    onClick={(e) => { if (e.target === e.currentTarget) setShowDownload(false); }}
-                  >
-                  <div className={`${currentTheme.bg} border ${currentTheme.border} rounded-xl shadow-2xl p-4 space-y-1.5`}>
-                    <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Download chapter</label>
-                    {([
-                      { key: 'xhtml', label: 'XHTML', file: 'Formatted XHTML' },
-                      { key: 'json', label: 'JSON', file: 'JSON AST' },
-                      { key: 'txt', label: 'TXT', file: 'Plain text' },
-                      { key: 'xml', label: 'TEI XML', file: 'Canonical TEI P5' }
-                    ] as const).map((f) => (
-                      <button
-                        key={f.key}
-                        id={`btn-download-${f.key}`}
-                        onClick={() => downloadChapter(f.key)}
-                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 opacity-80 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 text-xs font-mono font-semibold uppercase tracking-wider transition-all cursor-pointer"
-                      >
-                        <span>.{f.key === 'xml' ? 'tei.xml' : f.key}</span>
-                        <span className="font-sans normal-case opacity-60">{f.file}</span>
-                      </button>
-                    ))}
-
-                    {/* Inline display instead of saving - off by default.
-                        A plain native checkbox keeps it obvious. */}
-                    <label
-                      id="download-inline-label"
-                      className="flex items-center gap-2 pt-2 mt-1 border-t border-black/10 dark:border-white/10 text-xs opacity-80 hover:opacity-100 cursor-pointer select-none"
-                    >
-                      <input
-                        id="download-inline-checkbox"
-                        type="checkbox"
-                        checked={downloadInline}
-                        onChange={e => setDownloadInline(e.target.checked)}
-                        className="accent-amber-600 cursor-pointer"
-                      />
-                      <span className="font-sans">View inline in new window</span>
-                    </label>
-                  </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* "Share on..." - discrete toolbar button. Shows the LAST-USED
                 target's icon once chosen (stored in user prefs); quick tap
@@ -1321,7 +1255,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           ) : (
             <>
               {/* FORMATTED HTML - always; the four export formats are file
-                  downloads now (btn-reader-download-toggle), not views */}
+                  downloads now (btn-reader-download-toggle, on the back
+                  face), not views */}
               <div
                 ref={contentRef}
                 style={{
@@ -1418,6 +1353,77 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                     <dd className="text-lg font-bold">TEI P5</dd>
                   </div>
                 </dl>
+                {/* Download the chapter being read: the four export formats
+                    (the settings popup's old in-page format switchers).
+                    On the back face, not the toolbar: advanced and rarely
+                    used. */}
+                {!isChapterLocked && chapter?.htmlContent && (
+                  <div className="relative">
+                    <button
+                      id="btn-reader-download-toggle"
+                      onClick={() => {
+                        setShowDownload(!showDownload);
+                        setShowSettings(false);
+                      }}
+                      className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                        showDownload ? 'bg-[#f59e0b] text-black' : 'hover:bg-black/5 dark:hover:bg-white/10'
+                      }`}
+                      title="Download this chapter"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+
+                    {showDownload && (
+                      // Plain (unrounded) outer wrapper matching the panel's own
+                      // footprint exactly - see the settings panel's own note on
+                      // why this exists (border-radius corner fall-through).
+                      // e.target===e.currentTarget so only a direct hit on this
+                      // wrapper's own corners closes it - bubbled clicks from
+                      // the real controls inside don't.
+                      <div
+                        id="download-dropdown"
+                        className="absolute right-0 mt-2 w-56 z-50"
+                        onClick={(e) => { if (e.target === e.currentTarget) setShowDownload(false); }}
+                      >
+                      <div className={`${currentTheme.bg} border ${currentTheme.border} rounded-xl shadow-2xl p-4 space-y-1.5`}>
+                        <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Download chapter</label>
+                        {([
+                          { key: 'xhtml', label: 'XHTML', file: 'Formatted XHTML' },
+                          { key: 'json', label: 'JSON', file: 'JSON AST' },
+                          { key: 'txt', label: 'TXT', file: 'Plain text' },
+                          { key: 'xml', label: 'TEI XML', file: 'Canonical TEI P5' }
+                        ] as const).map((f) => (
+                          <button
+                            key={f.key}
+                            id={`btn-download-${f.key}`}
+                            onClick={() => downloadChapter(f.key)}
+                            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 opacity-80 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 text-xs font-mono font-semibold uppercase tracking-wider transition-all cursor-pointer"
+                          >
+                            <span>.{f.key === 'xml' ? 'tei.xml' : f.key}</span>
+                            <span className="font-sans normal-case opacity-60">{f.file}</span>
+                          </button>
+                        ))}
+
+                        {/* Inline display instead of saving - off by default.
+                            A plain native checkbox keeps it obvious. */}
+                        <label
+                          id="download-inline-label"
+                          className="flex items-center gap-2 pt-2 mt-1 border-t border-black/10 dark:border-white/10 text-xs opacity-80 hover:opacity-100 cursor-pointer select-none"
+                        >
+                          <input
+                            id="download-inline-checkbox"
+                            type="checkbox"
+                            checked={downloadInline}
+                            onChange={e => setDownloadInline(e.target.checked)}
+                            className="accent-amber-600 cursor-pointer"
+                          />
+                          <span className="font-sans">View inline in new window</span>
+                        </label>
+                      </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {bibliotecaExternalUrl() && (
                   (() => {
                     // The address itself is the link's label - the reader

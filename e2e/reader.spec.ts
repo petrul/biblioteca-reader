@@ -206,16 +206,10 @@ test('ArrowRight/ArrowLeft navigate chapters and flash the corresponding buttons
 
 test('Escape closes the reader dropdowns and flips the stats card back to reading', async ({ page }) => {
   // Escape is the universal close on the reading surface: overlays
-  // (settings, ToC, download, share) all close - but when the card is
-  // flipped to its back face, Escape's owner is the flip itself.
+  // (settings, ToC, share) all close - but when the card is flipped to its
+  // back face, Escape's owner is the flip itself.
   await page.goto('/app/reader/dulfu/ispravile_lui_pacala/fuga');
-  await page.locator('#btn-reader-download-toggle').waitFor();
-
-  // The download dropdown closes on Escape.
-  await page.click('#btn-reader-download-toggle');
-  await expect(page.locator('#download-inline-checkbox')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.locator('#download-inline-checkbox')).toHaveCount(0);
+  await page.locator('#nav-reader-settings-btn').waitFor();
 
   // The settings panel closes on Escape.
   await page.click('#nav-reader-settings-btn');
@@ -234,15 +228,20 @@ test('Escape closes the reader dropdowns and flips the stats card back to readin
   await page.keyboard.press('Escape');
   await expect(page.locator('#reader-toc-search')).toHaveCount(0);
 
-  // Flipped card first: Escape returns to the reading face, not to a menu.
+  // Flipped card first: Escape returns to the reading face, not to a menu
+  // - even with the back face's download dropdown open, which closes with
+  // the flip.
   await page.click('#btn-reader-flip-stats-front');
   await page.waitForTimeout(900); // let the 700ms flip animation settle
   await expect(page.locator('#btn-reader-flip-stats-back')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await page.click('#btn-reader-download-toggle');
+  await expect(page.locator('#download-inline-checkbox')).toBeVisible();
   await page.keyboard.press('Escape');
   await page.waitForTimeout(900);
   const stillFlipped = await page.evaluate(() =>
     !!document.querySelector('.rotate-y-180.relative'));
   expect(stillFlipped).toBe(false);
+  await expect(page.locator('#download-inline-checkbox')).toHaveCount(0);
 });
 
 test('s toggles the reader settings dropdown', async ({ page }) => {
@@ -252,7 +251,7 @@ test('s toggles the reader settings dropdown', async ({ page }) => {
   // must outwait the typing-burst guard (two letters within 800ms read as
   // typing a word, not two deliberate shortcuts).
   await page.goto('/app/reader/dulfu/ispravile_lui_pacala/fuga');
-  await page.locator('#btn-reader-download-toggle').waitFor();
+  await page.locator('#nav-reader-settings-btn').waitFor();
 
   await page.keyboard.press('s');
   await expect(page.locator('#settings-dropdown')).toBeVisible();
