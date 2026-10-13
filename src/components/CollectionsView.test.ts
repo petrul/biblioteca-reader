@@ -97,3 +97,43 @@ test('every type tab shows its own count, like All (n)', async () => {
   }
 });
 
+test('the s-shortcut modal and the Collections page render the same panel', async () => {
+  const globals = globalThis as any;
+  const previous = { window: globals.window, localStorage: globals.localStorage, document: globals.document };
+  const storage = new FakeWebStorage();
+  globals.localStorage = storage;
+  globals.window = { localStorage: storage, dispatchEvent: () => true, addEventListener: () => {}, removeEventListener: () => {} };
+  try {
+    const { readerService, ANONYMOUS_USER_ID } = await import('../services/readerService');
+    const { CollectionsView } = await import('./CollectionsView');
+    const { CollectionsModal } = await import('./CollectionsModal');
+    readerService.addItemToCollection(ANONYMOUS_USER_ID, readerService.getFavoritesId(ANONYMOUS_USER_ID), chapterItem(7));
+    const noop = () => {};
+    const strip = (html: string) => html.replace(/<!-- -->/g, '');
+    const modal = strip(renderToStaticMarkup(createElement(CollectionsModal, {
+      isOpen: true, userId: ANONYMOUS_USER_ID, onClose: noop, onSelectWork: noop, onSelectChapter: noop,
+      onOpenQuote: noop, onRunSearch: noop, onManage: noop,
+    })));
+    const page = strip(renderToStaticMarkup(createElement(CollectionsView, {
+      isOpen: true, currentUser: null, onOpenAuth: noop, onSelectWork: noop, onSelectChapter: noop, onOpenQuote: noop,
+    } as any)));
+    for (const html of [modal, page]) {
+      assert.ok(html.includes('id="collections-search"'), 'search box on top');
+      assert.ok(/Favorites \(\d+\)/.test(html), 'Favorites section');
+      assert.ok(html.includes('Collections (0)'), 'Collections section');
+      assert.ok(html.includes('Saved searches (0)'), 'Saved searches section');
+      assert.ok(html.includes('Bookmarked chapter 7'), 'the bookmarked item');
+    }
+    assert.ok(modal.includes('role="dialog"') && modal.includes('aria-modal="true"'));
+    assert.ok(!modal.includes('Move up') && !modal.includes('Remove from collection'), 'the modal is a jump list, not an editor');
+    assert.ok(page.includes('Remove from collection'), 'the page keeps its editing controls');
+    assert.equal(renderToStaticMarkup(createElement(CollectionsModal, {
+      isOpen: false, userId: ANONYMOUS_USER_ID, onClose: noop, onSelectWork: noop, onSelectChapter: noop,
+      onOpenQuote: noop, onRunSearch: noop, onManage: noop,
+    })), '');
+  } finally {
+    globals.window = previous.window;
+    globals.localStorage = previous.localStorage;
+  }
+});
+

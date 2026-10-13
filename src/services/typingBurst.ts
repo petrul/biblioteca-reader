@@ -1,5 +1,6 @@
 // Single-letter shortcuts (the work card's and the reader's 'i'/'x' flips,
-// the reader's 't' ToC and 's' settings toggles) must not fire while the
+// the reader's 't' ToC and 'S' settings toggles, the 's' collections jump)
+// must not fire while the
 // user is actually typing a word on the page - typing "right" contains
 // 'i' and would flip the card mid-word, covering the page with the stats
 // face; the same word's 's' and 't' would toggle panels the same way. A

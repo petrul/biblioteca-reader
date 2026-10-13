@@ -9,7 +9,8 @@ import {
   Menu, X,
   ArrowRight,
   ArrowLeft,
-  Settings
+  Settings,
+  BookMarked
 } from 'lucide-react';
 import { AppView, SearchResult } from '../types/textbase';
 import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
@@ -46,6 +47,8 @@ interface NavbarProps {
   // Opens the reading preferences panel - rendered only while reading a
   // book (the reader view), where the panel itself lives.
   onToggleReaderSettings?: () => void;
+  // Opens the collections quick-jump modal (the `s` shortcut's touch/mouse twin).
+  onOpenCollectionsQuickFind?: () => void;
   // Undefined (not just a no-op) for a non-admin - see App.tsx's isAdmin -
   // hides the hamburger button entirely rather than showing it disabled,
   // same convention MobileBottomNav already uses for its own admin button.
@@ -82,6 +85,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuth,
   onRandomDiscovery,
   onToggleReaderSettings,
+  onOpenCollectionsQuickFind,
   onOpenAdminSidebar,
   onCloseBook,
   onSearch,
@@ -559,6 +563,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
               )}
 
+              {/* Collections quick-jump: same panel the `s` shortcut opens.
+                  The Collections page has the same search box itself. */}
+              {onOpenCollectionsQuickFind && currentView !== 'collections' && (
+                <button
+                  id="nav-collections-quick-btn"
+                  onClick={onOpenCollectionsQuickFind}
+                  title="Find in favorites, collections and saved searches (s)"
+                  aria-label="Find in favorites, collections and saved searches (s)"
+                  className="p-1.5 sm:p-2 rounded-lg text-emerald-200 hover:text-white hover:bg-emerald-500/10 transition-all cursor-pointer active:scale-95 active:brightness-90"
+                >
+                  <BookMarked className="w-4 h-4 text-[#f59e0b]" />
+                </button>
+              )}
+
               {/* Random Discovery Quick Button - the same icon-button shape
                   as the search icon button to its left (p-2 square, no
                   label at any width). */}
@@ -590,7 +608,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   id="nav-reader-settings-btn"
                   onClick={onToggleReaderSettings}
-                  title="Reader Display Preferences (s)"
+                  title="Reader Display Preferences (Shift+S)"
                   aria-label="Reader Display Preferences"
                   className="p-1.5 sm:p-2 rounded-lg text-emerald-200 hover:text-white hover:bg-emerald-500/10 transition-all cursor-pointer active:scale-95 active:brightness-90"
                 >

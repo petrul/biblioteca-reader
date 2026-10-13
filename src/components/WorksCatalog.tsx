@@ -14,6 +14,7 @@ import { LanguageCode, Work } from "../types/textbase";
 import { readerService } from "../services/readerService";
 import { appAsset } from "../services/serversideApi";
 import { PaymentCheckoutModal } from "./PaymentCheckoutModal";
+import { SearchField } from "./SearchField";
 import { WorkCoverImage } from "./DefaultWorkCover";
 
 export interface WorksCatalogProps {
@@ -116,16 +117,15 @@ export const WorksCatalog: React.FC<WorksCatalogProps> = (props) => {
         id="works-search-toolbar"
         className="bg-white/0.12 backdrop-blur-xl p-4 rounded-xl border border-white/30 shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4"
       >
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/60" />
-          <input
-            id="input-filter-works"
-            value={props.query}
-            onChange={(e) => props.onQueryChange(e.target.value)}
-            placeholder="Filter works by title, author, topic..."
-            className="w-full pl-9 pr-4 py-2 rounded-lg bg-black/25 border border-white/25 text-xs text-white placeholder:text-white/60 focus:outline-none focus:ring-1 focus:ring-[#f59e0b]"
-          />
-        </div>
+        <SearchField
+          id="input-filter-works"
+          label="Filter works"
+          className="flex-1 max-w-md"
+          value={props.query}
+          onValueChange={props.onQueryChange}
+          placeholder="Filter works by title, author, topic..."
+          inputClassName="py-2 rounded-lg bg-black/25 border border-white/25 text-xs text-white placeholder:text-white/60 focus:outline-none focus:ring-1 focus:ring-[#f59e0b]"
+        />
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center space-x-1.5">
             <Lock className="w-3.5 h-3.5 text-amber-300" />

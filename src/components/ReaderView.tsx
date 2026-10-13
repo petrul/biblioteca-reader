@@ -57,6 +57,8 @@ import { languageName } from '../services/languageNames';
 import { buildShareIntent, type ShareTarget } from '../services/socialShare';
 import { copyToClipboard } from '../services/clipboard';
 import { NotFoundCard } from './NotFoundCard';
+import { SearchField } from './SearchField';
+import { matchesSearch } from '../services/collectionSearch';
 
 interface ReaderViewProps {
   workId: string;
@@ -333,9 +335,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const currentChapterIndex = chapters.findIndex(c => c.id === chapter?.id);
   const prevChapter = currentChapterIndex > 0 ? chapters[currentChapterIndex - 1] : null;
   const nextChapter = currentChapterIndex < chapters.length - 1 ? chapters[currentChapterIndex + 1] : null;
-  const filteredTocChapters = chapters.filter(c =>
-    c.title.toLocaleLowerCase().includes(tocQuery.trim().toLocaleLowerCase())
-  );
+  const filteredTocChapters = chapters.filter(c => matchesSearch(tocQuery, c.title));
   const tocEntries: Array<
     | { type: 'division'; id: string; title: string; depth: number }
     | { type: 'chapter'; chapter: Chapter }
@@ -484,8 +484,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
   // Keyboard shortcuts for the reading surface: i flips between the text
   // and the statistics back face (identical to the work card's own (i)/(x)
-  // toggle), t the ToC sidebar, s the display-preferences dropdown (the
-  // navbar gear button's panel). Escape or x turns back to the text from
+  // toggle), t the ToC sidebar, Shift+S the display-preferences dropdown
+  // (the navbar gear button's panel; a bare s opens the collections
+  // quick-jump, see App). Escape or x turns back to the text from
   // the stats face. Same editable-control and modifier guards as the
   // navbar's global shortcuts - plus the typing burst guard: a bare letter
   // pressed in the middle of typing a word (no focused input, e.g. the
@@ -505,7 +506,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       } else if (event.key === 't') {
         event.preventDefault();
         setShowTocMenu(prev => !prev);
-      } else if (event.key === 's') {
+      } else if (event.key === 'S') {
         event.preventDefault();
         setShowSettings(!showSettings);
       } else if ((event.key === 'Escape' || event.key === 'x') && showStats) {
@@ -664,7 +665,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       // this component's own DOM subtree entirely, so it needs its own
       // explicit check rather than falling out of the panel's own markup.
       // Matched by id, not its title: the tooltip text changes (it gained
-      // the "(s)" shortcut hint), which silently broke the button.
+      // the "(Shift+S)" shortcut hint), which silently broke the button.
       if (!target.closest('#settings-dropdown') && !target.closest('#nav-reader-settings-btn')) {
         setShowSettings(false);
       }
@@ -1120,14 +1121,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           {/* Translucent Sidebar */}
           <div id="reader-toc-sidebar" className="fixed inset-y-4 left-0 w-[calc(100%-1rem)] max-w-xs sm:max-w-sm bg-black/40 backdrop-blur-xl border border-white/15 rounded-r-2xl text-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-300 ease-out motion-reduce:animate-none">
             <div className="flex items-center gap-3 p-4 border-b border-white/10">
-              <label htmlFor="reader-toc-search" className="sr-only">Search chapters</label>
-              <input
+              <SearchField
                 id="reader-toc-search"
-                type="search"
+                label="Search chapters"
+                className="min-w-0 flex-1"
                 value={tocQuery}
-                onChange={(event) => setTocQuery(event.target.value)}
+                onValueChange={setTocQuery}
                 placeholder={`Search ${chapters.length} chapters…`}
-                className="min-w-0 flex-1 rounded-lg border border-white/20 bg-black/25 px-3 py-2 text-sm text-white placeholder:text-white/55 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                clearable
+                inputClassName="rounded-lg border border-white/20 bg-black/25 py-2 text-sm text-white placeholder:text-white/55 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
               />
               <button onClick={() => setShowTocMenu(false)} className="opacity-60 hover:opacity-100 cursor-pointer">
                 <X className="w-4 h-4" />
@@ -1495,6 +1497,17 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   <div className="flex items-center justify-between gap-4 text-xs">
                     <span className="opacity-80">Flip this card</span>
                     <kbd className="px-1.5 py-0.5 rounded border border-black/20 dark:border-white/20 bg-black/5 dark:bg-white/5 font-mono text-[10px] shrink-0">i</kbd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 text-xs">
+                    <span className="opacity-80">Collections</span>
+                    <kbd className="px-1.5 py-0.5 rounded border border-black/20 dark:border-white/20 bg-black/5 dark:bg-white/5 font-mono text-[10px] shrink-0">s</kbd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 text-xs">
+                    <span className="opacity-80">Display preferences</span>
+                    <span className="flex gap-1 shrink-0">
+                      <kbd className="px-1.5 py-0.5 rounded border border-black/20 dark:border-white/20 bg-black/5 dark:bg-white/5 font-mono text-[10px]">Shift</kbd>
+                      <kbd className="px-1.5 py-0.5 rounded border border-black/20 dark:border-white/20 bg-black/5 dark:bg-white/5 font-mono text-[10px]">S</kbd>
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-4 text-xs">
                     <span className="opacity-80">Back to reading</span>

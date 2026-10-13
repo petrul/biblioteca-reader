@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { SearchField } from './SearchField';
 import { Author } from '../types/textbase';
 
 export interface AuthorCatalogProps {
@@ -67,12 +68,15 @@ export const AuthorCatalog: React.FC<AuthorCatalogProps> = props => {
   const { authorsData, query, page, onSelectAuthor } = props;
   return <div className="space-y-6">
     <div className="bg-white/12 backdrop-blur-xl p-4 rounded-xl border border-white/30 shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] flex items-center justify-between">
-      <div className="relative flex-1 max-w-md">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/60" />
-        <input id="input-filter-authors" type="text" placeholder="Search author catalog by name, canonical ID, era..." value={query}
-          onChange={event => props.onQueryChange(event.target.value)}
-          className="w-full pl-9 pr-4 py-2 rounded-lg bg-black/25 border border-white/25 text-xs text-white placeholder:text-white/60 focus:outline-none focus:ring-1 focus:ring-[#f59e0b]" />
-      </div>
+        <SearchField
+          id="input-filter-authors"
+          label="Search authors"
+          className="flex-1 max-w-md"
+          placeholder="Search author catalog by name, canonical ID, era..."
+          value={query}
+          onValueChange={props.onQueryChange}
+          inputClassName="py-2 rounded-lg bg-black/25 border border-white/25 text-xs text-white placeholder:text-white/60 focus:outline-none focus:ring-1 focus:ring-[#f59e0b]"
+        />
     </div>
 
 

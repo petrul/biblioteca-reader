@@ -19,6 +19,8 @@ import { ReaderView } from './components/ReaderView';
 import { SearchView } from './components/SearchView';
 import { attachSavedSearchesAccount, detachSavedSearchesAccount, subscribeSavedSearches } from './services/savedSearches';
 import { CollectionsView } from './components/CollectionsView';
+import { CollectionsModal } from './components/CollectionsModal';
+import { useCollectionsShortcut } from './hooks/useCollectionsShortcut';
 import { AdminView } from './components/AdminView';
 import { QuoteView } from './components/QuoteView';
 import { AuthModal } from './components/AuthModal';
@@ -412,6 +414,16 @@ export default function App() {
     setCurrentView('quote');
   };
 
+  // `s` brings up the collections quick-jump over whatever is on screen.
+  // On the Collections page itself it focuses that page's search box
+  // instead, and it stands down while the sign-in or add-to-collection
+  // dialogs are up.
+  const [collectionsModalOpen, setCollectionsModalOpen] = useState(false);
+  useCollectionsShortcut(() => {
+    if (currentView === 'collections') document.getElementById('collections-search')?.focus();
+    else setCollectionsModalOpen(true);
+  }, !isAuthModalOpen && collectionModalPayload === null);
+
   const handleMoreLikeThis = (workId: string, title: string) => {
     setSearchMode('vector');
     setSearchQuery(title);
@@ -476,6 +488,7 @@ export default function App() {
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onRandomDiscovery={handleRandomDiscovery}
         onToggleReaderSettings={() => setReaderSettingsOpen(open => !open)}
+        onOpenCollectionsQuickFind={() => setCollectionsModalOpen(true)}
         onCloseBook={handleCloseBook}
         onOpenAdminSidebar={() => setIsAdminSidebarOpen(true)}
         onSearch={(query) => {
@@ -669,6 +682,21 @@ export default function App() {
         currentUser={currentUser}
         payload={collectionModalPayload}
         onSuccess={() => {}}
+      />
+
+      {/* Collections quick-jump (the `s` shortcut): same panel as the Collections page. */}
+      <CollectionsModal
+        isOpen={collectionsModalOpen}
+        userId={currentUser?.id || ANONYMOUS_USER_ID}
+        onClose={() => setCollectionsModalOpen(false)}
+        onSelectWork={handleSelectWork}
+        onSelectChapter={handleSelectChapter}
+        onOpenQuote={handleOpenQuote}
+        onRunSearch={query => {
+          setSearchQuery(query);
+          setCurrentView('search');
+        }}
+        onManage={() => setCurrentView('collections')}
       />
 
       {/* Connectivity status for online requests. */}

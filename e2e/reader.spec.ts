@@ -244,20 +244,39 @@ test('Escape closes the reader dropdowns and flips the stats card back to readin
   await expect(page.locator('#download-inline-checkbox')).toHaveCount(0);
 });
 
-test('s toggles the reader settings dropdown', async ({ page }) => {
+test('Shift+S toggles the reader settings dropdown', async ({ page }) => {
   // Same single-letter family as the stats flip (i) and the ToC sidebar
-  // (t): a bare s opens the display-preferences panel (the navbar gear
-  // button's dropdown) and, pressed again, closes it. The second press
-  // must outwait the typing-burst guard (two letters within 800ms read as
-  // typing a word, not two deliberate shortcuts).
+  // (t): Shift+S opens the display-preferences panel (the navbar gear
+  // button's dropdown) and, pressed again, closes it (a bare s belongs to
+  // the collections quick-jump). The second press must outwait the
+  // typing-burst guard (two letters within 800ms read as typing a word, not
+  // two deliberate shortcuts).
+  await page.goto('/app/reader/dulfu/ispravile_lui_pacala/fuga');
+  await page.locator('#nav-reader-settings-btn').waitFor();
+
+  await page.keyboard.press('Shift+S');
+  await expect(page.locator('#settings-dropdown')).toBeVisible();
+  await page.waitForTimeout(900);
+  await page.keyboard.press('Shift+S');
+  await expect(page.locator('#settings-dropdown')).toHaveCount(0);
+});
+
+test('s opens the collections quick-jump over the text, Escape closes it', async ({ page }) => {
   await page.goto('/app/reader/dulfu/ispravile_lui_pacala/fuga');
   await page.locator('#nav-reader-settings-btn').waitFor();
 
   await page.keyboard.press('s');
-  await expect(page.locator('#settings-dropdown')).toBeVisible();
-  await page.waitForTimeout(900);
-  await page.keyboard.press('s');
+  const modal = page.locator('#collections-modal');
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('#collections-search')).toBeFocused();
+  await expect(modal.getByRole('heading', { name: /Favorites/ })).toBeVisible();
+  await expect(modal.getByRole('heading', { name: /Collections/ })).toBeVisible();
+  await expect(modal.getByRole('heading', { name: /Saved searches/ })).toBeVisible();
+  // The reader's own settings panel must not have opened.
   await expect(page.locator('#settings-dropdown')).toHaveCount(0);
+
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
 });
 
 test('the incoming chapter heading stays in the content without a separate reader title', async ({ page }) => {
