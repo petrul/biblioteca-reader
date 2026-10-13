@@ -56,6 +56,7 @@ import { bibliotecaExternalUrl, chapterContentUrl, ENDING_ORNAMENT_IMAGE } from 
 import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
 import { languageName } from '../services/languageNames';
 import { buildShareIntent, type ShareTarget } from '../services/socialShare';
+import { ancestorIds, buildTocEntries, isPreviewPage } from '../services/tocTree';
 import { copyToClipboard } from '../services/clipboard';
 import { NotFoundCard } from './NotFoundCard';
 import { SearchField } from './SearchField';
@@ -174,7 +175,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // Loading depends only on this work, its TOC and the requested chapter.
   const isLiveLoading = (!work && readerService.isWorkLoading(workId)) ||
     Boolean(work && readerService.isLiveWork(work.id) &&
-      ((!chapter && readerService.isWorkLoading(workId)) || (chapter && !chapter.plainText && !readerService.isChapterContentFailed(chapter.id))));
+      ((!chapter && readerService.isWorkLoading(workId)) || (chapter && !chapter.plainText && !chapter.htmlContent && !readerService.isChapterContentFailed(chapter.id))));
   const isGenuinelyNotFound = !isLiveLoading && (!work || !chapter);
   useEffect(() => {
     onNotFoundChange?.(isGenuinelyNotFound);
@@ -214,6 +215,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const shareLongPressedRef = useRef(false);
   const [showTocMenu, setShowTocMenu] = useState(false);
   const [tocQuery, setTocQuery] = useState('');
+  const [tocExpanded, setTocExpanded] = useState<ReadonlySet<string>>(new Set());
   // Reading should show only the text - division/language/word-count and
   // whatever else gets added later live on the "back" of the page instead,
   // reached by flipping it via the small i button, not shown inline.
@@ -329,29 +331,30 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // Dynamic access check
   const isUnlocked = work ? readerService.isWorkUnlocked(work.id) : false;
   const isPremium = work?.accessType === 'premium';
-  const isChapterLocked = isPremium && !isUnlocked && (chapter?.chapterNumber || 1) > 1;
+  const isChapterLocked = isPremium && !isUnlocked && !isPreviewPage(chapters, chapter);
   const priceStr = `$${(((work?.priceCents || 499)) / 100).toFixed(2)}`;
 
   // Navigation indices
   const currentChapterIndex = chapters.findIndex(c => c.id === chapter?.id);
   const prevChapter = currentChapterIndex > 0 ? chapters[currentChapterIndex - 1] : null;
   const nextChapter = currentChapterIndex < chapters.length - 1 ? chapters[currentChapterIndex + 1] : null;
-  const filteredTocChapters = chapters.filter(c => matchesSearch(tocQuery, c.title));
-  const tocEntries: Array<
-    | { type: 'division'; id: string; title: string; depth: number }
-    | { type: 'chapter'; chapter: Chapter }
-  > = [];
-  let previousAncestors: NonNullable<Chapter['ancestors']> = [];
-  for (const tocChapter of filteredTocChapters) {
-    const ancestors = tocChapter.ancestors ?? [];
-    let shared = 0;
-    while (shared < ancestors.length && shared < previousAncestors.length &&
-      ancestors[shared].id === previousAncestors[shared].id) shared++;
-    for (const ancestor of ancestors.slice(shared))
-      tocEntries.push({ type: 'division', ...ancestor });
-    tocEntries.push({ type: 'chapter', chapter: tocChapter });
-    previousAncestors = ancestors;
-  }
+  const tocFiltering = tocQuery.trim() !== '';
+  const tocEntries = buildTocEntries(
+    chapters, tocExpanded, tocFiltering ? c => matchesSearch(tocQuery, c.title) : null);
+
+  // Opening the sidebar (or turning to another chapter) re-collapses the tree
+  // down to the divisions that lead to the chapter being read.
+  useEffect(() => {
+    setTocExpanded(new Set(ancestorIds(chapter)));
+  }, [showTocMenu, chapter?.id]);
+  useEffect(() => {
+    if (showTocMenu) document.querySelector('#reader-toc-sidebar [aria-current="true"]')?.scrollIntoView?.({ block: 'center' });
+  }, [showTocMenu, chapter?.id]);
+  const toggleTocDivision = (id: string) => setTocExpanded(prev => {
+    const next = new Set(prev);
+    if (!next.delete(id)) next.add(id);
+    return next;
+  });
 
   // The four export forms of the chapter being read, offered as file
   // downloads next to the settings gear (the old in-page format switching
@@ -364,7 +367,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     const isRemoteExport = fmt === 'xml' || fmt === 'json';
     const ext = fmt === 'xml' ? 'tei.xml' : fmt;
     const url = isRemoteExport
-      ? chapterContentUrl(chapter.id, fmt)
+      ? chapterContentUrl(chapter.id, fmt, chapter.isSection)
       : URL.createObjectURL(new Blob(
           [fmt === 'xhtml' ? chapter.htmlContent : chapter.plainText],
           { type: `${fmt === 'xhtml' ? 'application/xhtml+xml' : 'text/plain'};charset=utf-8` }
@@ -779,7 +782,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               title="Table of Contents"
             >
               <Layers className="w-4 h-4 text-[#f59e0b]" />
-              <span className="hidden sm:inline">Ch. {chapter.chapterNumber}</span>
+              <span className="hidden sm:inline">{chapter.isSection ? 'Section' : 'Ch.'} {chapter.chapterNumber}</span>
             </button>
           </div>
 
@@ -1117,7 +1120,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 className="min-w-0 flex-1"
                 value={tocQuery}
                 onValueChange={setTocQuery}
-                placeholder={`Search ${chapters.length} chapters…`}
+                placeholder={`Search ${chapters.filter(c => !c.isSection).length} chapters…`}
                 clearable
                 inputClassName="rounded-lg border border-white/20 bg-black/25 py-2 text-sm text-white placeholder:text-white/55 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
               />
@@ -1126,33 +1129,61 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {tocEntries.map(entry => entry.type === 'division' ? (
-                <div
-                  key={`division:${entry.id}`}
-                  className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-amber-300/90"
-                  style={{ paddingLeft: `${12 + Math.max(0, entry.depth - 1) * 12}px` }}
-                >
-                  {entry.title}
-                </div>
-              ) : (
-                <button
-                  key={`chapter:${entry.chapter.id}`}
-                  onClick={() => {
-                    onSelectChapter(work.id, entry.chapter.id);
-                    setShowTocMenu(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
-                    entry.chapter.id === chapter.id
-                      ? 'bg-[#f59e0b] text-black font-bold'
-                      : 'hover:bg-white/10'
-                  }`}
-                  style={{ paddingLeft: `${24 + (entry.chapter.ancestors?.length ?? 0) * 12}px` }}
-                >
-                  <span className="truncate pr-2">{entry.chapter.title}</span>
-                  <span className="text-[10px] font-mono opacity-60 shrink-0">p. {entry.chapter.chapterNumber}</span>
-                </button>
-              ))}
-              {filteredTocChapters.length === 0 && (
+              {tocEntries.map(entry => {
+                const entryChapter = entry.chapter;
+                const isCurrent = entryChapter.id === chapter.id;
+                const indent = (entryChapter.ancestors?.length ?? 0) * 12;
+                const open = () => {
+                  onSelectChapter(work.id, entryChapter.id);
+                  setShowTocMenu(false);
+                };
+                if (entry.type === 'section') {
+                  return (
+                    <div
+                      key={`section:${entryChapter.id}`}
+                      className="flex items-center gap-0.5 pt-2"
+                      style={{ paddingLeft: `${indent}px` }}
+                    >
+                      {entry.collapsible ? (
+                        <button
+                          type="button"
+                          aria-expanded={entry.expanded}
+                          aria-label={`${entry.expanded ? 'Collapse' : 'Expand'} ${entryChapter.title}`}
+                          onClick={() => toggleTocDivision(entryChapter.id)}
+                          className="shrink-0 p-1.5 rounded-md text-amber-300/90 hover:bg-white/10 cursor-pointer"
+                        >
+                          <ChevronRight className={`w-3.5 h-3.5 transition-transform motion-reduce:transition-none ${entry.expanded ? 'rotate-90' : ''}`} />
+                        </button>
+                      ) : <span className="w-[26px] shrink-0" aria-hidden="true" />}
+                      <button
+                        type="button"
+                        onClick={open}
+                        aria-current={isCurrent ? 'true' : undefined}
+                        className={`min-w-0 flex-1 text-left px-2 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${
+                          isCurrent ? 'bg-[#f59e0b] text-black' : 'text-amber-300/90 hover:bg-white/10'
+                        }`}
+                      >
+                        <span className="block truncate">{entryChapter.title}</span>
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={`chapter:${entryChapter.id}`}
+                    onClick={open}
+                    aria-current={isCurrent ? 'true' : undefined}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
+                      isCurrent ? 'bg-[#f59e0b] text-black font-bold' : 'hover:bg-white/10'
+                    }`}
+                    style={{ paddingLeft: `${24 + indent}px` }}
+                  >
+                    <span className="truncate pr-2">{entryChapter.title}</span>
+                    <span className="text-[10px] font-mono opacity-60 shrink-0">p. {entryChapter.chapterNumber}</span>
+                  </button>
+                );
+              })}
+              {tocEntries.length === 0 && (
                 <p className="px-3 py-4 text-xs text-white/60">No chapters match “{tocQuery}”.</p>
               )}
             </div>
@@ -1162,7 +1193,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
 
       {/* Sample Banner if Premium & Chapter 1 */}
-      {isPremium && !isUnlocked && (chapter?.chapterNumber || 1) === 1 && (
+      {isPremium && !isUnlocked && !isChapterLocked && (
         <div className="bg-amber-500/15 border-b border-amber-500/30 text-amber-950 dark:text-amber-200 px-4 py-2.5 text-xs text-center flex flex-wrap items-center justify-center gap-2">
           <span className="font-mono uppercase font-bold text-[10px] px-2 py-0.5 rounded bg-amber-500/25 border border-amber-500/40">Free Sample</span>
           <span>You are previewing Chapter 1. Unlock the full edition ({priceStr}) to access chapters 2–{chapters.length} and the complete critical apparatus.</span>
@@ -1264,7 +1295,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   lineHeight: lineHeight,
                   ['--drop-cap-color' as string]: currentTheme.dropCap
                 } as React.CSSProperties}
-                className={`${FONT_CLASSES[fontFamily]} reader-text-container select-text`}
+                className={`${FONT_CLASSES[fontFamily]} reader-text-container select-text${chapter.isSection ? ' reader-section-page' : ''}`}
                 dangerouslySetInnerHTML={contentHtml}
                 onClick={handleNoteClick}
               />
@@ -1273,12 +1304,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   p.deco-end (teidiv.css: img.deco-end { max-width: 100px;
                   margin: 30px auto; }) - served through the server-content
                   proxy like every other server-owned asset. */}
-              <img
+              {!chapter.isSection && <img
                 src={ENDING_ORNAMENT_IMAGE}
                 alt=""
                 aria-hidden="true"
                 className="block mx-auto max-w-[100px] mt-[30px] mb-[30px]"
-              />
+              />}
 
               {/* Footnotes & Apparatus */}
               {chapter.footnotes && chapter.footnotes.length > 0 && (

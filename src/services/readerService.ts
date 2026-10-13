@@ -134,6 +134,9 @@ function ensureWorkById(workId: string): void {
 // effect is that navigating to this chapter later is a chapterCache hit,
 // which loadChapterContent serves with no network round trip at all.
 function prefetchChapterContent(chapter: Chapter): void {
+  // A section is a tiny skeleton fetched on demand; its bare path would
+  // download the whole subtree.
+  if (chapter.isSection) return;
   prefetchChapterContentByPath(chapter.workId, chapter.id);
 }
 
@@ -283,13 +286,15 @@ function loadChapterContent(chapter: Chapter): void {
   // The failure set is part of the guard: without it every later render's
   // getChapter() re-fired the load, turning one server 500 into an endless
   // retry storm (observed as the same chapter warning dozens of times).
-  if (contentLoads.has(chapter.id) || chapter.plainText || contentLoadFailures.has(chapter.id)) return;
+  if (contentLoads.has(chapter.id) || chapter.plainText || chapter.htmlContent || contentLoadFailures.has(chapter.id)) return;
 
   // Published chapter text never changes underneath a given chapterId -
   // a cache hit is used as-is, no network round trip at all. See
   // chapterCache.ts for the LRU-by-book eviction (foundation for future
   // offline reading, not just a speed win).
-  const cached = chapterCache.get(chapter.workId, chapter.id);
+  // A section is only its heading and own text - tiny, and always fetched
+  // fresh so a cached whole-subtree page can never stand in for it.
+  const cached = chapter.isSection ? null : chapterCache.get(chapter.workId, chapter.id);
   if (cached) {
     Object.assign(chapter, cached);
     // Not notify() right away: this runs inside getChapter(), which
@@ -302,12 +307,12 @@ function loadChapterContent(chapter: Chapter): void {
   }
 
   contentLoads.add(chapter.id);
-  void fetchRealChapterContent(chapter.id, () => missingContent.add(chapter.id))
+  void fetchRealChapterContent(chapter.id, () => missingContent.add(chapter.id), chapter.isSection)
     .then(content => {
       if (content) {
         contentLoadFailures.delete(chapter.id);
         Object.assign(chapter, content);
-        chapterCache.set(chapter.workId, chapter.id, {
+        if (!chapter.isSection) chapterCache.set(chapter.workId, chapter.id, {
           htmlContent: content.htmlContent,
           plainText: content.plainText,
           noteCount: content.noteCount,
@@ -850,7 +855,8 @@ export const readerService = {
   getRandomChapter(): { work: Work; chapter: Chapter } {
     const work = this.getRandomWork();
     const chapters = this.getChaptersForWork(work.id);
-    const chapter = chapters[Math.floor(Math.random() * chapters.length)];
+    const readable = chapters.filter(c => !c.isSection);
+    const chapter = (readable.length ? readable : chapters)[Math.floor(Math.random() * (readable.length || chapters.length))];
     return { work, chapter };
   },
 

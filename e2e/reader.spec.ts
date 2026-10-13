@@ -81,6 +81,53 @@ test('TOC search keeps matching chapters grouped under their book divisions', as
   await expect(sidebar.getByText('1. King Theodoric to Anastasius, Most Pious Emperor. a.d. 511.')).toBeVisible();
 });
 
+test('TOC sections are collapsed except the ones leading to the chapter being read', async ({ page }) => {
+  await page.goto('/app/reader/sagarra/paulina/primera_part/i');
+  await page.locator('#btn-reader-toc-menu').waitFor();
+  await page.click('#btn-reader-toc-menu');
+
+  const sidebar = page.locator('#reader-toc-sidebar');
+  const toggle = (name: string) => sidebar.locator(`button[aria-expanded][aria-label$="${name}"]`);
+  await expect(toggle('PRIMERA PART')).toHaveAttribute('aria-expanded', 'true');
+  await expect(sidebar.locator('[aria-current="true"]')).toBeVisible();
+  await expect(toggle('SEGONA PART')).toHaveAttribute('aria-expanded', 'false');
+  const chapterRows = sidebar.locator('button:not([aria-expanded])[class*="justify-between"]');
+  const before = await chapterRows.count();
+
+  await toggle('SEGONA PART').click();
+  await expect(toggle('SEGONA PART')).toHaveAttribute('aria-expanded', 'true');
+  expect(await chapterRows.count()).toBeGreaterThan(before);
+  await toggle('SEGONA PART').click();
+  await expect(chapterRows).toHaveCount(before);
+});
+
+test('a section opens as its own title page, fetched without its sub-chapters', async ({ page }) => {
+  const contentRequests: string[] = [];
+  page.on('request', request => {
+    if (request.url().includes('/api/server-content/sagarra/paulina/primera_part.')) contentRequests.push(request.url());
+  });
+  await page.goto('/app/reader/sagarra/paulina/primera_part');
+  const text = page.locator('.reader-text-container.reader-section-page');
+  await expect(text).toBeVisible();
+  await expect(text.locator('h1, h2, h3').first()).toContainText('PRIMERA PART');
+  await expect(text.locator('p')).toHaveCount(0);
+  expect(contentRequests.length).toBeGreaterThan(0);
+  expect(contentRequests.every(url => url.includes('depth=0'))).toBe(true);
+
+  // Next page is the first chapter of that part, previous the work's title page.
+  await page.locator("#btn-reader-next-chapter-top").click();
+  await expect(page).toHaveURL(/primera_part\/i$/);
+  await expect(page.locator('.reader-text-container.reader-section-page')).toHaveCount(0);
+});
+
+test('the work root is a title page that keeps the text the chapters do not carry', async ({ page }) => {
+  await page.goto('/app/reader/creanga/amintiri_din_copilarie');
+  const text = page.locator('.reader-text-container.reader-section-page');
+  await expect(text).toContainText('Amintiri din copilărie');
+  await expect(text).toContainText('Dedicație d-șoarei L.M.');
+  await expect(text).not.toContainText('Stau câteodată');
+});
+
 test('the header hides on scroll down and reappears on scroll up', async ({ page }) => {
   await page.goto('/app/');
   await page.locator('[id^="btn-open-work-"]').first().click();

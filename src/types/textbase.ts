@@ -61,6 +61,11 @@ export interface Chapter {
   workId: string;
   chapterNumber: number;
   title: string;
+  /**
+   * A non-leaf division (a book, part, volume...): its page is a title page
+   * plus any text it holds of its own, loaded without its sub-chapters.
+   */
+  isSection?: boolean;
   /** Non-leaf divisions between the work and this chapter, in TOC order. */
   ancestors?: Array<{ id: string; title: string; depth: number }>;
   subtitle?: string;

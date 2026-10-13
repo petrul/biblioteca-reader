@@ -69,15 +69,25 @@ test('live TOC chapters retain their non-leaf division hierarchy', async () => {
   };
   try {
     const chapters = await fetchRealChaptersForWork('author/work');
-    assert.deepEqual(chapters.map(chapter => chapter.chapterNumber), [1, 2, 3]);
+    // Every division is a page in document order: sections are title pages.
+    assert.deepEqual(chapters.map(chapter => chapter.chapterNumber), [1, 2, 3, 4, 5, 6]);
+    assert.deepEqual(chapters.map(chapter => Boolean(chapter.isSection)), [true, true, false, false, true, false]);
     assert.deepEqual(chapters.map(chapter => chapter.ancestors?.map(ancestor => ancestor.title)), [
+      [],
+      [],
       ['BOOK I.'],
       ['BOOK I.'],
+      [],
       ['BOOK II.']
     ]);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('a section loads without its sub-chapters', () => {
+  assert.equal(chapterContentUrl('author/work/book_i', 'html', true), '/api/server-content/author/work/book_i.html?depth=0');
+  assert.equal(chapterContentUrl('author/work/book_i', 'html'), '/api/server-content/author/work/book_i.html');
 });
 
 test('Lucene results show a bounded excerpt around the searched text', () => {

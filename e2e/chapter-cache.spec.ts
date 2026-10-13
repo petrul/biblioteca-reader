@@ -11,6 +11,16 @@ import { test, expect } from '@playwright/test';
  * Requires the dev server already running (see playwright.config.ts).
  */
 
+// Title pages (sections) are tiny skeletons that are never cached, so reading
+// starts counting from the first real chapter.
+async function skipTitlePages(page: import('@playwright/test').Page) {
+  await expect(page.locator('.reader-text-container')).toBeVisible();
+  for (let i = 0; i < 6 && await page.locator('.reader-section-page').count(); i++) {
+    await page.locator('#btn-reader-next-chapter-top').click();
+    await expect(page.locator('.reader-text-container')).toBeVisible();
+  }
+}
+
 test('reading a chapter caches its content, and reopening it after a reload skips the network fetch', async ({ page }) => {
   // Cold SPA boot plus the works-catalog fetch can eat most of the
   // default timeout on a busy dev server - this test opens and reloads
@@ -21,7 +31,7 @@ test('reading a chapter caches its content, and reopening it after a reload skip
   await page.locator('#tab-sub-works').click();
   await page.locator('[id^="card-work-"][id*="/"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
-  await expect(page.locator('.reader-text-container')).toBeVisible();
+  await skipTitlePages(page);
 
   const cacheRaw = await page.evaluate(() => localStorage.getItem('biblioteca.reader.chapterCache.v1'));
   expect(cacheRaw).toBeTruthy();
@@ -57,7 +67,7 @@ test('the chapter cache keeps at most 3 books, evicting the least recently touch
       location.pathname.replace(/^\/app\/work\//, '').split('/').map(decodeURIComponent).join('/')
     );
     await page.locator('#btn-read-first-chapter').click();
-    await expect(page.locator('.reader-text-container')).toBeVisible();
+    await skipTitlePages(page);
     return workId;
   };
 

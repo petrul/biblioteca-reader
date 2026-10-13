@@ -299,7 +299,10 @@ export async function fetchRealChaptersForWork(workPath: string): Promise<Chapte
   });
   const toc = requireData(tocResult, `/api/divs/${root.id}/toc`);
   const leaves = toc.filter(div => div.leaf && div.path);
-  const readable = leaves.length ? leaves : toc.filter(div => div.path === workPath);
+  // Every division is a page, in document order: leaves are chapters, the
+  // rest are section title pages (which may carry text of their own). A work
+  // the server reports without any leaf is just its root, read whole.
+  const readable = leaves.length ? toc.filter(div => div.path) : toc.filter(div => div.path === workPath);
   const divisionsByPath = new Map(
     toc.filter(div => div.path).map(div => [div.path!, div])
   );
@@ -321,6 +324,7 @@ export async function fetchRealChaptersForWork(workPath: string): Promise<Chapte
       : [],
     wordCount: div.wordSize || 0,
     charCount: div.size,
+    ...(leaves.length && !div.leaf ? { isSection: true } : {}),
     htmlContent: '',
     plainText: '',
     illustrations: [],
@@ -332,13 +336,17 @@ export class ServerHttpError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
-export function chapterContentUrl(path: string, extension: 'txt' | 'xml' | 'json' | 'html'): string {
+/**
+ * `skeleton` asks for a non-leaf division without its sub-chapters
+ * (?depth=0): its own heading and text only, never the whole book.
+ */
+export function chapterContentUrl(path: string, extension: 'txt' | 'xml' | 'json' | 'html', skeleton = false): string {
   const encoded = path.split('/').map(encodeURIComponent).join('/');
-  return `${SERVER_CONTENT}/${encoded}.${extension}`;
+  return `${SERVER_CONTENT}/${encoded}.${extension}${skeleton ? '?depth=0' : ''}`;
 }
 
-async function rawText(path: string, extension: 'txt' | 'xml' | 'json' | 'html'): Promise<string> {
-  const response = await trackedFetch(chapterContentUrl(path, extension));
+async function rawText(path: string, extension: 'txt' | 'xml' | 'json' | 'html', skeleton = false): Promise<string> {
+  const response = await trackedFetch(chapterContentUrl(path, extension, skeleton));
   if (!response.ok) throw new ServerHttpError(`textbase-server ${path}.${extension} -> HTTP ${response.status}`, response.status);
   return response.text();
 }
@@ -377,7 +385,7 @@ export function rewriteServerBinaryUrls(html: string): string {
   );
 }
 
-export async function fetchRealChapterContent(chapterPath: string, onNotFound?: () => void): Promise<Pick<Chapter, 'plainText' | 'htmlContent' | 'noteCount' | 'sentenceCount'> | null> {
+export async function fetchRealChapterContent(chapterPath: string, onNotFound?: () => void, skeleton = false): Promise<Pick<Chapter, 'plainText' | 'htmlContent' | 'noteCount' | 'sentenceCount'> | null> {
   try {
     // 'html' (not 'xhtml' - textbase-server has no such route) is the
     // UNDECORATED content endpoint: clean, transformed markup with no site
@@ -387,7 +395,7 @@ export async function fetchRealChapterContent(chapterPath: string, onNotFound?: 
     // into the reader's own content area via dangerouslySetInnerHTML.
     // XML and JSON are requested only by the explicit export links.
     const [plainText, htmlContent] = await Promise.all([
-      rawText(chapterPath, 'txt'), rawText(chapterPath, 'html')
+      rawText(chapterPath, 'txt', skeleton), rawText(chapterPath, 'html', skeleton)
     ]);
     return { plainText, htmlContent: rewriteServerBinaryUrls(htmlContent), noteCount: countNotes(htmlContent), sentenceCount: countSentences(plainText) };
   } catch (error) {

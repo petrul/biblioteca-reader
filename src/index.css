@@ -115,6 +115,50 @@
     line-height: 1.75rem;
   }
 }
+/* A section (book, part, volume...) page: its title set large and centered
+   with room to breathe. Most hold only the title; any text the section has
+   of its own simply follows it in the normal body style. */
+.reader-section-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: min(68vh, 34rem);
+  padding-block: 3rem;
+}
+.reader-section-page :is(h1, h2, h3, h4, h5, h6) {
+  font-size: clamp(2rem, 8vw, 3.5rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin-block: 0 1.75rem;
+  padding-block: 0;
+  border-bottom: 0;
+  text-wrap: balance;
+}
+.reader-section-page > :is(h1, h2, h3, h4, h5, h6):first-of-type:not(.author)::after {
+  content: '❖';
+  display: block;
+  margin-top: 1.75rem;
+  font-size: 1.125rem;
+  font-weight: 400;
+  opacity: 0.45;
+}
+.reader-section-page > :is(h1, h2, h3, h4, h5, h6):has(+ .deco-title-author-separator)::after {
+  content: none;
+}
+.reader-section-page .head-label {
+  font-size: 1.125rem;
+}
+.reader-section-page :is(h1, h2, h3, h4, h5, h6).author {
+  font-size: 1.25rem;
+  font-weight: 400;
+  font-style: italic;
+  opacity: 0.8;
+}
+.reader-section-page :is(.epigraph, .deco-title-author-separator) {
+  text-align: center;
+  font-style: italic;
+  opacity: 0.75;
+}
 .reader-text-container hr {
   margin-block: 2rem;
   border: 0;

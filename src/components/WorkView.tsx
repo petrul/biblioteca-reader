@@ -28,6 +28,7 @@ import { PaymentCheckoutModal } from './PaymentCheckoutModal';
 import { WorkCoverImage } from './DefaultWorkCover';
 import { AdminCoverSection } from './AdminCoverSection';
 import { NotFoundCard } from './NotFoundCard';
+import { isPreviewPage } from '../services/tocTree';
 
 interface WorkViewProps {
   workId: string;
@@ -504,13 +505,14 @@ export const WorkView: React.FC<WorkViewProps> = ({
             </p>
           )}
           {chapters.map((chapter) => {
-            const isChapterLocked = isPremium && !isUnlocked && chapter.chapterNumber > 1;
+            const isChapterLocked = isPremium && !isUnlocked && !isPreviewPage(chapters, chapter);
 
             return (
               <div
                 key={chapter.id}
                 id={`toc-chapter-${chapter.id}`}
                 className="p-4 sm:p-5 hover:bg-emerald-500/10 transition-colors flex items-center justify-between gap-4 group"
+                style={{ paddingLeft: `${20 + (chapter.ancestors?.length ?? 0) * 16}px` }}
               >
                 <div className="flex items-start space-x-4">
                   <span className={`w-8 h-8 rounded-lg font-mono font-bold text-xs flex items-center justify-center shrink-0 border ${
@@ -531,11 +533,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
                             onSelectChapter(work.id, chapter.id);
                           }
                         }}
-                        className="font-display-title text-sm sm:text-base font-bold text-white group-hover:text-[#f59e0b] transition-colors cursor-pointer"
+                        className={`font-display-title text-sm sm:text-base font-bold group-hover:text-[#f59e0b] transition-colors cursor-pointer ${
+                          chapter.isSection ? 'text-amber-200 uppercase tracking-wide' : 'text-white'
+                        }`}
                       >
                         {chapter.title}
                       </h4>
-                      {isPremium && !isUnlocked && chapter.chapterNumber === 1 && (
+                      {isPremium && !isUnlocked && !isChapterLocked && chapter.id === chapters.find(c => !c.isSection)?.id && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                           Free Preview
                         </span>
@@ -553,7 +557,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
                       </p>
                     )}
                     <div className="flex items-center space-x-3 text-[11px] text-emerald-200/50 font-mono mt-1">
-                      <span>{chapter.wordCount} words</span>
+                      {!chapter.isSection && <span>{chapter.wordCount} words</span>}
                       {chapter.illustrations && chapter.illustrations.length > 0 && (
                         <span className="text-[#f59e0b] font-semibold">• {chapter.illustrations.length} illustration</span>
                       )}
