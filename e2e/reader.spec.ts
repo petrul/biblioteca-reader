@@ -345,7 +345,9 @@ test('a long press on the bookmark button opens the collections menu and saves i
   await expect(menu.getByRole('menuitemcheckbox', { name })).toHaveAttribute('aria-checked', 'false');
 });
 
-test('next/previous chapter navigation plays the card-turn animation, in the right direction', async ({ page }) => {
+test('opening a book flips the page; next/previous within it slides, in the right direction', async ({ page }) => {
+  // The rule itself is unit-tested (chapterTransition.test.ts); this pins
+  // that ReaderView applies it.
   await page.goto('/app/');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
@@ -353,21 +355,25 @@ test('next/previous chapter navigation plays the card-turn animation, in the rig
   const column = page.locator('main > div').first();
   const startUrl = page.url();
 
-  await page.locator('#btn-reader-next-chapter').click();
-  await expect.poll(() => page.url()).not.toBe(startUrl);
+  // Arriving on the work: the page flip.
   await expect(column).toHaveClass(/chapter-turn-next/);
   await expect(column).not.toHaveClass(/chapter-turn-/, { timeout: 3_000 }); // cleared on animationend
 
-  await page.keyboard.press('ArrowLeft');
-  await expect.poll(() => page.url()).toBe(startUrl);
-  await expect(column).toHaveClass(/chapter-turn-prev/);
-  await expect(column).not.toHaveClass(/chapter-turn-/, { timeout: 3_000 });
-
-  // The toolbar's Back (a history back) turns back to the previous chapter too.
   await page.locator('#btn-reader-next-chapter').click();
   await expect.poll(() => page.url()).not.toBe(startUrl);
-  await expect(column).not.toHaveClass(/chapter-turn-/, { timeout: 3_000 });
+  await expect(column).toHaveClass(/chapter-slide-next/);
+  await expect(column).not.toHaveClass(/chapter-(turn|slide)-/, { timeout: 3_000 });
+
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => page.url()).toBe(startUrl);
+  await expect(column).toHaveClass(/chapter-slide-prev/);
+  await expect(column).not.toHaveClass(/chapter-(turn|slide)-/, { timeout: 3_000 });
+
+  // The toolbar's Back (a history back) slides back to the previous chapter too.
+  await page.locator('#btn-reader-next-chapter').click();
+  await expect.poll(() => page.url()).not.toBe(startUrl);
+  await expect(column).not.toHaveClass(/chapter-(turn|slide)-/, { timeout: 3_000 });
   await page.locator('#btn-reader-back-work').click();
   await expect.poll(() => page.url()).toBe(startUrl);
-  await expect(column).toHaveClass(/chapter-turn-prev/);
+  await expect(column).toHaveClass(/chapter-slide-prev/);
 });

@@ -50,6 +50,7 @@ import { useSpeechReader } from '../hooks/useSpeechReader';
 import { useSwipeNavigate } from '../hooks/useSwipeNavigate';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { FootnoteSheet } from './FootnoteSheet';
+import { chapterTransitionClass, type PendingChapterTurn } from '../services/chapterTransition';
 import { PaymentCheckoutModal } from './PaymentCheckoutModal';
 import { bibliotecaExternalUrl, chapterContentUrl, ENDING_ORNAMENT_IMAGE } from '../services/serversideApi';
 import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
@@ -400,17 +401,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   };
 
   // Keyboard navigation shortcuts (ArrowLeft / ArrowRight)
-  // Page-turn animation for next/previous chapter navigation (buttons,
-  // arrow keys, swipes): the direction is noted here and a one-shot
-  // chapter-* class (index.css) applied once the new chapter is shown.
-  // In-book turns always play the calmer slide (chapter-slide-*), the new
-  // page coming in from the direction of travel; the dramatic 3D card
-  // swing (chapter-turn-*) is reserved for opening a book (below). The
-  // toolbar's Back is a history back (App's handleReaderBack): it notes
-  // a 'prev' turn too, which plays only if it lands on another chapter
-  // shortly after - hence the timestamp, so a Back that left the chapter
-  // unchanged cannot animate a later TOC jump.
-  const pendingChapterTurn = useRef<{ direction: 'next' | 'prev'; at: number } | null>(null);
+  // Page-turn animation: next/previous chapter navigation (buttons, arrow
+  // keys, swipes) notes its direction here, and a one-shot chapter-* class
+  // (index.css) is applied once the new chapter is shown - the page flip on
+  // arriving on a work, the slide for turns within it; chapterTransitionClass
+  // decides (and its unit test pins the rule). The toolbar's Back is a
+  // history back (App's handleReaderBack): it notes a 'prev' turn too, which
+  // plays only if it lands on another chapter shortly after.
+  const pendingChapterTurn = useRef<PendingChapterTurn | null>(null);
   const [chapterTurnClass, setChapterTurnClass] = useState('');
   const noteChapterTurn = (direction: 'next' | 'prev') => {
     pendingChapterTurn.current = { direction, at: Date.now() };
@@ -419,24 +417,16 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     noteChapterTurn(direction);
     onSelectChapter(workId, chapterId);
   };
+  // The work last shown: arriving on a different one (or the first) is
+  // opening a book, which flips the page instead of sliding it.
+  const shownWorkId = useRef<string | null>(null);
   useEffect(() => {
     const pending = pendingChapterTurn.current;
     pendingChapterTurn.current = null;
-    if (pending && Date.now() - pending.at < 2000) {
-      setChapterTurnClass(`chapter-slide-${pending.direction}`);
-    }
-  }, [chapter?.id]);
-
-  // Opening a book (mounting on a work, or the work switching underneath,
-  // e.g. "More like this" jumping straight into another one) plays the 3D
-  // card swing once, hinged on the left like the cover coming down onto
-  // the page. Chapter turns within the same book don't re-trigger it.
-  const openedWorkId = useRef<string | null>(null);
-  useEffect(() => {
-    if (openedWorkId.current === workId) return;
-    openedWorkId.current = workId;
-    setChapterTurnClass('chapter-turn-next');
-  }, [workId]);
+    const transition = chapterTransitionClass(shownWorkId.current, workId, pending, Date.now());
+    shownWorkId.current = workId;
+    if (transition) setChapterTurnClass(transition);
+  }, [workId, chapter?.id]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
