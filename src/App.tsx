@@ -17,6 +17,7 @@ import { AuthorView } from './components/AuthorView';
 import { WorkView } from './components/WorkView';
 import { ReaderView } from './components/ReaderView';
 import { SearchView } from './components/SearchView';
+import { attachSavedSearchesAccount, detachSavedSearchesAccount, subscribeSavedSearches } from './services/savedSearches';
 import { CollectionsView } from './components/CollectionsView';
 import { AdminView } from './components/AdminView';
 import { QuoteView } from './components/QuoteView';
@@ -103,12 +104,15 @@ export default function App() {
     const account = who.authenticated && who.username ? who.username : null;
     if (collectionsAccountRef.current && collectionsAccountRef.current !== account) {
       readerService.detachCollectionsStore(collectionsAccountRef.current);
+      detachSavedSearchesAccount();
       collectionsAccountRef.current = null;
     }
     if (account && collectionsAccountRef.current !== account) {
       collectionsAccountRef.current = account;
       void readerService.attachCollectionsStore(account, preferencesStoreFor(true))
         .catch(error => console.warn('[collections] could not load the account\'s collections', error));
+      void attachSavedSearchesAccount()
+        .catch(error => console.warn('[saved-search] could not load the account\'s saved searches', error));
     }
     if (who.authenticated && who.username) {
       const user: User = {
@@ -191,6 +195,7 @@ export default function App() {
   const [collectionModalPayload, setCollectionModalPayload] = useState<AddToCollectionPayload | null>(null);
 
   useEffect(() => readerService.subscribe(() => setDataRevision(value => value + 1)), []);
+  useEffect(() => subscribeSavedSearches(() => setDataRevision(value => value + 1)), []);
 
   // Skips the path-push effect below on its very first run: that first
   // run's closure still sees the default ('browse') state captured at
@@ -561,6 +566,10 @@ export default function App() {
           onSelectWork={handleSelectWork}
           onSelectChapter={handleSelectChapter}
           onOpenQuote={handleOpenQuote}
+          onRunSearch={query => {
+            setSearchQuery(query);
+            setCurrentView('search');
+          }}
           onBack={handleAppBack}
         />
 

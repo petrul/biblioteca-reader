@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { PersonalCollection, CollectionItem, User, CollectionItemType } from '../types/textbase';
 import { readerService, ANONYMOUS_USER_ID } from '../services/readerService';
+import { SavedSearchesSection } from './SavedSearchesSection';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
 
 interface CollectionsViewProps {
@@ -26,6 +27,7 @@ interface CollectionsViewProps {
   onSelectWork: (workId: string) => void;
   onSelectChapter: (workId: string, chapterId: string) => void;
   onOpenQuote: (quoteId: string) => void;
+  onRunSearch: (query: string) => void;
   onBack: () => void;
 }
 
@@ -36,6 +38,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
   onSelectWork,
   onSelectChapter,
   onOpenQuote,
+  onRunSearch,
   onBack
 }) => {
   // Sign-out lives in the AuthModal (the signed-in navbar avatar opens it),
@@ -69,7 +72,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
   // mount went stale - chapters bookmarked in the reader (saved through
   // AddToCollectionModal) never showed up in Favorites.
   const collections: PersonalCollection[] = readerService.getCollections(userId);
-  const [selectedColId, setSelectedColId] = useState<string>('col-favorites');
+  const [selectedColId, setSelectedColId] = useState<string>('');
   
   // New Collection Form
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -224,6 +227,8 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
               );
             })}
           </div>
+
+          <SavedSearchesSection onRunSearch={onRunSearch} onSelectWork={onSelectWork} onSelectChapter={onSelectChapter} />
         </div>
 
         {/* Right Main Panel: Collection Details and Saved Items */}

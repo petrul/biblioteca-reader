@@ -23,6 +23,7 @@ import {
 import { SearchMode, SearchResult, LanguageCode, PersonalCollection } from '../types/textbase';
 import { languageName } from '../services/languageNames';
 import { readerService, ANONYMOUS_USER_ID } from '../services/readerService';
+import { saveSearch } from '../services/savedSearches';
 
 interface SearchViewProps {
   initialMode?: SearchMode;
@@ -145,6 +146,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
   const queryInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { queryInputRef.current?.focus(); }, []);
   const [page, setPage] = useState(1);
+  // Saving applies to the query/results shown - any change of query or mode makes it saveable again.
+  const [searchSaveState, setSearchSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  useEffect(() => setSearchSaveState('idle'), [query, activeMode, combinedMode]);
   // Flips the header card to reveal the 5 search-mode explanation boxes
   // on the back - same rotate-y-180 mechanism as WorkView's technical
   // metadata and ReaderView's chapter stats. The front keeps a compact
@@ -552,7 +556,24 @@ export const SearchView: React.FC<SearchViewProps> = ({
         <div className="space-y-4">
           <div className="flex items-center justify-between text-xs text-emerald-200/60 font-mono">
             <span>Total results: {searchResponse.total} {searchResponse.total === 1 ? 'match' : 'matches'} {combinedMode ? 'across all 5 modes' : `in ${activeMode.toUpperCase()} mode`}</span>
-            <span>Page {page} of {searchResponse.totalPages}</span>
+            <div className="flex items-center gap-4">
+              <button
+                id="btn-save-search"
+                type="button"
+                disabled={searchSaveState === 'saving'}
+                onClick={() => {
+                  setSearchSaveState('saving');
+                  saveSearch(query, combinedMode ? 'all' : activeMode, searchResponse.results)
+                    .then(() => setSearchSaveState('saved'))
+                    .catch(error => { console.warn('[saved-search] could not save', error); setSearchSaveState('failed'); });
+                }}
+                className="flex items-center space-x-1 text-xs font-sans font-bold text-amber-300 hover:text-white transition-colors cursor-pointer disabled:opacity-60"
+              >
+                <Bookmark className="w-3.5 h-3.5" fill={searchSaveState === 'saved' ? 'currentColor' : 'none'} />
+                <span>{searchSaveState === 'saved' ? 'Search saved' : searchSaveState === 'failed' ? 'Could not save - retry' : 'Save search'}</span>
+              </button>
+              <span>Page {page} of {searchResponse.totalPages}</span>
+            </div>
           </div>
 
           <div className="space-y-3">

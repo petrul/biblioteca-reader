@@ -201,8 +201,7 @@ export interface Quotation {
 
 export type CollectionItemType = 'work' | 'chapter' | 'quote';
 
-export interface CollectionItem {
-  id: string;
+export interface CollectionItem extends CollectionEntry {
   type: CollectionItemType;
   referenceId: string; // workId, chapterId, or quoteId
   workId: string;
@@ -211,19 +210,48 @@ export interface CollectionItem {
   chapterId?: string;
   chapterTitle?: string;
   quoteText?: string;
-  addedAt: string;
   note?: string;
 }
 
-export interface PersonalCollection {
-  id: string;
-  userId: string;
+/** Favourites, user-curated collections and saved searches - mirrors the server's ItemCollection. */
+export type CollectionKind = 'favorites' | 'user' | 'search';
+
+export interface CollectionEntry {
+  id: string; // UUID
+  addedAt: string;
+}
+
+export interface Collection<Entry extends CollectionEntry = CollectionEntry> {
+  id: string; // UUID
+  kind: CollectionKind;
   name: string;
-  description?: string;
-  isDefaultFavorites: boolean;
   createdAt: string;
   updatedAt: string;
-  items: CollectionItem[];
+  items: Entry[];
+}
+
+export interface PersonalCollection extends Collection<CollectionItem> {
+  kind: 'favorites' | 'user';
+  userId: string;
+  description?: string;
+  isDefaultFavorites: boolean;
+}
+
+export interface SavedSearchItem extends CollectionEntry {
+  workId: string; // stable authorId/opusId path
+  chapterId?: string;
+  workTitle: string;
+  authorName: string;
+  chapterTitle?: string;
+  snippet: string;
+  score?: number;
+}
+
+/** The results of a search, kept as a collection; its name defaults to the query and is editable. */
+export interface SavedSearch extends Collection<SavedSearchItem> {
+  kind: 'search';
+  query: string;
+  mode?: SearchMode;
 }
 
 export interface User {

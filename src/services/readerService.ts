@@ -15,6 +15,7 @@ import {
   BookPurchaseReceipt,
   PaymentServiceConfig
 } from '../types/textbase';
+import { newId } from './ids';
 import { buildAppPath } from '../router';
 import { LocalPreferencesStore, PreferencesStore } from './preferencesStore';
 import { chapterCache } from './chapterCache';
@@ -524,10 +525,26 @@ export function resetCollectionsForTests(): void {
   localPreferences = undefined;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Brings stored collections up to the current shape: a `kind` on each, and
+ * UUID ids in place of the old `col-...` / `item-...` ones.
+ */
+export function normalizeCollections(cols: PersonalCollection[]): PersonalCollection[] {
+  return cols.map(col => ({
+    ...col,
+    id: UUID_PATTERN.test(col.id) ? col.id : newId(),
+    kind: col.isDefaultFavorites ? 'favorites' : 'user',
+    items: col.items.map(item => (UUID_PATTERN.test(item.id) ? item : { ...item, id: newId() }))
+  }));
+}
+
 function defaultCollections(userId: string): PersonalCollection[] {
   return [
     {
-      id: 'col-favorites',
+      id: newId(),
+      kind: 'favorites',
       userId,
       name: 'Favorites',
       description: 'Your primary bookmarked works, chapters, and notable quotations.',
@@ -570,8 +587,13 @@ function loadStoredCollections(userId: string): PersonalCollection[] {
   // else the legacy per-user key (migrated into them), else the defaults.
   // Written quietly - this runs during render, where a notify() must not fire.
   let cols = localPreferencesStore().getSync().collections ?? null;
+  const migrated = cols ? normalizeCollections(cols) : null;
+  if (cols && JSON.stringify(migrated) !== JSON.stringify(cols)) {
+    cols = migrated;
+    if (!collectionsStores.has(userId)) void localPreferencesStore().set({ collections: cols }).catch(e => console.error(e));
+  }
   if (!cols) {
-    cols = readLegacyCollections(userId) ?? defaultCollections(userId);
+    cols = normalizeCollections(readLegacyCollections(userId) ?? defaultCollections(userId));
     if (!collectionsStores.has(userId)) void localPreferencesStore().set({ collections: cols }).catch(e => console.error(e));
   }
   collectionsCache.set(userId, cols);
@@ -1095,14 +1117,16 @@ export const readerService = {
     return loadStoredCollections(userId);
   },
 
+  /** The (UUID) id of the user's non-deletable Favorites collection. */
+  getFavoritesId(userId: string): string {
+    return loadStoredCollections(userId).find(c => c.isDefaultFavorites)!.id;
+  },
+
   createCollection(userId: string, name: string, description?: string): PersonalCollection {
     const cols = loadStoredCollections(userId);
     const newCol: PersonalCollection = {
-      // Same id shape as collection items below (Date.now() plus a random
-      // suffix): bare Date.now() collided when two collections were created
-      // in the same millisecond (the unit tests do exactly that, and the
-      // sign-in migration creates several back-to-back).
-      id: `col-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: newId(),
+      kind: 'user',
       userId,
       name,
       description,
@@ -1138,7 +1162,7 @@ export const readerService = {
 
     const newItem: CollectionItem = {
       ...item,
-      id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: newId(),
       addedAt: new Date().toISOString()
     };
 
@@ -1196,9 +1220,11 @@ export const readerService = {
     collectionsStores.set(userId, store);
     const remote = (await store.get()).collections;
     if (remote && remote.length) {
-      collectionsCache.set(userId, copyCollections(remote));
+      const migrated = normalizeCollections(remote);
+      collectionsCache.set(userId, copyCollections(migrated));
+      if (JSON.stringify(migrated) !== JSON.stringify(remote)) await store.set({ collections: migrated });
     } else {
-      const seed = readLegacyCollections(userId) ?? collectionsCache.get(userId) ?? defaultCollections(userId);
+      const seed = normalizeCollections(readLegacyCollections(userId) ?? collectionsCache.get(userId) ?? defaultCollections(userId));
       collectionsCache.set(userId, copyCollections(seed));
       await store.set({ collections: seed });
     }

@@ -52,13 +52,13 @@ test('a chapter bookmarked into Favorites notifies subscribers and appears in Co
     let notifications = 0;
     const unsubscribe = readerService.subscribe(() => { notifications++; });
     try {
-      readerService.addItemToCollection(ANONYMOUS_USER_ID, 'col-favorites', chapterItem(1));
+      readerService.addItemToCollection(ANONYMOUS_USER_ID, readerService.getFavoritesId(ANONYMOUS_USER_ID), chapterItem(1));
       assert.ok(notifications > 0, 'saving a bookmark must notify subscribers, or App never re-renders the view');
 
       const afterFirst = render();
       assert.ok(afterFirst.includes('Bookmarked chapter 1'), 'the bookmarked chapter shows in Favorites');
 
-      readerService.addItemToCollection(ANONYMOUS_USER_ID, 'col-favorites', chapterItem(2));
+      readerService.addItemToCollection(ANONYMOUS_USER_ID, readerService.getFavoritesId(ANONYMOUS_USER_ID), chapterItem(2));
       const afterSecond = render();
       assert.ok(afterSecond.includes('Bookmarked chapter 1') && afterSecond.includes('Bookmarked chapter 2'),
         'a later bookmark shows too - the view must not keep an earlier copy');
@@ -80,9 +80,9 @@ test('every type tab shows its own count, like All (n)', async () => {
   try {
     const { readerService, ANONYMOUS_USER_ID } = await import('../services/readerService');
     const { CollectionsView } = await import('./CollectionsView');
-    readerService.addItemToCollection(ANONYMOUS_USER_ID, 'col-favorites', chapterItem(1));
-    readerService.addItemToCollection(ANONYMOUS_USER_ID, 'col-favorites', chapterItem(2));
-    readerService.addItemToCollection(ANONYMOUS_USER_ID, 'col-favorites', { ...chapterItem(3), type: 'work', referenceId: 'author/other-work', chapterId: undefined });
+    readerService.addItemToCollection(ANONYMOUS_USER_ID, readerService.getFavoritesId(ANONYMOUS_USER_ID), chapterItem(1));
+    readerService.addItemToCollection(ANONYMOUS_USER_ID, readerService.getFavoritesId(ANONYMOUS_USER_ID), chapterItem(2));
+    readerService.addItemToCollection(ANONYMOUS_USER_ID, readerService.getFavoritesId(ANONYMOUS_USER_ID), { ...chapterItem(3), type: 'work', referenceId: 'author/other-work', chapterId: undefined });
     const html = renderToStaticMarkup(createElement(CollectionsView, {
       isOpen: true, currentUser: null,
       onOpenAuth: () => {}, onSelectWork: () => {}, onSelectChapter: () => {}, onOpenQuote: () => {},

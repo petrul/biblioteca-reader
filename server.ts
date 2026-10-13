@@ -477,6 +477,34 @@ async function relayPutToBiblioteca(req: Request, res: Response) {
 ['/api/reading-progress', '/api/reading-progress/attention', '/api/reading-progress/scroll', '/api/users/me/preferences']
   .forEach(route => app.put(route, relayPutToBiblioteca));
 
+// Saved searches and collection edits (biblioteca-server's /api/collections/mine
+// family) - explicit routes like every other one here, never a wildcard.
+function relayBodyToBiblioteca(method: 'POST' | 'PATCH' | 'DELETE') {
+  return async (req: Request, res: Response) => {
+    try {
+      const upstreamRes = await fetch(`${BIBLIOTECA_SERVER_URL}${req.originalUrl}`, {
+        method,
+        headers: { ...forwardedHeaders(req), 'Content-Type': 'application/json' },
+        body: method === 'DELETE' ? undefined : JSON.stringify(req.body ?? {}),
+        redirect: 'manual'
+      });
+      relaySetCookie(upstreamRes, res);
+      res.status(upstreamRes.status);
+      res.setHeader('Content-Type', upstreamRes.headers.get('content-type') || 'application/octet-stream');
+      res.send(Buffer.from(await upstreamRes.arrayBuffer()));
+    } catch (error: any) {
+      res.status(502).json({ error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
+    }
+  };
+}
+app.post('/api/collections/mine/searches', relayBodyToBiblioteca('POST'));
+app.patch('/api/collections/mine/:id', relayBodyToBiblioteca('PATCH'));
+app.delete('/api/collections/mine/:id', relayBodyToBiblioteca('DELETE'));
+app.put('/api/collections/mine/:id/order', relayPutToBiblioteca);
+// The server's own /graphql, same-origin: read access to the signed-in
+// reader's collections (myCollections) goes through here.
+app.post('/graphql', relayBodyToBiblioteca('POST'));
+
 // Same-origin proxy for biblioteca-nestjs's own unauthenticated status
 // endpoint - the admin page's indexing-progress card (IndexingProgressCard)
 // polls this. No cookie relay needed, unlike the biblioteca-server routes

@@ -47,26 +47,26 @@ const localDocument = (): UserPreferences => JSON.parse(storage.getItem(PREFEREN
 
 test('an anonymous reader\'s collections are stored in this browser\'s local preferences', async () => {
   const { readerService, ANONYMOUS_USER_ID } = await import('./readerService');
-  readerService.addItemToCollection(ANONYMOUS_USER_ID, 'col-favorites', chapter(1));
+  readerService.addItemToCollection(ANONYMOUS_USER_ID, readerService.getFavoritesId(ANONYMOUS_USER_ID), chapter(1));
   await settle();
   const stored = localDocument().collections!;
-  assert.equal(stored.find(c => c.id === 'col-favorites')!.items[0].chapterTitle, 'Chapter 1');
+  assert.equal(stored.find(c => c.isDefaultFavorites)!.items[0].chapterTitle, 'Chapter 1');
 });
 
 test('a signed-in reader\'s collections come from and go to the account store, not localStorage', async () => {
   const { readerService } = await import('./readerService');
   const account = new FakeAccountStore({
-    collections: [{ id: 'col-favorites', userId: 'petru', name: 'Favorites', isDefaultFavorites: true, createdAt: '', updatedAt: '', items: [] },
-      { id: 'col-essays', userId: 'petru', name: 'Essays', isDefaultFavorites: false, createdAt: '', updatedAt: '', items: [] }],
+    collections: [{ id: 'col-favorites', kind: 'favorites', userId: 'petru', name: 'Favorites', isDefaultFavorites: true, createdAt: '', updatedAt: '', items: [] },
+      { id: 'col-essays', kind: 'user', userId: 'petru', name: 'Essays', isDefaultFavorites: false, createdAt: '', updatedAt: '', items: [] }],
   });
   await readerService.attachCollectionsStore('petru', account);
   assert.deepEqual(readerService.getCollections('petru').map(c => c.name), ['Favorites', 'Essays'], 'served from the account');
 
   const writesBefore = account.writes;
-  readerService.addItemToCollection('petru', 'col-essays', chapter(7));
+  readerService.addItemToCollection('petru', readerService.getCollections('petru').find(c => c.name === 'Essays')!.id, chapter(7));
   await settle();
   assert.ok(account.writes > writesBefore, 'the change was written to the account store');
-  assert.equal(account.document.collections!.find(c => c.id === 'col-essays')!.items[0].chapterTitle, 'Chapter 7');
+  assert.equal(account.document.collections!.find(c => c.name === 'Essays')!.items[0].chapterTitle, 'Chapter 7');
   assert.ok(!JSON.stringify(localDocument()).includes('Chapter 7'), 'nothing of the account leaks into localStorage');
 });
 
@@ -74,14 +74,14 @@ test('reordering moves an item and the new order is what gets stored', async () 
   const { readerService } = await import('./readerService');
   const account = new FakeAccountStore();
   await readerService.attachCollectionsStore('petru', account);
-  for (const n of [1, 2, 3]) readerService.addItemToCollection('petru', 'col-favorites', chapter(n));
+  for (const n of [1, 2, 3]) readerService.addItemToCollection('petru', readerService.getFavoritesId('petru'), chapter(n));
   // addItemToCollection prepends: the list reads 3, 2, 1.
-  const items = () => readerService.getCollections('petru').find(c => c.id === 'col-favorites')!.items;
+  const items = () => readerService.getCollections('petru').find(c => c.isDefaultFavorites)!.items;
   assert.deepEqual(items().map(i => i.chapterTitle), ['Chapter 3', 'Chapter 2', 'Chapter 1']);
 
-  readerService.moveItemInCollection('petru', 'col-favorites', items()[2].id, -1);
+  readerService.moveItemInCollection('petru', readerService.getFavoritesId('petru'), items()[2].id, -1);
   assert.deepEqual(items().map(i => i.chapterTitle), ['Chapter 3', 'Chapter 1', 'Chapter 2']);
-  readerService.moveItemInCollection('petru', 'col-favorites', items()[0].id, -1); // already first: no-op
+  readerService.moveItemInCollection('petru', readerService.getFavoritesId('petru'), items()[0].id, -1); // already first: no-op
   assert.deepEqual(items().map(i => i.chapterTitle), ['Chapter 3', 'Chapter 1', 'Chapter 2']);
   await settle();
   assert.deepEqual(account.document.collections![0].items.map(i => i.chapterTitle), ['Chapter 3', 'Chapter 1', 'Chapter 2']);
@@ -89,7 +89,7 @@ test('reordering moves an item and the new order is what gets stored', async () 
 
 test('an account without collections is seeded from what this browser held for it (legacy key)', async () => {
   storage.setItem('biblioteca_reader_collections_petru', JSON.stringify([
-    { id: 'col-favorites', userId: 'petru', name: 'Favorites', isDefaultFavorites: true, createdAt: '', updatedAt: '', items: [{ ...chapter(4), id: 'x', addedAt: '' }] },
+    { id: 'col-favorites', kind: 'favorites', userId: 'petru', name: 'Favorites', isDefaultFavorites: true, createdAt: '', updatedAt: '', items: [{ ...chapter(4), id: 'x', addedAt: '' }] },
   ]));
   const { readerService } = await import('./readerService');
   const account = new FakeAccountStore();
@@ -103,4 +103,19 @@ test('preferencesStoreFor picks the account store when signed in, localStorage w
   const { LocalPreferencesStore, RemotePreferencesStore } = await import('./preferencesStore');
   assert.ok(preferencesStoreFor(true) instanceof RemotePreferencesStore);
   assert.ok(preferencesStoreFor(false) instanceof LocalPreferencesStore);
+});
+
+test('legacy collection and item ids are migrated to UUIDs', async () => {
+  const { readerService, ANONYMOUS_USER_ID } = await import('./readerService');
+  const account = new FakeAccountStore({
+    collections: [{ id: 'col-favorites', kind: 'favorites', userId: 'petru', name: 'Favorites', isDefaultFavorites: true, createdAt: '', updatedAt: '', items: [{ ...chapter(1), id: 'item-123-ab', addedAt: '' }] }],
+  });
+  await readerService.attachCollectionsStore('petru', account);
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const [favorites] = readerService.getCollections('petru');
+  assert.match(favorites.id, uuid);
+  assert.match(favorites.items[0].id, uuid);
+  assert.equal(favorites.kind, 'favorites');
+  assert.equal(account.document.collections![0].id, favorites.id, 'the migrated ids were written back');
+  assert.match(readerService.createCollection(ANONYMOUS_USER_ID, 'New').id, uuid);
 });
