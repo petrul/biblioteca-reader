@@ -19,7 +19,7 @@ export function NotFoundCard({ message, primaryLabel, onPrimary, secondaryLabel,
   return (
     <div className="max-w-md mx-auto px-4 py-12 text-center">
       <img
-        src={appAsset('404.png')}
+        src={appAsset('404.jpeg')}
         alt="A book gone astray, somewhere in the stacks"
         className="w-full max-w-[280px] mx-auto rounded-2xl shadow-2xl shadow-black/40 mb-6"
       />

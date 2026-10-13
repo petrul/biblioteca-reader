@@ -30,12 +30,12 @@ const api = createClient<paths>({
   // bookmarkStore.test.ts's withFetchMock). Without this, createClient
   // would snapshot the original global fetch at import time and no
   // post-import stub would ever intercept an API call.
-  fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+  fetch: trackedFetch,
   headers: { Accept: 'application/vnd.hal+json' }
 });
 const bibliotecaServerApi = createClient<bibliotecaServerPaths>({
   baseUrl: (globalThis as { location?: Location }).location?.origin ?? 'http://localhost',
-  fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+  fetch: trackedFetch,
   headers: { Accept: 'application/json' }
 });
 
@@ -44,6 +44,17 @@ type TeiDiv = components['schemas']['TeiDivDto'];
 type AuthorDto = components['schemas']['AuthorDto'] & { worksCount?: number };
 type Hit = components['schemas']['HitDto'];
 export type CatalogPage<T> = { items: T[]; page: number; size: number; totalItems: number; totalPages: number };
+
+export const SERVER_ERROR_EVENT = 'reader:server-error';
+
+export async function trackedFetch(...args: Parameters<typeof globalThis.fetch>): Promise<Response> {
+  const response = await globalThis.fetch(...args);
+  if (response.status >= 500 && typeof window !== 'undefined'
+    && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<number>(SERVER_ERROR_EVENT, { detail: response.status }));
+  }
+  return response;
+}
 
 const SERVER_LANG_TO_CODE: Record<string, LanguageCode> = {
   BG: 'bul', BR: 'bre', CA: 'cat', DA: 'dan', DE: 'deu', EN: 'eng', ES: 'spa',
@@ -209,7 +220,7 @@ export async function fetchRealWorks(limit = 5000, authors: AuthorDto[] = []): P
   // to type-check a call against.
   const divs: Array<EntityDiv | TeiDiv> = [];
   for (let page = 0; divs.length < limit; page += 1) {
-    const response = await fetch(`/api/divs/?page=${page}&size=${pageSize}`, { headers: { Accept: 'application/json' } });
+    const response = await trackedFetch(`/api/divs/?page=${page}&size=${pageSize}`, { headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error(`textbase-server /api/divs/ -> HTTP ${response.status}`);
     const batch = await response.json() as TeiDiv[];
     divs.push(...batch);
@@ -327,7 +338,7 @@ export function chapterContentUrl(path: string, extension: 'txt' | 'xml' | 'json
 }
 
 async function rawText(path: string, extension: 'txt' | 'xml' | 'json' | 'html'): Promise<string> {
-  const response = await fetch(chapterContentUrl(path, extension));
+  const response = await trackedFetch(chapterContentUrl(path, extension));
   if (!response.ok) throw new ServerHttpError(`textbase-server ${path}.${extension} -> HTTP ${response.status}`, response.status);
   return response.text();
 }

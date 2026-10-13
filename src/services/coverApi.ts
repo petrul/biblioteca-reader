@@ -1,5 +1,6 @@
 import createClient from 'openapi-fetch';
 import type { paths } from '../generated/same-origin-api';
+import { trackedFetch } from './serversideApi';
 
 export interface WorkCoverRequest {
   workId: string;
@@ -12,7 +13,7 @@ export interface WorkCoverRequest {
 
 const api = createClient<paths>({
   baseUrl: (globalThis as { location?: Location }).location?.origin ?? 'http://localhost',
-  fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+  fetch: trackedFetch,
 });
 
 /** Render a work cover through the reader's same-origin Express gateway. */

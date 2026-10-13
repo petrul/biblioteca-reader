@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ImagePlus, Loader2 } from 'lucide-react';
+import { trackedFetch } from '../services/serversideApi';
 
 type CoverWork = { coverUrl?: string; request: Record<string, unknown> | null };
 
@@ -18,7 +19,7 @@ export function AdminCoverSection({ workId, onCoverChanged }: { workId: string; 
     let cancelled = false;
     setCurrent(null);
     setError('');
-    fetch(`/api/admin/covers/work/request?path=${encodeURIComponent(workId)}`, { headers: { Accept: 'application/json' } })
+    trackedFetch(`/api/admin/covers/work/request?path=${encodeURIComponent(workId)}`, { headers: { Accept: 'application/json' } })
       .then(async res => {
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body?.error || body?.message || `HTTP ${res.status}`);
@@ -32,7 +33,7 @@ export function AdminCoverSection({ workId, onCoverChanged }: { workId: string; 
     setBusy(true);
     setError('');
     try {
-      const res = await fetch('/api/admin/covers/work', {
+      const res = await trackedFetch('/api/admin/covers/work', {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: workId }),

@@ -33,6 +33,7 @@ import {
   fetchRandomServerLocation,
   fetchRealFeaturedWorks,
   realSearch,
+  trackedFetch,
   fetchPaymentConfig,
   postPaymentIntent,
   confirmPaymentPurchase,
@@ -201,7 +202,7 @@ async function retryServerConnection(): Promise<void> {
   // Existing lightweight server status route; no author/work pages are fetched.
   connectionRetry = (async () => {
     try {
-      const response = await fetch('/api/lucene/status', { signal: AbortSignal.timeout(10000) });
+      const response = await trackedFetch('/api/lucene/status', { signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new ServerHttpError('server status request failed', response.status);
       serverDown = false;
       for (const id of contentLoadFailures) if (!missingContent.has(id)) contentLoadFailures.delete(id);
@@ -1275,7 +1276,7 @@ export const readerService = {
     // path for it), so it keeps its raw fetch; the other two go through
     // the generated same-origin client.
     const [infoP, luceneP, vectorizingP] = await Promise.allSettled([
-      fetch('/api/server-info').then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
+      trackedFetch('/api/server-info').then(r => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))),
       fetchLuceneRebuildStatus(),
       fetchVectorizingStatus()
     ]);

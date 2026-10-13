@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import { createHash } from 'node:crypto';
 import path from 'path';
 import fs from 'fs';
@@ -20,10 +20,17 @@ import { BibliotecaServerProxy } from './src/services/BibliotecaServerProxy';
 import createClient from 'openapi-fetch';
 import type { paths as NestjsPaths } from './src/generated/biblioteca-nestjs-api';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
+import { renderServerErrorPage } from './src/httpErrorPage';
 
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3333;
+
+function asyncRoute(handler: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    void handler(req, res, next).catch(next);
+  };
+}
 
 // Body parsing middleware
 app.use(express.json());
@@ -101,7 +108,7 @@ app.get('/api/payment/config', (req: Request, res: Response) => {
 });
 
 // 2. Create Payment Intent / Checkout Session for a Work
-app.post('/api/payment/create-intent', async (req: Request, res: Response) => {
+app.post('/api/payment/create-intent', asyncRoute(async (req: Request, res: Response) => {
   try {
     const { workId, workTitle, amountCents, currency = 'usd', userEmail, userId } = req.body;
 
@@ -158,10 +165,10 @@ app.post('/api/payment/create-intent', async (req: Request, res: Response) => {
       error: error.message || 'Failed to initialize payment process' 
     });
   }
-});
+}));
 
 // 3. Confirm & Verify Book Purchase
-app.post('/api/payment/confirm', async (req: Request, res: Response) => {
+app.post('/api/payment/confirm', asyncRoute(async (req: Request, res: Response) => {
   try {
     const { paymentId, workId, workTitle, amountCents, currency = 'usd', userId = 'reader-guest', customerEmail } = req.body;
 
@@ -226,7 +233,7 @@ app.post('/api/payment/confirm', async (req: Request, res: Response) => {
       error: error.message || 'Payment confirmation failed' 
     });
   }
-});
+}));
 
 // ==========================================
 // BIBLIOTECA-SERVER / NESTJS PROXY
@@ -477,7 +484,7 @@ async function relayPutToBiblioteca(req: Request, res: Response) {
 // can't be a wildcard: anything else under nestjs (including its
 // manual-only /api/vector-store/reset and /api/vector-store/remove-opus)
 // must never be reachable through here.
-app.get('/api/vectorizing', async (req: Request, res: Response) => {
+app.get('/api/vectorizing', asyncRoute(async (req: Request, res: Response) => {
   const upstreamUrl = `${NESTJS_URL}/api/vectorizing`;
   try {
     const upstreamRes = await fetch(upstreamUrl, { headers: { Accept: 'application/json' } });
@@ -489,7 +496,7 @@ app.get('/api/vectorizing', async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });
   }
-});
+}));
 
 // Same-origin gateway to biblioteca-server's public build identity (the
 // unauthenticated /api/info endpoint, no admin gate by design) plus the
@@ -498,7 +505,7 @@ app.get('/api/vectorizing', async (req: Request, res: Response) => {
 // Caddy keeps /actuator/** away from the internet, not the reader's
 // relay. The admin sidebar's footer and status cards show the
 // actually-deployed server version/uptime instead of stale mocks.
-app.get('/api/server-info', async (req: Request, res: Response) => {
+app.get('/api/server-info', asyncRoute(async (req: Request, res: Response) => {
   try {
     const [infoRes, uptimeRes] = await Promise.allSettled([
       fetch(`${BIBLIOTECA_SERVER_URL}/api/info`, { headers: { Accept: 'application/json' } }),
@@ -519,13 +526,13 @@ app.get('/api/server-info', async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(502).json({ error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
   }
-});
+}));
 
 // Render a cover for the work currently open in the reader. This is a narrow
 // same-origin gateway rather than a generic proxy: callers provide stable
 // work metadata, while the theme is selected here and arbitrary upstream
 // paths cannot be reached through the reader.
-app.post('/api/covers/work', async (req: Request, res: Response) => {
+app.post('/api/covers/work', asyncRoute(async (req: Request, res: Response) => {
   const { workId, title, author, subtitle, date, coverArtUrl } = req.body ?? {};
   if (typeof title !== 'string' || !title.trim() || typeof author !== 'string' || !author.trim()) {
     res.status(400).json({ error: 'title and author are required' });
@@ -602,7 +609,7 @@ app.post('/api/covers/work', async (req: Request, res: Response) => {
       : `Cover renderer unreachable at ${COVERS_API_URL}: ${error?.message || 'unknown error'}`;
     res.status(502).json({ error: message });
   }
-});
+}));
 
 // A stable, GET-able og:image URL for a work - unlike the POST route
 // above (which the client calls with the work's title/author already in
@@ -611,7 +618,7 @@ app.post('/api/covers/work', async (req: Request, res: Response) => {
 // same MinIO cache/cache-key as the POST route (readCachedCover/
 // writeCachedCover), so a page view through either path warms the same
 // cached object and a cache hit here never touches the covers renderer.
-app.get('/api/covers/work/:authorId/:opusId', async (req: Request, res: Response) => {
+app.get('/api/covers/work/:authorId/:opusId', asyncRoute(async (req: Request, res: Response) => {
   const workId = `${req.params.authorId}/${req.params.opusId}`;
 
   const cached = await readCachedCover(workId);
@@ -680,7 +687,7 @@ app.get('/api/covers/work/:authorId/:opusId', async (req: Request, res: Response
   } catch {
     res.status(502).end();
   }
-});
+}));
 
 // Admin-only: one work's cover on demand (the work card's back-face admin
 // section). The UI only shows the section to administrators, but the gate
@@ -708,7 +715,7 @@ const nestjsApi = createClient<NestjsPaths>({
 
 // Synchronous: waits for nestjs to render, store and assign the new cover
 // (seconds to a minute), then answers { coverUrl, request }.
-app.post('/api/admin/covers/work', async (req: Request, res: Response) => {
+app.post('/api/admin/covers/work', asyncRoute(async (req: Request, res: Response) => {
   const path = req.body?.path;
   if (typeof path !== 'string' || !WORK_PATH.test(path)) {
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
@@ -727,11 +734,11 @@ app.post('/api/admin/covers/work', async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });
   }
-});
+}));
 
 // The request JSON the work's current cover was rendered from (null for
 // covers rendered before requests were recorded).
-app.get('/api/admin/covers/work/request', async (req: Request, res: Response) => {
+app.get('/api/admin/covers/work/request', asyncRoute(async (req: Request, res: Response) => {
   const path = typeof req.query.path === 'string' ? req.query.path : '';
   if (!WORK_PATH.test(path)) {
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
@@ -747,7 +754,7 @@ app.get('/api/admin/covers/work/request', async (req: Request, res: Response) =>
   } catch (error: any) {
     res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });
   }
-});
+}));
 
 // POST passthrough for nestjs's vectorizing controls (start/pause/resume -
 // see IndexingProgressCard's stop/resume buttons). Fire-and-forget on
@@ -788,14 +795,14 @@ app.post('/api/vectorizing/:action(start|pause|resume)', (req: Request, res: Res
   .forEach(prefix => app.get(`${prefix}/*`, (req: Request, res: Response) =>
     void relayGetFromBiblioteca(req, res, req.originalUrl)));
 
-app.get('/api/server-content/*', async (req: Request, res: Response) => {
+app.get('/api/server-content/*', asyncRoute(async (req: Request, res: Response) => {
   const upstreamPath = req.originalUrl.replace(/^\/api\/server-content/, '');
   if (upstreamPath.startsWith('/api/') || upstreamPath.startsWith('/actuator')) {
     res.status(404).json({ error: 'not a public endpoint' });
     return;
   }
   await relayGetFromBiblioteca(req, res, upstreamPath);
-});
+}));
 
 // This app's own public API contract - see openapi-public.ts. Internal
 // (unauthenticated) by convenience, not by design: nothing here should
@@ -816,7 +823,7 @@ app.use('/api/ui', swaggerUi.serve, swaggerUi.setup(openApiPublicDoc));
 // its redirect-shaped response into a plain JSON success/failure the
 // widget's fetch call can actually use - while still relaying the real
 // session cookie back to the browser on success.
-app.post('/api/auth/google', async (req: Request, res: Response) => {
+app.post('/api/auth/google', asyncRoute(async (req: Request, res: Response) => {
   const credential = req.body?.credential;
   console.debug(`[tb-proxy][google-auth] request received, credential present=${Boolean(credential)}, length=${credential?.length ?? 0}, incoming cookie present=${Boolean(req.headers.cookie)}`);
   if (!credential) {
@@ -853,12 +860,12 @@ app.post('/api/auth/google', async (req: Request, res: Response) => {
     console.debug(`[tb-proxy][google-auth] FAILED to reach textbase-server: ${error.message}`);
     res.status(502).json({ success: false, error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
   }
-});
+}));
 
 // Refresh the signed-in user's Google profile photo. The access token never
 // leaves this same-origin proxy and is sent only to biblioteca-server, which
 // validates it against the current session before persisting the photo URL.
-app.post('/api/auth/google/profile', async (req: Request, res: Response) => {
+app.post('/api/auth/google/profile', asyncRoute(async (req: Request, res: Response) => {
   const accessToken = req.body?.access_token;
   if (!accessToken) {
     res.status(400).json({ success: false, error: 'missing access token' });
@@ -876,7 +883,7 @@ app.post('/api/auth/google/profile', async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(502).json({ success: false, error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
   }
-});
+}));
 
 // Real sign-out. textbase-server has no custom logout endpoint - this is
 // Spring Security's own default POST /logout (invalidates the session,
@@ -885,7 +892,7 @@ app.post('/api/auth/google/profile', async (req: Request, res: Response) => {
 // above: relay the browser's cookie up, relay whatever Set-Cookie (the
 // now-invalidated session) comes back, and report plain JSON success
 // rather than following textbase-server's own redirect.
-app.post('/api/auth/logout', async (req: Request, res: Response) => {
+app.post('/api/auth/logout', asyncRoute(async (req: Request, res: Response) => {
   console.debug('[tb-proxy][google-auth] sign-out requested, incoming cookie present=', Boolean(req.headers.cookie));
   try {
     const upstreamRes = await fetch(`${BIBLIOTECA_SERVER_URL}/logout`, {
@@ -900,7 +907,7 @@ app.post('/api/auth/logout', async (req: Request, res: Response) => {
     console.debug(`[tb-proxy][google-auth] sign-out FAILED to reach textbase-server: ${error.message}`);
     res.status(502).json({ success: false, error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
   }
-});
+}));
 
 // 4. Check user book unlock & purchase status
 app.get('/api/payment/purchases/:userId', (req: Request, res: Response) => {
@@ -990,14 +997,14 @@ app.get('/robots.txt', (req: Request, res: Response) => {
 const SITEMAP_TTL_MS = 60 * 60 * 1000;
 let sitemapCache: { xml: string; origin: string; builtAt: number } | null = null;
 
-app.get('/sitemap.xml', async (req: Request, res: Response) => {
+app.get('/sitemap.xml', asyncRoute(async (req: Request, res: Response) => {
   const origin = originFor(req);
   if (!sitemapCache || sitemapCache.origin !== origin || Date.now() - sitemapCache.builtAt > SITEMAP_TTL_MS) {
     const xml = await buildSitemapXml(origin, BIBLIOTECA_SERVER_URL);
     sitemapCache = { xml, origin, builtAt: Date.now() };
   }
   res.type('application/xml').send(sitemapCache.xml);
-});
+}));
 
 async function renderPageFor(req: Request, template: string): Promise<string> {
   const origin = originFor(req);
@@ -1021,6 +1028,10 @@ async function renderPageFor(req: Request, template: string): Promise<string> {
 }
 
 async function startServer() {
+  app.use('/api', (req: Request, res: Response) => {
+    res.status(404).json({ error: 'not found' });
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1059,10 +1070,32 @@ async function startServer() {
     app.use('/app', express.static(distPath, { index: false }));
     app.use(express.static(distPath, { index: false }));
     const indexHtml = fs.readFileSync(path.join(distPath, 'index.html'), 'utf-8');
-    app.get('*', async (req: Request, res: Response) => {
-      res.type('html').send(await renderPageFor(req, indexHtml));
-    });
+    app.get('*', asyncRoute(async (req: Request, res: Response) => {
+      try {
+        const html = await renderPageFor(req, indexHtml);
+        const queryIndex = req.url.indexOf('?');
+        const search = queryIndex >= 0 ? req.url.slice(queryIndex) : '';
+        const route = parseAppPath(req.path, '', search);
+        res.status(route.view === 'notFound' ? 404 : 200).type('html').send(html);
+      } catch (error) {
+        console.error('Failed to render reader page:', error);
+        res.status(500).type('html').send(renderServerErrorPage(publicBasePath()));
+      }
+    }));
   }
+
+  app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    console.error('Unhandled reader server error:', error);
+    if (req.path === '/api' || req.path.startsWith('/api/')) {
+      res.status(500).json({ error: 'internal server error' });
+      return;
+    }
+    res.status(500).type('html').send(renderServerErrorPage(publicBasePath()));
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Bilioteca Reader server listening on http://0.0.0.0:${PORT}`);
