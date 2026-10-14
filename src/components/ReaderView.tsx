@@ -60,6 +60,7 @@ import { ancestorIds, buildTocEntries, isPreviewPage } from '../services/tocTree
 import { copyToClipboard } from '../services/clipboard';
 import { NotFoundCard } from './NotFoundCard';
 import { SearchField } from './SearchField';
+import { ReaderBlockMarker } from './ReaderBlockMarker';
 import { matchesSearch } from '../services/collectionSearch';
 
 interface ReaderViewProps {
@@ -527,17 +528,22 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       else if (showTocMenu) setShowTocMenu(false);
       else if (showDownload) setShowDownload(false);
       else if (showShareMenu) setShowShareMenu(false);
+      else if (selectedText) {
+        setSelectedText('');
+        setSelectionCoords(null);
+        window.getSelection()?.removeAllRanges();
+      }
       else return;
       event.preventDefault();
     };
     window.addEventListener('keydown', handleEscapeKey);
     return () => window.removeEventListener('keydown', handleEscapeKey);
-  }, [footnote, showStats, showSettings, showTocMenu, showDownload, showShareMenu]);
+  }, [footnote, showStats, showSettings, showTocMenu, showDownload, showShareMenu, selectedText]);
 
   // Land back on the reading face when moving to a different chapter, and
   // drop an open footnote popover with the page it belongs to - keyboard
   // page turns (arrow keys) never pass through the outside-click close.
-  useEffect(() => { setShowStats(false); setFootnote(null); }, [chapter?.id]);
+  useEffect(() => { setShowStats(false); setFootnote(null); setSelectedText(''); setSelectionCoords(null); }, [chapter?.id]);
 
   // The download dropdown lives on the back face: flipping back to reading
   // closes it, so it is not still open on the next flip.
@@ -998,8 +1004,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   {/* Font Family */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Typeface</label>
-                    <div className="grid grid-cols-4 gap-1">
-                      {(['serif', 'gentium', 'sans', 'mono'] as ReaderFontFamily[]).map((f) => (
+                    <div className="grid grid-cols-3 gap-1">
+                      {(['serif', 'gentium', 'sans'] as ReaderFontFamily[]).map((f) => (
                         <button
                           key={f}
                           id={`font-btn-${f}`}
@@ -1299,6 +1305,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 dangerouslySetInnerHTML={contentHtml}
                 onClick={handleNoteClick}
               />
+              <ReaderBlockMarker containerRef={contentRef} contentKey={`${chapter.id}:${chapter.htmlContent}`} />
 
               {/* End-of-text ornament, the original server page's own
                   p.deco-end (teidiv.css: img.deco-end { max-width: 100px;

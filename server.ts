@@ -17,6 +17,7 @@ import openApiPublicDoc from './openapi-public.json';
 // package.json happens to sit next to it at runtime.
 import packageInfo from './package.json';
 import { BibliotecaServerProxy } from './src/services/BibliotecaServerProxy';
+import { registerReaderThumbnails } from './src/services/coverThumbnailProxy';
 import createClient from 'openapi-fetch';
 import type { paths as NestjsPaths } from './src/generated/biblioteca-nestjs-api';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
@@ -275,6 +276,7 @@ const COVERS_API_URL = (process.env.COVERS_API_URL || 'http://localhost:3335').r
 // Keep all structured biblioteca-server forwarding in one object. The legacy
 // helpers below remain temporarily for compatibility with older route blocks;
 // this proxy is registered first and therefore owns the public routes.
+registerReaderThumbnails(app, { coversUrl: COVERS_API_URL, apiDocument: openApiPublicDoc });
 new BibliotecaServerProxy(BIBLIOTECA_SERVER_URL).register(app);
 const COVER_LAYOUTS = ['archival_monograph', 'folio_heritage', 'criterion_minimal', 'faber_poetry'] as const;
 const COVER_PALETTES = [

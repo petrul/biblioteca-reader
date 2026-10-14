@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ImagePlus, Loader2 } from 'lucide-react';
 import { trackedFetch } from '../services/serversideApi';
+import { coverThumbnailUrl } from '../services/coverThumbnail';
 
 type CoverWork = { coverUrl?: string; request: Record<string, unknown> | null };
 
@@ -66,7 +67,7 @@ export function AdminCoverSection({ workId, onCoverChanged }: { workId: string; 
         </button>
       </div>
       {current?.coverUrl && (
-        <img src={current.coverUrl} alt="Current cover" referrerPolicy="no-referrer"
+        <img src={coverThumbnailUrl(current.coverUrl)} alt="Current cover" referrerPolicy="no-referrer"
           className="h-40 rounded border border-emerald-500/20 object-contain bg-black/20" />
       )}
       {current && (current.request

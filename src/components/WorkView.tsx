@@ -210,7 +210,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
               <div className="flex flex-col md:flex-row items-start justify-between gap-6 pb-6 border-b border-emerald-500/15">
           <div className="w-full md:w-36 shrink-0 order-2 md:order-1">
             <div className="aspect-[5/8] overflow-hidden rounded-xl border border-amber-500/25 bg-black/20 shadow-lg">
-              <WorkCoverImage src={work.coverImage} title={work.title} author={work.authorName} alt={`Cover for ${work.title}`} className="h-full w-full" imgClassName="object-cover" />
+              <WorkCoverImage src={work.coverImage} thumbnailWidth={640} title={work.title} author={work.authorName} alt={`Cover for ${work.title}`} className="h-full w-full" imgClassName="object-cover" />
             </div>
           </div>
           <div className="space-y-2 max-w-2xl">

@@ -1,3 +1,4 @@
+import { coverThumbnailUrl } from '../src/services/coverThumbnail';
 import { test, expect } from '@playwright/test';
 
 /**
@@ -72,10 +73,16 @@ test('Table of Contents opens as a modal, not shown inline on the page', async (
  */
 test('a work with a MinIO cover uses it instead of the default fallback', async ({ page }) => {
   const minioCover = 'https://minio.example.com/biblioteca/covers/opera-alecsandri-lume-d91a5027a5a9.png';
-  await page.route('**minio.example.com/**', async (route) => {
-    // a real 1x1 PNG so the img actually loads - onError would otherwise
-    // swap the src (the catalog's broken-image fallback) mid-assertion
-    await route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') });
+  let originalDownloads = 0;
+  await page.route(/^https:\/\/minio\.example\.com\//, route => {
+    originalDownloads++;
+    return route.abort();
+  });
+  await page.route('**/api/cover-thumbnails?**', async route => {
+    const request = new URL(route.request().url());
+    expect(request.searchParams.get('url')).toBe(minioCover);
+    expect(['320', '640']).toContain(request.searchParams.get('width'));
+    await route.fulfill({ contentType: 'image/webp', body: Buffer.from('UklGRjgAAABXRUJQVlA4ICwAAADwAQCdASoBAAEAAUAmJaACdLoB+AAETAAA/vn7A/8btxhvwXf770BvAwAAAA==', 'base64') });
   });
   await page.route('**/api/users/me', (route) => route.fulfill({ json: { authenticated: false } }));
   await page.route('**/api/authors/page?**', (route) => route.fulfill({ json: { items: [], totalItems: 0, totalPages: 0 } }));
@@ -110,11 +117,11 @@ test('a work with a MinIO cover uses it instead of the default fallback', async 
 
   // featured carousel (the third cover slot, BrowseView): the MinIO
   // object there too
-  await expect(page.locator('img[alt="Lume Ridicată"]')).toHaveAttribute('src', minioCover);
+  await expect(page.locator('img[alt="Lume Ridicată"]')).toHaveAttribute('src', coverThumbnailUrl(minioCover)!);
 
   // catalog card: the MinIO object for the covered work, the fallback
   // only for the genuinely coverless one - exactly one DefaultWorkCover
-  await expect(page.locator('img[alt="Cover of Lume Ridicată"]')).toHaveAttribute('src', minioCover);
+  await expect(page.locator('img[alt="Cover of Lume Ridicată"]')).toHaveAttribute('src', coverThumbnailUrl(minioCover)!);
   await expect(page.locator('[aria-label="Default cover for Coverless Poem by Alt Autor"]')).toBeVisible();
   await expect(page.locator('[aria-label^="Default cover for"]')).toHaveCount(1);
 
@@ -122,6 +129,7 @@ test('a work with a MinIO cover uses it instead of the default fallback', async 
   // (scoped to the catalog card - the featured carousel has its own h3)
   await page.locator('[id^="card-work-"] h3', { hasText: 'Lume Ridicată' }).click();
   await expect(page.locator('h1')).toBeVisible();
-  await expect(page.locator('img[alt="Cover for Lume Ridicată"]')).toHaveAttribute('src', minioCover);
+  await expect(page.locator('img[alt="Cover for Lume Ridicată"]')).toHaveAttribute('src', coverThumbnailUrl(minioCover, 640)!);
   await expect(page.locator('[aria-label^="Default cover for"]')).toHaveCount(0);
+  expect(originalDownloads).toBe(0);
 });

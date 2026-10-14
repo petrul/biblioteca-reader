@@ -1,5 +1,6 @@
 import React from 'react';
 import { appAsset } from '../services/serversideApi';
+import { coverThumbnailUrl, type CoverThumbnailWidth } from '../services/coverThumbnail';
 
 interface DefaultWorkCoverProps {
   title: string;
@@ -26,6 +27,7 @@ export const DefaultWorkCover: React.FC<DefaultWorkCoverProps> = ({ title, autho
 
 interface WorkCoverImageProps {
   src?: string;
+  thumbnailWidth?: CoverThumbnailWidth;
   title: string;
   author: string;
   /** Sizing for both the image and the fallback, e.g. "h-full w-full". */
@@ -41,19 +43,20 @@ interface WorkCoverImageProps {
  * object, an unreachable host). Tracks the failed URL rather than a boolean,
  * so a newly supplied cover is tried again.
  */
-export const WorkCoverImage: React.FC<WorkCoverImageProps> = ({ src, title, author, className = '', imgClassName = 'object-cover object-center', alt }) => {
+export const WorkCoverImage: React.FC<WorkCoverImageProps> = ({ src, title, author, className = '', imgClassName = 'object-cover object-center', alt, thumbnailWidth = 320 }) => {
   const [failedSource, setFailedSource] = React.useState<string>();
-  if (!src || src === failedSource) {
+  const imageSource = coverThumbnailUrl(src, thumbnailWidth);
+  if (!imageSource || imageSource === failedSource) {
     return <DefaultWorkCover title={title} author={author} className={className} />;
   }
   return (
     <img
-      key={src}
-      src={src}
+      key={imageSource}
+      src={imageSource}
       alt={alt ?? `Cover of ${title}`}
       referrerPolicy="no-referrer"
       className={`${className} ${imgClassName}`}
-      onError={() => setFailedSource(src)}
+      onError={() => setFailedSource(imageSource)}
     />
   );
 };

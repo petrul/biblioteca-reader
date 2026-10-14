@@ -61,7 +61,8 @@ test('404 content with stale metadata displays Chapter not available, without de
     await readerService.retryServerConnection();
     const outage = renderToStaticMarkup(createElement(ServerStatusToast));
     assert.match(outage, /Server down/);
-    assert.match(outage, /500\.jpeg/);
+    // the server-error artwork is inlined: it must show while the server is unreachable
+    assert.match(outage, /src="data:image\/jpeg;base64,/);
     assert.doesNotMatch(outage, /Fetch failed|catalog can’t load/);
     assert.equal(outage.match(/Server down/g)?.length, 1);
   } finally {

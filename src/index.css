@@ -223,15 +223,11 @@
   display: none;
 }
 
-/* Selected text on the reading surface. The app root's selection:
-   utilities tint selected text pale amber app-wide, which on the light
-   paper/parch cards renders the text invisible. Scope the site's emerald
-   here (same green as the footnote chips) with white text - a solid,
-   legible pairing under all three themes, and specific enough to win
-   over the root's *::selection rules. */
+/* Reader text selection uses the action buttons' amber with dark text. */
+.reader-text-container::selection,
 .reader-text-container ::selection {
-  background-color: #059669;
-  color: #ffffff;
+  background-color: #f59e0b;
+  color: #1c1917;
 }
 
 /* The Random Discovery buttons' dice-tumble: a quick tumbling wiggle on
@@ -386,4 +382,12 @@
   padding-bottom: 2px;
   font-weight: 700;
   color: var(--drop-cap-color, #f59e0b);
+}
+
+/* Highlight without changing paragraph/verse layout. */
+.reader-text-container .block-active {
+  outline: 2px solid #9ca3af;
+  outline-offset: 3px;
+  border-radius: 3px;
+  background-color: rgba(229, 231, 235, 0.35);
 }

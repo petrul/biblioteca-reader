@@ -212,6 +212,18 @@ text on paper.
 
 ### 1. Paragraph quoting and editing
 
+**Implemented on 2026-10-14:** hovering a reading block for 400 ms reveals a
+clickable, translucent gray ¶ button inside the block’s top-left corner and highlight; a stationary touch/pen press for 500 ms
+also selects the block and opens the existing quote/copy/save/citation toolbar.
+`q` opens actions for the active block; `Esc` dismisses them. Moving a finger,
+scrolling, cancellation, and quick taps do not activate it. Links, footnotes,
+and editable controls retain their own gestures. The marker is rendered outside
+the imported chapter HTML so it is never included in copied/quoted text.
+
+The stable block URLs, correction editing, and crawler text twin below remain
+proposed work; the current implementation reuses the existing quotation actions.
+
+
 #### 1.1 Is a separate mode needed? No: recommended design is modeless
 
 The request was a `q` "quote/edit mode" in the navbar that decorates every
@@ -475,3 +487,30 @@ npm run build
 ```
 
 The tests certify language/cover mapping and that the checked-in OpenAPI export contains every endpoint used by the reader integration.
+
+
+## Cover thumbnails through the reader gateway
+
+Stored cover URLs remain original URLs in catalogue data. Display components
+request same-origin WebP thumbnails from `/api/cover-thumbnails?url=...&width=320`.
+Cards use 320 pixels, the main work cover 640, and checkout previews 160. Existing
+local/data-image defaults pass through unchanged; a thumbnail load failure uses
+the existing local fallback. Old locally cached work metadata is also handled
+by the cover component. Cover downloads/rendering and stored originals are untouched.
+
+The gateway forwards only thumbnail GET requests to `COVERS_API_URL`, including
+`/api/cover-thumbnails/cache/<key>` for cached images. It preserves ETag,
+Cache-Control and hit/miss headers and rewrites Content-Location to same origin.
+It never forwards browser cookies/Authorization or exposes cache deletion.
+The routes appear in `/api/docs` and have their own
+`/api/cover-thumbnails/openapi.json` document.
+
+The covers service must run its new `src2/` API and allow the original MinIO
+origin through `THUMBNAIL_SOURCE_ORIGINS` or its MinIO URL configuration. It
+owns conversion and persistent disk caching; the reader has no second disk cache.
+No new development server or Docker deployment was started for this change.
+
+For bare-metal thumbnail development on zmeu, use
+`rake 'run[zmeu,http://localhost:3335]'` to select the dev covers endpoint
+explicitly after loading the pass-store profile. Omitting the second argument
+keeps the configured profile endpoint.

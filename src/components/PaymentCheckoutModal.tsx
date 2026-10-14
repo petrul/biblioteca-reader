@@ -1,3 +1,4 @@
+import { coverThumbnailUrl } from '../services/coverThumbnail';
 import React, { useState, useEffect } from 'react';
 import {
   CreditCard,
@@ -179,7 +180,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               <div className="flex gap-4 p-4 rounded-xl bg-white/[0.07] border border-white/15">
                 {work.coverImage && (
                   <img
-                    src={work.coverImage}
+                    src={coverThumbnailUrl(work.coverImage, 160)}
                     alt={work.title}
                     className="w-16 h-22 object-cover rounded-lg border border-white/20 shadow-md shrink-0"
                   />

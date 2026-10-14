@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('a failed featured cover renders the default cover instead of a broken image', async ({ page }) => {
-  await page.route('**/biblioteca/covers/**', route => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/api/cover-thumbnails?**', route => route.fulfill({ status: 404, body: '' }));
   await page.goto('/app/');
   const carousel = page.locator('#hero-featured-carousel');
   const fallback = carousel.getByRole('img', { name: /^Default cover for / }).first();
@@ -11,7 +11,7 @@ test('a failed featured cover renders the default cover instead of a broken imag
 });
 
 test('even a missing default-cover texture leaves a readable card without a broken-image icon', async ({ page }) => {
-  await page.route('**/biblioteca/covers/**', route => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/api/cover-thumbnails?**', route => route.fulfill({ status: 404, body: '' }));
   await page.route('**/cover-blue.jpg', route => route.fulfill({ status: 404, body: '' }));
   await page.goto('/app/');
   const carousel = page.locator('#hero-featured-carousel');

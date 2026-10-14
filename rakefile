@@ -110,8 +110,10 @@ task :test, [:profile] => [:ensure_deps] do |_task, args|
 end
 
 desc 'Run the dev server (Vite + Express) using a profile (dev by default)'
-task :run, [:profile] => [:ensure_deps] do |_task, args|
+task :run, [:profile, :covers_url] => [:ensure_deps] do |_task, args|
     load_profile!(selected_profile(args))
+    # Explicit dev endpoint overrides are applied after the authoritative profile.
+    ENV['COVERS_API_URL'] = args[:covers_url] if args[:covers_url] && !args[:covers_url].empty?
     sh 'npm run dev'
 end
 task :start, [:profile] do |_task, args|

@@ -49,7 +49,7 @@ export const QuoteView: React.FC<QuoteViewProps> = ({
         <h2 className="font-display-title text-xl font-bold text-white mb-2">
           Quotation Fragment Not Found
         </h2>
-        <p className="text-stone-400 text-sm mb-6">
+        <p className="text-white text-sm mb-6">
           The requested textbase fragment link does not exist or may have been deleted.
         </p>
         <button
