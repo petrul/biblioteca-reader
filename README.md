@@ -536,7 +536,7 @@ selects an export of the same literary content. Every reader response varies on
 `Accept`, `User-Agent` and `Sec-Fetch-Mode`; negotiated responses are private and
 require cache revalidation. The SPA advertises its text alternate in its head.
 
-Click a paragraph, then ¶, to copy its stable URL, citation or HTML. Paragraph
+Click a paragraph to select its text and open the standard selection toolbar. Paragraph
 ordinals are chapter-local (`?p=17#p17`, ranges `?p=17-19#p17-19`), excluding
 ornamental separators. Source IDs are retained. Ordinals can change if an edition
 is re-imported with different paragraph breaks. Sharing ranges highlights them
@@ -576,3 +576,15 @@ whitespace, and uses the selected block and its preceding text to disambiguate
 repeated passages. An ambiguous or unmatched passage reports a clear error
 instead of inventing an address. Previously stored browser-only quotations are
 preserved; source-addressed quotations do not depend on that browser storage.
+
+
+### Similar passages from the reader
+
+Click a paragraph or select a text fragment to open the same selection toolbar.
+The selected paragraph keeps its gray right-hand bar; there is no separate ¶ button.
+Choose **Similar** to run a semantic vector search for that exact selected text.
+Results appear in a modal with the work-card TOC design, eight results per page,
+loading/empty/error states, retry, and links back to the matching divisions.
+Arrow keys page within the modal; Escape closes it. **Save search** stores the
+query, vector mode, and results from visited pages through the existing saved
+search store (account storage when signed in, browser storage otherwise).

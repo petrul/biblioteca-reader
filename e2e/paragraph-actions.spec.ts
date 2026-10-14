@@ -8,50 +8,21 @@ async function openChapter(page: Page) {
   return paragraph;
 }
 
-test('hover highlights immediately; clicking reveals transparent paragraph actions', async ({ page }) => {
+test('clicking selects the paragraph, opens the standard toolbar and never shows a PI button', async ({ page }) => {
   const paragraph = await openChapter(page);
   const text = (await paragraph.textContent())!.trim();
-  const initialBox = (await paragraph.boundingBox())!;
-  const immediate = await paragraph.evaluate(element => {
-    element.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }));
-    return element.classList.contains('block-hover');
-  });
-  expect(immediate).toBe(true);
+  await paragraph.hover();
+  await expect(paragraph).toHaveClass(/block-hover/);
   await expect(paragraph).not.toHaveClass(/block-active/);
-  expect(await paragraph.evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
-  await expect(page.locator('#reader-block-marker')).toHaveCount(0);
   await paragraph.click();
-  const marker = page.getByRole('button', { name: 'Paragraph actions' });
-  await expect(marker).toBeVisible();
-  await expect(marker).toHaveCSS('color', 'rgb(156, 163, 175)');
-  await expect(marker).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  await expect(marker).toHaveCSS('box-shadow', 'none');
-  await expect(marker).toHaveCSS('backdrop-filter', 'none');
-  await expect(paragraph).toHaveClass(/block-active/);
-  await expect(paragraph).toHaveCSS('outline-style', 'none');
-  await expect(paragraph).toHaveCSS('box-shadow', 'none');
-  expect(await paragraph.evaluate(element => {
-    const bar = getComputedStyle(element, '::before');
-    return { right: bar.right, width: bar.width, color: bar.backgroundColor };
-  })).toEqual({ right: '-8px', width: '3px', color: 'rgb(156, 163, 175)' });
-  await expect(paragraph).toHaveCSS('background-color', 'rgba(229, 231, 235, 0.35)');
-  const blockBox = (await paragraph.boundingBox())!;
-  const markerBox = (await marker.boundingBox())!;
-  expect(blockBox).toEqual(initialBox);
-  expect(markerBox.x).toBeCloseTo(Math.max(4, Math.min(blockBox.x + blockBox.width - 28, page.viewportSize()!.width - 28)), 0);
-  expect(markerBox.y).toBeCloseTo(blockBox.y, 0);
-  expect(markerBox.x).toBeLessThan(blockBox.x + blockBox.width);
-  expect(markerBox.x + markerBox.width).toBeLessThanOrEqual(blockBox.x + blockBox.width - 4);
-  expect(markerBox.y + markerBox.height).toBeLessThanOrEqual(blockBox.y + blockBox.height);
-  await marker.click();
-  await expect(page.locator('#reader-block-popover')).toBeVisible();
-  await page.getByRole('button', { name: 'Quote selection', exact: true }).click();
   await expect(page.locator('#selection-quote-toolbar')).toBeVisible();
-  expect(await page.evaluate(() => window.getSelection()?.toString().trim())).toBe(text);
-  await page.keyboard.press('Escape');
-  await expect(marker).toBeVisible();
-  await expect(page.locator('#selection-quote-toolbar')).toHaveCount(0);
+  await expect(page.locator('#btn-sel-similar')).toBeVisible();
+  await expect(page.locator('#reader-block-marker')).toHaveCount(0);
   await expect(paragraph).toHaveClass(/block-active/);
+  expect(await page.evaluate(() => window.getSelection()?.toString().trim())).toBe(text);
+  expect(await paragraph.evaluate(element => ({ right: getComputedStyle(element, '::before').right, color: getComputedStyle(element, '::before').backgroundColor }))).toEqual({ right: '-8px', color: 'rgb(156, 163, 175)' });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#selection-quote-toolbar')).toHaveCount(0);
 });
 
 test('hover alone never shows a marker and leaving clears the highlight', async ({ page }) => {
@@ -96,31 +67,21 @@ test('a quick tap or canceled touch does not trigger paragraph actions', async (
 });
 
 
-test('selection survives hover, clears on outside click and moves to the next clicked block', async ({ page }) => {
+test('selected gray bar survives hovering, clears outside and follows the next clicked block', async ({ page }) => {
   const paragraph = await openChapter(page);
-  await paragraph.hover();
   await paragraph.click();
-  const marker = page.locator('#reader-block-marker');
-  await expect(marker).toBeVisible();
-  await marker.hover();
+  await expect(page.locator('#selection-quote-toolbar')).toBeVisible();
   await page.mouse.move(0, 0);
-  await expect(marker).toBeVisible();
   await expect(paragraph).toHaveClass(/block-active/);
   await page.mouse.click(0, 0);
-  await expect(marker).toHaveCount(0);
   await expect(paragraph).not.toHaveClass(/block-active/);
+  await expect(page.locator('#selection-quote-toolbar')).toHaveCount(0);
   await paragraph.click();
-  await expect(marker).toBeVisible();
   const other = page.locator('.reader-text-container p').filter({ hasText: /\S.{12}/ }).nth(1);
-  await other.hover();
-  await expect(paragraph).toHaveClass(/block-active/);
-  await expect(other).not.toHaveClass(/block-active/);
   await other.click();
   await expect(other).toHaveClass(/block-active/);
   await expect(paragraph).not.toHaveClass(/block-active/);
-  await expect(page.locator('.reader-text-container .block-active')).toHaveCount(1);
-  const box = (await other.boundingBox())!;
-  expect((await marker.boundingBox())!.y).toBeCloseTo(box.y, 0);
+  expect(await page.evaluate(() => window.getSelection()?.toString().trim())).toBe((await other.textContent())!.trim());
 });
 
 test('q opens the hovered paragraph actions', async ({ page }) => {
@@ -147,16 +108,13 @@ test('phone-sized native touch input opens paragraph actions', async ({ browser 
     await expect(paragraph).not.toHaveClass(/block-active/);
     await page.keyboard.press('Escape');
     await paragraph.tap();
-    const marker = page.locator('#reader-block-marker');
-    await expect(marker).toBeVisible();
+    await expect(page.locator('#reader-block-marker')).toHaveCount(0);
     await expect(paragraph).toHaveClass(/block-active/);
-    const selectedBox = (await paragraph.boundingBox())!;
-    const markerBox = (await marker.boundingBox())!;
-    expect(markerBox.x + markerBox.width).toBeLessThanOrEqual(selectedBox.x + selectedBox.width - 4);
-    expect(markerBox.y).toBeCloseTo(selectedBox.y, 0);
+    await expect(page.locator('#selection-quote-toolbar')).toBeVisible();
+    await expect(page.locator('#btn-sel-similar')).toBeVisible();
     await page.touchscreen.tap(4, 400);
-    await expect(marker).toHaveCount(0);
     await expect(paragraph).not.toHaveClass(/block-active/);
+
   } finally { await context.close(); }
 });
 

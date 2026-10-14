@@ -61,7 +61,8 @@ import { ancestorIds, buildTocEntries, isPreviewPage } from '../services/tocTree
 import { copyToClipboard } from '../services/clipboard';
 import { NotFoundCard } from './NotFoundCard';
 import { SearchField } from './SearchField';
-import { ReaderBlockMarker } from './ReaderBlockMarker';
+import { ReaderBlockSelection } from './ReaderBlockSelection';
+import { ReaderSimilarityDialog } from './ReaderSimilarityDialog';
 import { matchesSearch } from '../services/collectionSearch';
 
 interface ReaderViewProps {
@@ -167,6 +168,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [quoteContext, setQuoteContext] = useState<{ context?: string; before?: string }>({});
   const [quoteError, setQuoteError] = useState('');
   const [quoteCreating, setQuoteCreating] = useState(false);
+  const [similarityQuery, setSimilarityQuery] = useState<string | null>(null);
   const work = readerService.getWorkById(workId);
   const chapters = work ? readerService.getChaptersForWork(work.id) : [];
   const chapter = readerService.getChapter(workId, chapterId);
@@ -627,7 +629,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       }
 
       const text = selection.toString().trim();
-      if (text.length > 5) {
+      if (text.length > 0) {
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
         
@@ -658,7 +660,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
     const handleDocumentClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('#selection-quote-toolbar') && !target.closest('#quote-created-modal')) {
+      if (!target.closest('#selection-quote-toolbar') && !target.closest('#quote-created-modal') && !target.closest('#reader-similarity-dialog')) {
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed) {
           setSelectedText('');
@@ -1316,7 +1318,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 dangerouslySetInnerHTML={contentHtml}
                 onClick={handleNoteClick}
               />
-              <ReaderBlockMarker containerRef={contentRef} contentKey={`${chapter.id}:${chapter.htmlContent}`} chapterId={chapter.id} title={work?.title || workId} chapterTitle={chapter.title} />
+              <ReaderBlockSelection containerRef={contentRef} contentKey={`${chapter.id}:${chapter.htmlContent}`} />
 
               {/* End-of-text ornament, the original server page's own
                   p.deco-end (teidiv.css: img.deco-end { max-width: 100px;
@@ -1618,18 +1620,30 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </div>
       )}
 
-      {/* Floating Selection Toolbar for Quotations */}
+      {similarityQuery !== null && <ReaderSimilarityDialog query={similarityQuery}
+        onClose={() => setSimilarityQuery(null)} onSelect={hit => {
+          setSimilarityQuery(null);
+          if (hit.chapterId) onSelectChapter(hit.workId, hit.chapterId);
+          else onSelectWork(hit.workId);
+        }} />}
+
+      {/* Shared toolbar for text selections and clicked paragraphs. */}
       {selectedText && selectionCoords && (
         <div
           id="selection-quote-toolbar"
           style={{
             position: 'fixed',
-            left: `${selectionCoords.x}px`,
+            left: window.innerWidth <= 640 ? '50%' : `${selectionCoords.x}px`,
             top: `${Math.max(60, selectionCoords.y - 45)}px`,
             transform: 'translateX(-50%)'
           }}
-          className="z-50 bg-[#08231c] text-emerald-100 px-3 py-1.5 rounded-xl shadow-2xl border border-emerald-500/30 flex items-center space-x-2 animate-in fade-in zoom-in-95 duration-150"
+          className="z-50 bg-[#08231c] text-emerald-100 px-3 py-1.5 rounded-xl shadow-2xl border border-emerald-500/30 flex flex-wrap justify-center items-center gap-1.5 max-w-[calc(100vw-16px)] animate-in fade-in zoom-in-95 duration-150"
         >
+          <button id="btn-sel-similar" type="button" onClick={() => setSimilarityQuery(selectedText)}
+            className="flex items-center gap-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-emerald-500/20 cursor-pointer"
+            title="Find semantically similar passages">
+            <Sparkles className="w-3.5 h-3.5 text-[#f59e0b]" /><span>Similar</span>
+          </button>
           {quoteError && <p role="alert" className="absolute top-full mt-2 w-72 p-2 rounded bg-[#08231c] text-white">{quoteError}</p>}
           <button
             id="btn-sel-create-quote"

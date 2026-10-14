@@ -30,13 +30,8 @@ test('paragraph range deep link selects the same text and produces a crawlable s
   await page.goto(path + '?p=2-3#p2-3');
   await expect(page.locator('.block-linked')).toHaveCount(2, { timeout: 20000 });
   await expect(page.locator('[data-reader-paragraph="p2"]')).toHaveClass(/block-active/);
-  await page.getByRole('button', { name: 'Paragraph actions' }).click();
-  const input = page.getByRole('textbox', { name: 'Stable paragraph link' });
-  await expect(input).toHaveValue(new URL(path + '?p=2-3#p2-3', page.url()).href);
-  await page.getByRole('button', { name: 'Copy link', exact: true }).click();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(path + '?p=2-3#p2-3');
-  await page.getByRole('button', { name: 'Edit', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Editing is not yet available.');
+  await expect(page.locator('#selection-quote-toolbar')).toBeVisible();
+  await expect(page.locator('#reader-block-marker')).toHaveCount(0);
   const response = await page.request.get(path + '?p=2-3', { headers: { 'User-Agent': 'Slackbot', Accept: 'text/html' } });
   const html = await response.text();
   expect(html).toContain('class="justify shared-passage"');
@@ -87,8 +82,6 @@ test('a newly created quote is readable in a fresh browser and by the server ren
   await expect(paragraph).toBeVisible({ timeout: 20000 });
   const words = (await paragraph.textContent())!.trim();
   await paragraph.click();
-  await page.getByRole('button', { name: 'Paragraph actions' }).click();
-  await page.getByRole('button', { name: 'Quote selection', exact: true }).click();
   await expect(page.locator('#selection-quote-toolbar')).toBeVisible();
   await page.locator('#btn-sel-create-quote').click();
   const modal = page.locator('#quote-created-modal');

@@ -943,6 +943,8 @@ export const readerService = {
     useRegex?: boolean;
     fuzzy?: boolean;
     workIdSeed?: string;
+    throwOnError?: boolean;
+    probeNextPage?: boolean;
   }): {
     results: SearchResult[];
     total: number;
@@ -979,6 +981,8 @@ export const readerService = {
     useRegex?: boolean;
     fuzzy?: boolean;
     workIdSeed?: string;
+    throwOnError?: boolean;
+    probeNextPage?: boolean;
   }): Promise<{
     results: SearchResult[];
     total: number;
@@ -1004,8 +1008,9 @@ export const readerService = {
     }
     let live: SearchResult[] = [];
     try {
-      live = await realSearch(mode, query, Math.max(50, page * pageSize), realWorks);
+      live = await realSearch(mode, query, Math.max(50, page * pageSize + (options?.probeNextPage ? 1 : 0)), realWorks);
     } catch (error) {
+      if (options?.throwOnError) throw error;
       console.warn(`live ${mode} search unavailable`, error);
     }
     if (options?.language) live = live.filter(result => result.language === options.language);

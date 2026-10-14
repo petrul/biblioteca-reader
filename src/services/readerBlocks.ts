@@ -54,6 +54,7 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     // A text drag still belongs to the native selection/quote toolbar.
     if (!block || !doc.getSelection()?.isCollapsed) return;
     select(block);
+    callbacks.onActivate(block);
   };
   const down = (event: PointerEvent) => {
     if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
@@ -82,7 +83,7 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
   const outside = (event: PointerEvent) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!selected || !target || selected.contains(target) ||
-        target.closest('#reader-block-marker, #reader-block-popover, #selection-quote-toolbar, #quote-created-modal')) return;
+        target.closest('#selection-quote-toolbar, #quote-created-modal, #reader-similarity-dialog')) return;
     selected.classList.remove('block-active');
     selected = null;
     container.querySelectorAll('.block-linked').forEach(element => element.classList.remove('block-linked'));
@@ -106,6 +107,7 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     select(first);
     for (let n = range.start; n <= range.end; n++) container.querySelector(`[data-reader-paragraph="p${n}"]`)?.classList.add('block-linked');
     first.scrollIntoView({ block: 'center' });
+    callbacks.onActivate(first);
   };
   applyLink();
   window.addEventListener('hashchange', applyLink);
