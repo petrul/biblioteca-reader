@@ -354,9 +354,39 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   useEffect(() => {
     setTocExpanded(new Set(ancestorIds(chapter)));
   }, [showTocMenu, chapter?.id]);
+  // Opening the sidebar takes the keyboard focus, on the chapter being read,
+  // so the arrows walk the table of contents (see onTocKeyDown) instead of
+  // scrolling the page underneath.
+  const tocListRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (showTocMenu) document.querySelector('#reader-toc-sidebar [aria-current="true"]')?.scrollIntoView?.({ block: 'center' });
+    if (!showTocMenu) return;
+    const current = tocListRef.current?.querySelector<HTMLElement>('[data-toc-entry][aria-current="true"]')
+      ?? tocListRef.current?.querySelector<HTMLElement>('[data-toc-entry]');
+    current?.focus({ preventScroll: true });
+    current?.scrollIntoView?.({ block: 'center' });
   }, [showTocMenu, chapter?.id]);
+  // Up/Down (and Home/End) move between the entries; Enter opens one (a
+  // button's own behavior). Down from the search box enters the list, Up
+  // from its first entry goes back to the search box.
+  const onTocKeyDown = (event: React.KeyboardEvent) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const entries = Array.from(tocListRef.current?.querySelectorAll<HTMLElement>('[data-toc-entry]') ?? []);
+    if (entries.length === 0) return;
+    const target = event.target as HTMLElement;
+    const inSearch = target.id === 'reader-toc-search' || target.closest('#reader-toc-search') !== null;
+    if (inSearch && (event.key === 'Home' || event.key === 'End')) return; // the caret's own keys
+    const index = entries.indexOf(target);
+    let next: HTMLElement | undefined;
+    if (event.key === 'Home') next = entries[0];
+    else if (event.key === 'End') next = entries[entries.length - 1];
+    else if (event.key === 'ArrowDown') next = inSearch || index < 0 ? entries[0] : entries[Math.min(index + 1, entries.length - 1)];
+    else if (index === 0) next = document.getElementById('reader-toc-search') as HTMLElement ?? undefined;
+    else if (index > 0) next = entries[index - 1];
+    if (!next) return;
+    event.preventDefault();
+    next.focus({ preventScroll: true });
+    next.scrollIntoView?.({ block: 'nearest' });
+  };
   const toggleTocDivision = (id: string) => setTocExpanded(prev => {
     const next = new Set(prev);
     if (!next.delete(id)) next.add(id);
@@ -442,6 +472,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       // Avoid firing if user is typing in an input
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      // The open ToC sidebar owns the keyboard: no page turn underneath it.
+      if (showTocMenu) return;
       if (e.key === 'ArrowLeft' && prevChapter) {
         // preventDefault: without it the browser ALSO applies the arrows'
         // default page scroll, which can leave the next chapter's page
@@ -460,7 +492,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [prevChapter, nextChapter, workId, onSelectChapter]);
+  }, [prevChapter, nextChapter, workId, onSelectChapter, showTocMenu]);
 
   // Touch swipe page-turn (mobile): same effect and same visual feedback
   // as the ArrowLeft/ArrowRight keyboard shortcuts above - left = next
@@ -1131,7 +1163,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           />
 
           {/* Translucent Sidebar */}
-          <div id="reader-toc-sidebar" className="fixed inset-y-4 left-0 w-[calc(100%-1rem)] max-w-xs sm:max-w-sm bg-black/40 backdrop-blur-xl border border-white/15 rounded-r-2xl text-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-300 ease-out motion-reduce:animate-none">
+          <div id="reader-toc-sidebar" onKeyDown={onTocKeyDown} className="fixed inset-y-4 left-0 w-[calc(100%-1rem)] max-w-xs sm:max-w-sm bg-black/40 backdrop-blur-xl border border-white/15 rounded-r-2xl text-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-300 ease-out motion-reduce:animate-none">
             <div className="flex items-center gap-3 p-4 border-b border-white/10">
               <SearchField
                 id="reader-toc-search"
@@ -1147,7 +1179,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            <div ref={tocListRef} className="flex-1 overflow-y-auto p-2 space-y-1">
               {tocEntries.map(entry => {
                 const entryChapter = entry.chapter;
                 const isCurrent = entryChapter.id === chapter.id;
@@ -1176,9 +1208,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       ) : <span className="w-[26px] shrink-0" aria-hidden="true" />}
                       <button
                         type="button"
+                        data-toc-entry
                         onClick={open}
                         aria-current={isCurrent ? 'true' : undefined}
-                        className={`min-w-0 flex-1 text-left px-2 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer ${
+                        className={`min-w-0 flex-1 text-left px-2 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-widest transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
                           isCurrent ? 'bg-[#f59e0b] text-black' : 'text-amber-300/90 hover:bg-white/10'
                         }`}
                       >
@@ -1190,9 +1223,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 return (
                   <button
                     key={`chapter:${entryChapter.id}`}
+                    data-toc-entry
                     onClick={open}
                     aria-current={isCurrent ? 'true' : undefined}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer ${
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
                       isCurrent ? 'bg-[#f59e0b] text-black font-bold' : 'hover:bg-white/10'
                     }`}
                     style={{ paddingLeft: `${24 + indent}px` }}

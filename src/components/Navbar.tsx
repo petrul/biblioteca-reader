@@ -71,6 +71,10 @@ interface NavbarProps {
   // link to that author's page.
   pageAuthorId?: string;
   onOpenAuthor?: (authorId: string) => void;
+  // While reading: the work whose title the wordmark shows - clicking the
+  // title opens that work's card instead of the main page.
+  pageWorkId?: string;
+  onOpenWork?: (workId: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -95,7 +99,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   pageTitle,
   pageSubtitle,
   pageAuthorId,
-  onOpenAuthor
+  onOpenAuthor,
+  pageWorkId,
+  onOpenWork
 }) => {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const brandSubtitle = pageTitle ? pageSubtitle : 'Your Scriptorium classical readings';
@@ -470,14 +476,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* Title (home) and subtitle stacked; while reading the subtitle
-                is the work's author and links to the author page - its own
-                button, so it cannot nest inside the title button. */}
+            {/* Title and subtitle stacked. The title goes to the main page -
+                except while reading, when it is the work's own title and opens
+                that work's card; the subtitle is then the work's author and
+                links to the author page - its own button, so it cannot nest
+                inside the title button. */}
             <div className="flex flex-col min-w-0">
               <button
                 id="nav-logo-title-btn"
-                onClick={() => onNavigateHome ? onNavigateHome() : navigate('browse')}
-                title="Biblioteca - go to the main page"
+                onClick={() => {
+                  if (currentView === 'reader' && pageWorkId && onOpenWork) onOpenWork(pageWorkId);
+                  else if (onNavigateHome) onNavigateHome();
+                  else navigate('browse');
+                }}
+                title={currentView === 'reader' && pageWorkId && onOpenWork
+                  ? `Open ${pageTitle ?? 'the work'}'s page`
+                  : 'Biblioteca - go to the main page'}
                 className="text-left cursor-pointer group/title min-w-0"
               >
                 <div className="flex items-center space-x-1.5">

@@ -475,6 +475,8 @@ export default function App() {
         pageSubtitle={readerNavWork?.authorName}
         pageAuthorId={readerNavWork?.authorId}
         onOpenAuthor={handleSelectAuthor}
+        pageWorkId={readerNavWork?.id}
+        onOpenWork={handleSelectWork}
         onNavigateHome={() => {
           setCatalog(DEFAULT_CATALOG_STATE);
           setCurrentView('browse');

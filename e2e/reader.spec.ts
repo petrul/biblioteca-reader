@@ -22,7 +22,7 @@ test('the chapter text renders in the Alegreya serif face by default', async ({ 
   await expect(content).toHaveCSS('font-family', 'Alegreya, "Times New Roman", Times, serif');
 });
 
-test('the navbar wordmark becomes the work title while reading; the chapter title lives in the reader once', async ({ page }) => {
+test('the navbar wordmark becomes the work title while reading and opens the work card; the chapter title lives in the reader once', async ({ page }) => {
   await page.goto('/app/');
   const navTitle = page.locator('#nav-logo-title-btn');
   await expect(navTitle).toContainText('BIBLIOTECA');
@@ -43,9 +43,14 @@ test('the navbar wordmark becomes the work title while reading; the chapter titl
   await expect(navTitle).not.toContainText('BIBLIOTECA');
   if (workTitle) await expect(navTitle).toContainText(workTitle);
 
-  // Back to Browse: the generic wordmark returns.
+  // While reading, the title opens the work's own card (not the main page);
+  // there the generic wordmark returns and leads to the main page.
   await navTitle.click();
+  await expect(page).toHaveURL(/\/app\/work\//);
+  await expect(page.locator('#btn-read-first-chapter')).toBeVisible();
   await expect(navTitle).toContainText('BIBLIOTECA');
+  await navTitle.click();
+  await expect(page).toHaveURL(/\/app\/?$/);
 });
 
 test('the reader toolbar matches the page width and the title has no back arrow', async ({ page }) => {
@@ -423,4 +428,34 @@ test('opening a book flips the page; next/previous within it slides, in the righ
   await page.locator('#btn-reader-back-work').click();
   await expect.poll(() => page.url()).toBe(startUrl);
   await expect(column).toHaveClass(/chapter-slide-prev/);
+});
+
+test('the open ToC sidebar takes the focus, on the current chapter, and the arrows walk it', async ({ page }) => {
+  await page.goto('/app/reader/dulfu/ispravile_lui_pacala/fuga');
+  await page.locator('#btn-reader-toc-menu').waitFor();
+  const startUrl = page.url();
+  await page.keyboard.press('t');
+  const entries = page.locator('#reader-toc-sidebar [data-toc-entry]');
+  await expect(entries.first()).toBeVisible();
+  const current = page.locator('#reader-toc-sidebar [data-toc-entry][aria-current="true"]');
+  await expect(current).toBeFocused();
+
+  const focusedIndex = () => page.evaluate(() =>
+    Array.from(document.querySelectorAll('#reader-toc-sidebar [data-toc-entry]')).indexOf(document.activeElement as Element));
+  const start = await focusedIndex();
+  await page.keyboard.press('Home');
+  expect(await focusedIndex()).toBe(0);
+  await page.keyboard.press('ArrowDown');
+  expect(await focusedIndex()).toBe(1);
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp'); // past the first entry: back to the search box
+  await expect(page.locator('#reader-toc-search')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  expect(await focusedIndex()).toBe(0);
+  expect(start).toBeGreaterThanOrEqual(0);
+
+  // Left/Right do not turn the page underneath the open sidebar.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#reader-toc-sidebar')).toBeVisible();
+  expect(page.url()).toBe(startUrl);
 });
