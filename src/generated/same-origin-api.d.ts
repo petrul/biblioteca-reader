@@ -252,7 +252,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["executeSearch-teidiv-get_8"];
+        get: operations["executeSearch-teidiv-get_10"];
         put?: never;
         post?: never;
         delete?: never;
@@ -946,6 +946,275 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cover-thumbnails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Proxy a cover thumbnail from biblioteca-covers */
+        get: {
+            parameters: {
+                query: {
+                    url: string;
+                    width?: 160 | 320 | 640;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description WebP thumbnail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/webp": string;
+                    };
+                };
+                /** @description Unchanged thumbnail */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Thumbnail service unavailable */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cover-thumbnails/cache/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Proxy an already generated cached thumbnail */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description WebP thumbnail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unchanged */
+                304: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not cached */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve a TEI quotation using server fragment boundaries */
+        get: {
+            parameters: {
+                query: {
+                    path: string;
+                    start: string;
+                    end: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Quotation and source attribution */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            language?: string;
+                            text: string;
+                            paragraphs: string[];
+                            workId: string;
+                            chapterId: string;
+                            workTitle: string;
+                            chapterTitle: string;
+                            authorName: string;
+                            canonicalUrl: string;
+                        };
+                    };
+                };
+                /** @description Invalid source boundaries */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Outside free preview */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Quotation not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Source unavailable */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Resolve a selected passage into exact TEI fragment boundaries */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        path: string;
+                        text: string;
+                        context?: string;
+                        before?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Quotation and source attribution */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            language?: string;
+                            text: string;
+                            paragraphs: string[];
+                            workId: string;
+                            chapterId: string;
+                            workTitle: string;
+                            chapterTitle: string;
+                            authorName: string;
+                            canonicalUrl: string;
+                        };
+                    };
+                };
+                /** @description Invalid source boundaries */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Outside free preview */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Quotation not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Ambiguous source passage */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Selection not found in source */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Source unavailable */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -976,6 +1245,42 @@ export interface components {
         };
         RepresentationModelObject: {
             _links?: components["schemas"]["Links"];
+        };
+        EntityModelTeiElem: {
+            xpath?: string;
+            domPath?: string;
+            /** @enum {string} */
+            lang?: "BG" | "BR" | "CA" | "DA" | "DE" | "EN" | "ES" | "FI" | "FR" | "GR" | "HU" | "IT" | "LA" | "NL" | "NO" | "PT" | "RO" | "RU" | "ZH";
+            name?: string;
+            /** Format: int32 */
+            nth?: number;
+            urlFragment?: string;
+            /** Format: byte */
+            txtSha256?: string;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int32 */
+            wordSize?: number;
+            leaf?: boolean;
+            completePath?: string;
+            _links?: components["schemas"]["Links"];
+        };
+        PageMetadata: {
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int64 */
+            totalPages?: number;
+            /** Format: int64 */
+            number?: number;
+        };
+        PagedModelEntityModelTeiElem: {
+            _embedded?: {
+                teiElems?: components["schemas"]["EntityModelTeiElem"][];
+            };
+            _links?: components["schemas"]["Links"];
+            page?: components["schemas"]["PageMetadata"];
         };
         Author: {
             /** Format: int64 */
@@ -1016,16 +1321,6 @@ export interface components {
             anonymous?: boolean;
             _links?: components["schemas"]["Links"];
         };
-        PageMetadata: {
-            /** Format: int64 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int64 */
-            totalPages?: number;
-            /** Format: int64 */
-            number?: number;
-        };
         PagedModelEntityModelAuthor: {
             _embedded?: {
                 authors?: components["schemas"]["EntityModelAuthor"][];
@@ -1038,6 +1333,44 @@ export interface components {
                 authors?: components["schemas"]["EntityModelAuthor"][];
             };
             _links?: components["schemas"]["Links"];
+        };
+        EntityModelEmbeddingBatchStat: {
+            /** Format: date-time */
+            recordedAt?: string;
+            /** Format: int32 */
+            batchSize?: number;
+            /** Format: int64 */
+            totalChars?: number;
+            /** Format: int32 */
+            vectorDimension?: number;
+            embedderModel?: string;
+            /** Format: int64 */
+            durationMs?: number;
+            _links?: components["schemas"]["Links"];
+        };
+        PagedModelEntityModelEmbeddingBatchStat: {
+            _embedded?: {
+                embeddingBatchStats?: components["schemas"]["EntityModelEmbeddingBatchStat"][];
+            };
+            _links?: components["schemas"]["Links"];
+            page?: components["schemas"]["PageMetadata"];
+        };
+        EntityModelTeiOpus: {
+            description?: string;
+            significantQuote?: string;
+            summary?: string;
+            summarySourceUrl?: string;
+            /** Format: date-time */
+            workEnrichedAt?: string;
+            coverUrl?: string;
+            _links?: components["schemas"]["Links"];
+        };
+        PagedModelEntityModelTeiOpus: {
+            _embedded?: {
+                teiOpuses?: components["schemas"]["EntityModelTeiOpus"][];
+            };
+            _links?: components["schemas"]["Links"];
+            page?: components["schemas"]["PageMetadata"];
         };
         EntityModelTeiDiv: {
             /** Format: int64 */
@@ -1061,6 +1394,12 @@ export interface components {
             coverUrl?: string;
             leaf?: boolean;
             completePath?: string;
+            _links?: components["schemas"]["Links"];
+        };
+        CollectionModelObject: {
+            _embedded?: {
+                objects?: unknown[];
+            };
             _links?: components["schemas"]["Links"];
         };
         PagedModelEntityModelTeiDiv: {
@@ -1089,32 +1428,6 @@ export interface components {
             timestamp?: string;
             author?: components["schemas"]["Author"];
         };
-        EntityModelTeiElem: {
-            xpath?: string;
-            domPath?: string;
-            /** @enum {string} */
-            lang?: "BG" | "BR" | "CA" | "DA" | "DE" | "EN" | "ES" | "FI" | "FR" | "GR" | "HU" | "IT" | "LA" | "NL" | "NO" | "PT" | "RO" | "RU" | "ZH";
-            name?: string;
-            /** Format: int32 */
-            nth?: number;
-            urlFragment?: string;
-            /** Format: byte */
-            txtSha256?: string;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int32 */
-            wordSize?: number;
-            leaf?: boolean;
-            completePath?: string;
-            _links?: components["schemas"]["Links"];
-        };
-        PagedModelEntityModelTeiElem: {
-            _embedded?: {
-                teiElems?: components["schemas"]["EntityModelTeiElem"][];
-            };
-            _links?: components["schemas"]["Links"];
-            page?: components["schemas"]["PageMetadata"];
-        };
         EntityModelOpusVectorizingStat: {
             /** Format: date-time */
             recordedAt?: string;
@@ -1132,46 +1445,6 @@ export interface components {
         PagedModelEntityModelOpusVectorizingStat: {
             _embedded?: {
                 opusVectorizingStats?: components["schemas"]["EntityModelOpusVectorizingStat"][];
-            };
-            _links?: components["schemas"]["Links"];
-            page?: components["schemas"]["PageMetadata"];
-        };
-        EntityModelTeiOpus: {
-            description?: string;
-            significantQuote?: string;
-            coverUrl?: string;
-            _links?: components["schemas"]["Links"];
-        };
-        PagedModelEntityModelTeiOpus: {
-            _embedded?: {
-                teiOpuses?: components["schemas"]["EntityModelTeiOpus"][];
-            };
-            _links?: components["schemas"]["Links"];
-            page?: components["schemas"]["PageMetadata"];
-        };
-        CollectionModelObject: {
-            _embedded?: {
-                objects?: unknown[];
-            };
-            _links?: components["schemas"]["Links"];
-        };
-        EntityModelEmbeddingBatchStat: {
-            /** Format: date-time */
-            recordedAt?: string;
-            /** Format: int32 */
-            batchSize?: number;
-            /** Format: int64 */
-            totalChars?: number;
-            /** Format: int32 */
-            vectorDimension?: number;
-            embedderModel?: string;
-            /** Format: int64 */
-            durationMs?: number;
-            _links?: components["schemas"]["Links"];
-        };
-        PagedModelEntityModelEmbeddingBatchStat: {
-            _embedded?: {
-                embeddingBatchStats?: components["schemas"]["EntityModelEmbeddingBatchStat"][];
             };
             _links?: components["schemas"]["Links"];
             page?: components["schemas"]["PageMetadata"];
@@ -1274,6 +1547,10 @@ export interface components {
             teiDiv?: string;
             description?: string;
             significantQuote?: string;
+            summary?: string;
+            summarySourceUrl?: string;
+            /** Format: date-time */
+            workEnrichedAt?: string;
             coverUrl?: string;
         };
         SaveRequest: {
@@ -1304,6 +1581,39 @@ export interface components {
             /** Format: int64 */
             secondsDelta?: number;
         };
+        ReorderRequest: {
+            itemIds?: string[];
+        };
+        DivCollectionDto: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            /** @enum {string} */
+            kind?: "FAVORITES" | "USER" | "SEARCH";
+            searchQuery?: string;
+            searchParams?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            items?: components["schemas"]["DivCollectionItemDto"][];
+            favorites?: boolean;
+        };
+        DivCollectionItemDto: {
+            /** Format: uuid */
+            id?: string;
+            kind?: string;
+            divPath?: string;
+            divHead?: string;
+            fragmentStart?: string;
+            fragmentEnd?: string;
+            fragmentText?: string[];
+            snippet?: string;
+            /** Format: float */
+            score?: number;
+            /** Format: int32 */
+            sortOrder?: number;
+            /** Format: date-time */
+            addedAt?: string;
+        };
         RuntimeConfigUpdate: {
             value?: string;
         };
@@ -1326,6 +1636,9 @@ export interface components {
             bio?: string;
             bioSourceUrl?: string;
             summary?: string;
+            summarySourceUrl?: string;
+            workEnriched?: boolean;
+            overwrite?: boolean;
             significantQuote?: string;
             birthDate?: string;
             deathDate?: string;
@@ -1334,36 +1647,31 @@ export interface components {
             writingLanguage?: string;
             imageUrls?: string[];
             coverUrl?: string;
+            replaceCover?: boolean;
         };
         CreateCollectionRequest: {
             name?: string;
-        };
-        DivCollectionDto: {
-            /** Format: int64 */
-            id?: number;
-            name?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            items?: components["schemas"]["DivCollectionItemDto"][];
-            favorites?: boolean;
-        };
-        DivCollectionItemDto: {
-            /** Format: int64 */
-            id?: number;
-            kind?: string;
-            divPath?: string;
-            divHead?: string;
-            fragmentStart?: string;
-            fragmentEnd?: string;
-            fragmentText?: string[];
-            /** Format: date-time */
-            addedAt?: string;
         };
         AddItemRequest: {
             type?: string;
             path?: string;
             start?: string;
             end?: string;
+        };
+        SaveSearchRequest: {
+            name?: string;
+            query?: string;
+            params?: string;
+            hits?: components["schemas"]["SearchHitToSave"][];
+        };
+        SearchHitToSave: {
+            path?: string;
+            snippet?: string;
+            /** Format: float */
+            score?: number;
+        };
+        RenameRequest: {
+            name?: string;
         };
         AuthorDto: {
             strId?: string;
@@ -1382,6 +1690,7 @@ export interface components {
             worksCount?: number;
             opera?: components["schemas"]["OpusDto"][];
             image_href?: string;
+            imageUrls?: string[];
         };
         CatalogPageDtoTeiDivDto: {
             items?: components["schemas"]["TeiDivDto"][];
@@ -1416,10 +1725,13 @@ export interface components {
             summarySourceUrl?: string;
             coverUrl?: string;
             description?: string;
+            summary?: string;
+            workEnrichedAt?: string;
             significantQuote?: string;
             author?: unknown;
             leaf?: boolean;
             opus?: boolean;
+            imageUrls?: string[];
             authors?: components["schemas"]["AuthorDto"][];
         };
         TeiDivDto: {
@@ -1444,11 +1756,14 @@ export interface components {
             summarySourceUrl?: string;
             coverUrl?: string;
             description?: string;
+            summary?: string;
+            workEnrichedAt?: string;
             significantQuote?: string;
             children?: components["schemas"]["TeiDivDto"][];
             author?: components["schemas"]["AuthorDto"];
             leaf?: boolean;
             opus?: boolean;
+            imageUrls?: string[];
         };
         TeiElemDto: {
             /** Format: int64 */
@@ -1504,6 +1819,59 @@ export interface components {
             /** Format: int64 */
             indexedDocs?: number;
         };
+        /** @description Book metadata available to cover themes - matches schemas/book-metadata.schema.json exactly. title/author/publisher/date always come back (possibly ""); every other field is omitted entirely when this work's TEI source has nothing for it - which is most works, most fields, in this corpus. */
+        BookMetadataDto: {
+            /**
+             * @description Main title of the book. Required - always present, from this corpus's own reliable DB field.
+             * @example Poezii
+             */
+            title?: string;
+            /**
+             * @description Subtitle or descriptive heading, read live from the opus's own TEI <subtitle> when present. Often absent.
+             * @example (1864)
+             */
+            subtitle?: string;
+            /**
+             * @description Primary author or creator. Required - always present, from this corpus's own reliable DB field.
+             * @example Costache Negri
+             */
+            author?: string;
+            /** @description Editor or compiler, read live from the TEI header's titleStmt/editor. Almost always absent in this corpus. */
+            editor?: string;
+            /** @description Translator, read live from the TEI header's titleStmt/editor[@role='translator']. Almost always absent in this corpus. */
+            translator?: string;
+            /**
+             * @description Publishing house / imprint name. Required - always present; this platform's own fixed value, not read from the TEI source.
+             * @example Biblioteca
+             */
+            publisher?: string;
+            /** @description City or place of publication, read live from the TEI header's publicationStmt/pubPlace. Almost always absent in this corpus. */
+            pubPlace?: string;
+            /**
+             * @description Publication year/date. Required - always present (possibly ""). Reads the TEI header's editionStmt/edition/date, which in this corpus is the digitization date, not an original publication date - there usually isn't one to read.
+             * @example 2024
+             */
+            date?: string;
+            /** @description ISBN identifier, read live from the TEI header's sourceDesc//idno[@type='ISBN']. Almost always absent - this corpus predates ISBNs or never recorded them. */
+            isbn?: string;
+            /** @description Book series or collection title, read live from the TEI header's seriesStmt/title. Almost always absent in this corpus. */
+            series?: string;
+            /** @description Volume number or designation (e.g. 'I', '2', 'Vol. 1'), read live from the TEI header's seriesStmt/biblScope[@unit='volume']. Almost always absent. */
+            volume?: string;
+            /** @description Epigraph quote or front-cover blurb, read live from the opus's own TEI <epigraph>. Almost always absent in this corpus. */
+            taglineQuote?: string;
+            /** @description Genre / subject classification, read live from the TEI header's profileDesc/textClass/keywords. Almost always absent in this corpus. */
+            genre?: string;
+            /** @description Notice such as 'First Edition', 'Critical Edition', etc., read live from the TEI header's editionStmt/edition text. Almost always absent. */
+            editionNotice?: string;
+            /**
+             * @description Language code, from this corpus's own reliable DB field.
+             * @example ro
+             */
+            language?: string;
+            /** @description Raw TEI-XML source of this opus/div, only included when the request sets ?includeRawTei=true (omitted by default - can be large). */
+            rawTei?: string;
+        };
         CatalogPageDtoAuthorDto: {
             items?: components["schemas"]["AuthorDto"][];
             /** Format: int32 */
@@ -1514,6 +1882,11 @@ export interface components {
             totalItems?: number;
             /** Format: int32 */
             totalPages?: number;
+        };
+        AuthorMediaDto: {
+            strId?: string;
+            displayName?: string;
+            imageUrls?: string[];
         };
         Embedder: {
             model?: string;
@@ -1529,6 +1902,7 @@ export interface components {
             newOpusImportedTopic?: string;
             opusReimportedTopic?: string;
             opusRemovedTopic?: string;
+            enrichWorkTopic?: string;
         };
         Milvus: {
             collection?: string;
@@ -1951,7 +2325,7 @@ export interface operations {
             };
         };
     };
-    "executeSearch-teidiv-get_8": {
+    "executeSearch-teidiv-get_10": {
         parameters: {
             query?: {
                 /** @description Zero-based page index (0..N) */

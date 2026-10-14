@@ -1,3 +1,4 @@
+import { registerQuoteTwins, enrichQuoteSeo } from './src/services/quoteTwin';
 import express, { NextFunction, Request, Response } from 'express';
 import { createHash } from 'node:crypto';
 import path from 'path';
@@ -20,6 +21,7 @@ import { BibliotecaServerProxy } from './src/services/BibliotecaServerProxy';
 import { registerReaderThumbnails } from './src/services/coverThumbnailProxy';
 import createClient from 'openapi-fetch';
 import type { paths as NestjsPaths } from './src/generated/biblioteca-nestjs-api';
+import { registerTextTwins, canonicalReaderPath, textAlternates } from './src/services/textTwin';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
 import { renderServerErrorPage } from './src/httpErrorPage';
 
@@ -1036,12 +1038,17 @@ app.get('/sitemap.xml', asyncRoute(async (req: Request, res: Response) => {
   res.type('application/xml').send(sitemapCache.xml);
 }));
 
+async function buildReaderPageSeo(options: Parameters<typeof buildPageSeo>[0]) {
+  const seo = await buildPageSeo(options);
+  return options.route.view === 'quote' ? enrichQuoteSeo(seo, options.route.quoteId, options.bibliotecaServerUrl, options.origin) : seo;
+}
+
 async function renderPageFor(req: Request, template: string): Promise<string> {
   const origin = originFor(req);
   const queryIndex = req.url.indexOf('?');
   const search = queryIndex >= 0 ? req.url.slice(queryIndex) : '';
   const route = parseAppPath(req.path, '', search);
-  const seo = await buildPageSeo({
+  const seo = await buildReaderPageSeo({
     route,
     origin,
     // Caddy strips the /app mount prefix before proxying here, but the
@@ -1049,15 +1056,18 @@ async function renderPageFor(req: Request, template: string): Promise<string> {
     // keys its link-preview cache on must be the public form, or an /app
     // share gets merged into the root URL's cache object (which is how a
     // fresh deploy kept showing the pre-rebrand "TEXT ❖ BASE" preview).
-    path: `${publicBasePath()}${req.path}`,
+    path: route.view === 'reader' ? canonicalReaderPath(req.path) : req.path,
     searchParams: new URLSearchParams(search),
     bibliotecaServerUrl: BIBLIOTECA_SERVER_URL,
     defaultImage: defaultOgImage(origin),
   });
-  return renderIndexHtml(template, seo);
+  const rendered = renderIndexHtml(template, seo);
+  return ['reader', 'quote'].includes(route.view) ? rendered.replace('</head>', textAlternates(canonicalReaderPath(req.path), new URLSearchParams(search)) + '</head>') : rendered;
 }
 
 async function startServer() {
+  registerQuoteTwins(app, { serverUrl: BIBLIOTECA_SERVER_URL, originFor, apiDocument: openApiPublicDoc });
+  registerTextTwins(app, { serverUrl: BIBLIOTECA_SERVER_URL, originFor, defaultImage: defaultOgImage });
   app.use('/api', (req: Request, res: Response) => {
     res.status(404).json({ error: 'not found' });
   });
@@ -1078,15 +1088,16 @@ async function startServer() {
             const [pathname = '/', search = ''] = (ctx.originalUrl || '/').split('?');
             const route = parseAppPath(pathname, '', search);
             const origin = 'https://test.scriptorium.ro';
-            const seo = await buildPageSeo({
+            const seo = await buildReaderPageSeo({
               route,
               origin,
-              path: pathname,
+              path: route.view === 'reader' ? canonicalReaderPath(pathname) : pathname,
               searchParams: new URLSearchParams(search),
               bibliotecaServerUrl: BIBLIOTECA_SERVER_URL,
               defaultImage: defaultOgImage(origin),
             });
-            return renderIndexHtml(html, seo);
+            const rendered = renderIndexHtml(html, seo);
+            return ['reader', 'quote'].includes(route.view) ? rendered.replace('</head>', textAlternates(canonicalReaderPath(pathname), new URLSearchParams(search)) + '</head>') : rendered;
           },
         },
       }],

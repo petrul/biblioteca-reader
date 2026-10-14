@@ -1093,11 +1093,11 @@ export const readerService = {
   },
 
   // --- QUOTATIONS (FRAGMENTS) ---
-  createQuotation(data: Omit<Quotation, 'id' | 'createdAt'>): Quotation {
+  createQuotation(data: Omit<Quotation, 'id' | 'createdAt'>, sourceId?: string): Quotation {
     const quotes = loadStoredQuotes();
     const newQuote: Quotation = {
       ...data,
-      id: `quote-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: sourceId || `quote-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       createdAt: new Date().toISOString()
     };
     quotes.unshift(newQuote);

@@ -66,11 +66,8 @@ function aistudioMediaPlugin(): Plugin {
 
 export default defineConfig(() => {
   return {
-    // Everything the reader UI serves lives under /app/ so it can share a
-    // domain/Caddy instance with textbase-server's own URLs, which live at
-    // the root (/{authorId}/{opusId}/{div...}) without path collisions -
-    // see src/router.ts.
-    base: '/app/',
+    // Reading URLs live at the root; application pages remain under /app/.
+    base: '/',
     plugins: [react(), tailwindcss(), aistudioMediaPlugin()],
     resolve: {
       alias: {

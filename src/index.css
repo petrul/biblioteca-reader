@@ -390,7 +390,8 @@
 }
 
 .reader-text-container .block-active,
-.reader-text-container .block-hover {
+.reader-text-container .block-hover,
+.reader-text-container .block-linked {
   background-color: rgba(229, 231, 235, 0.35);
 }
 

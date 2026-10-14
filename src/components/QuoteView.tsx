@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { fetchServerQuote } from '../services/serverQuoteApi';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
   Quote, 
@@ -38,10 +39,21 @@ export const QuoteView: React.FC<QuoteViewProps> = ({
   onOpenChapter,
   onOpenAddToCollection
 }) => {
-  const quote = readerService.getQuotationById(quoteId);
+  const [serverQuote, setServerQuote] = useState<Quotation | null>(null);
+  const [loading, setLoading] = useState(quoteId.startsWith('server:'));
+  useEffect(() => {
+    if (!quoteId.startsWith('server:')) { setLoading(false); setServerQuote(null); return; }
+    let cancelled = false;
+    setLoading(true); setServerQuote(null);
+    fetchServerQuote(quoteId).then(quote => { if (!cancelled) setServerQuote(quote); })
+      .catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [quoteId]);
+  const quote = quoteId.startsWith('server:') ? serverQuote : readerService.getQuotationById(quoteId);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCitation, setCopiedCitation] = useState(false);
 
+  if (loading) return <p role="status" className="text-white p-8">Loading quotation…</p>;
   if (!quote) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center">
@@ -114,11 +126,11 @@ export const QuoteView: React.FC<QuoteViewProps> = ({
                 Permanent Fragment
               </span>
               <span className="text-xs text-emerald-300/50 font-mono">
-                ID: {quote.id}
+                {quote.id.startsWith('server:') ? 'Source-addressed TEI fragment' : `ID: ${quote.id}`}
               </span>
             </div>
             <span className="text-xs text-emerald-300/50">
-              Created {new Date(quote.createdAt).toLocaleDateString()}
+              {quote.createdAt ? `Created ${new Date(quote.createdAt).toLocaleDateString()}` : 'Permanent source fragment'}
             </span>
           </div>
 

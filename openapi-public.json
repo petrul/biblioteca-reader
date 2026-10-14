@@ -81,6 +81,117 @@
           }
         }
       },
+      "EntityModelTeiElem": {
+        "type": "object",
+        "properties": {
+          "xpath": {
+            "type": "string"
+          },
+          "domPath": {
+            "type": "string"
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "BG",
+              "BR",
+              "CA",
+              "DA",
+              "DE",
+              "EN",
+              "ES",
+              "FI",
+              "FR",
+              "GR",
+              "HU",
+              "IT",
+              "LA",
+              "NL",
+              "NO",
+              "PT",
+              "RO",
+              "RU",
+              "ZH"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "nth": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "urlFragment": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0
+          },
+          "txtSha256": {
+            "type": "string",
+            "format": "byte"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "wordSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "leaf": {
+            "type": "boolean"
+          },
+          "completePath": {
+            "type": "string"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "PageMetadata": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "PagedModelEntityModelTeiElem": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "teiElems": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelTeiElem"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
       "Author": {
         "type": "object",
         "properties": {
@@ -264,27 +375,6 @@
           }
         }
       },
-      "PageMetadata": {
-        "type": "object",
-        "properties": {
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "totalElements": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "totalPages": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "number": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
       "PagedModelEntityModelAuthor": {
         "type": "object",
         "properties": {
@@ -323,6 +413,108 @@
           },
           "_links": {
             "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "EntityModelEmbeddingBatchStat": {
+        "type": "object",
+        "properties": {
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "batchSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalChars": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "vectorDimension": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "embedderModel": {
+            "type": "string"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "PagedModelEntityModelEmbeddingBatchStat": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "embeddingBatchStats": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelEmbeddingBatchStat"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "EntityModelTeiOpus": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "significantQuote": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "summarySourceUrl": {
+            "type": "string"
+          },
+          "workEnrichedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "PagedModelEntityModelTeiOpus": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "teiOpuses": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelTeiOpus"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
           }
         }
       },
@@ -403,6 +595,23 @@
           },
           "completePath": {
             "type": "string"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "CollectionModelObject": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "objects": {
+                "type": "array",
+                "items": {}
+              }
+            }
           },
           "_links": {
             "$ref": "#/components/schemas/Links"
@@ -507,96 +716,6 @@
           }
         }
       },
-      "EntityModelTeiElem": {
-        "type": "object",
-        "properties": {
-          "xpath": {
-            "type": "string"
-          },
-          "domPath": {
-            "type": "string"
-          },
-          "lang": {
-            "type": "string",
-            "enum": [
-              "BG",
-              "BR",
-              "CA",
-              "DA",
-              "DE",
-              "EN",
-              "ES",
-              "FI",
-              "FR",
-              "GR",
-              "HU",
-              "IT",
-              "LA",
-              "NL",
-              "NO",
-              "PT",
-              "RO",
-              "RU",
-              "ZH"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "nth": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "urlFragment": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 0
-          },
-          "txtSha256": {
-            "type": "string",
-            "format": "byte"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "wordSize": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "leaf": {
-            "type": "boolean"
-          },
-          "completePath": {
-            "type": "string"
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "PagedModelEntityModelTeiElem": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "teiElems": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelTeiElem"
-                }
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          },
-          "page": {
-            "$ref": "#/components/schemas/PageMetadata"
-          }
-        }
-      },
       "EntityModelOpusVectorizingStat": {
         "type": "object",
         "properties": {
@@ -638,115 +757,6 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/EntityModelOpusVectorizingStat"
-                }
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          },
-          "page": {
-            "$ref": "#/components/schemas/PageMetadata"
-          }
-        }
-      },
-      "EntityModelTeiOpus": {
-        "type": "object",
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "significantQuote": {
-            "type": "string"
-          },
-          "coverUrl": {
-            "type": "string"
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "PagedModelEntityModelTeiOpus": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "teiOpuses": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelTeiOpus"
-                }
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          },
-          "page": {
-            "$ref": "#/components/schemas/PageMetadata"
-          }
-        }
-      },
-      "CollectionModelObject": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "objects": {
-                "type": "array",
-                "items": {}
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "EntityModelEmbeddingBatchStat": {
-        "type": "object",
-        "properties": {
-          "recordedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "batchSize": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "totalChars": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "vectorDimension": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "embedderModel": {
-            "type": "string"
-          },
-          "durationMs": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "PagedModelEntityModelEmbeddingBatchStat": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "embeddingBatchStats": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelEmbeddingBatchStat"
                 }
               }
             }
@@ -1078,6 +1088,16 @@
           "significantQuote": {
             "type": "string"
           },
+          "summary": {
+            "type": "string"
+          },
+          "summarySourceUrl": {
+            "type": "string"
+          },
+          "workEnrichedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "coverUrl": {
             "type": "string"
           }
@@ -1151,6 +1171,102 @@
           }
         }
       },
+      "ReorderRequest": {
+        "type": "object",
+        "properties": {
+          "itemIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "DivCollectionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "FAVORITES",
+              "USER",
+              "SEARCH"
+            ]
+          },
+          "searchQuery": {
+            "type": "string"
+          },
+          "searchParams": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DivCollectionItemDto"
+            }
+          },
+          "favorites": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DivCollectionItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "divPath": {
+            "type": "string"
+          },
+          "divHead": {
+            "type": "string"
+          },
+          "fragmentStart": {
+            "type": "string"
+          },
+          "fragmentEnd": {
+            "type": "string"
+          },
+          "fragmentText": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "format": "float"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "addedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "RuntimeConfigUpdate": {
         "type": "object",
         "properties": {
@@ -1212,6 +1328,15 @@
           "summary": {
             "type": "string"
           },
+          "summarySourceUrl": {
+            "type": "string"
+          },
+          "workEnriched": {
+            "type": "boolean"
+          },
+          "overwrite": {
+            "type": "boolean"
+          },
           "significantQuote": {
             "type": "string"
           },
@@ -1238,6 +1363,9 @@
           },
           "coverUrl": {
             "type": "string"
+          },
+          "replaceCover": {
+            "type": "boolean"
           }
         }
       },
@@ -1246,65 +1374,6 @@
         "properties": {
           "name": {
             "type": "string"
-          }
-        }
-      },
-      "DivCollectionDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "name": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DivCollectionItemDto"
-            }
-          },
-          "favorites": {
-            "type": "boolean"
-          }
-        }
-      },
-      "DivCollectionItemDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "divPath": {
-            "type": "string"
-          },
-          "divHead": {
-            "type": "string"
-          },
-          "fragmentStart": {
-            "type": "string"
-          },
-          "fragmentEnd": {
-            "type": "string"
-          },
-          "fragmentText": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "addedAt": {
-            "type": "string",
-            "format": "date-time"
           }
         }
       },
@@ -1321,6 +1390,49 @@
             "type": "string"
           },
           "end": {
+            "type": "string"
+          }
+        }
+      },
+      "SaveSearchRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "params": {
+            "type": "string"
+          },
+          "hits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHitToSave"
+            }
+          }
+        }
+      },
+      "SearchHitToSave": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "RenameRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
             "type": "string"
           }
         }
@@ -1376,6 +1488,12 @@
           },
           "image_href": {
             "type": "string"
+          },
+          "imageUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -1464,6 +1582,12 @@
           "description": {
             "type": "string"
           },
+          "summary": {
+            "type": "string"
+          },
+          "workEnrichedAt": {
+            "type": "string"
+          },
           "significantQuote": {
             "type": "string"
           },
@@ -1473,6 +1597,12 @@
           },
           "opus": {
             "type": "boolean"
+          },
+          "imageUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "authors": {
             "type": "array",
@@ -1540,6 +1670,12 @@
           "description": {
             "type": "string"
           },
+          "summary": {
+            "type": "string"
+          },
+          "workEnrichedAt": {
+            "type": "string"
+          },
           "significantQuote": {
             "type": "string"
           },
@@ -1557,6 +1693,12 @@
           },
           "opus": {
             "type": "boolean"
+          },
+          "imageUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -1691,6 +1833,82 @@
           }
         }
       },
+      "BookMetadataDto": {
+        "type": "object",
+        "description": "Book metadata available to cover themes - matches schemas/book-metadata.schema.json exactly. title/author/publisher/date always come back (possibly \"\"); every other field is omitted entirely when this work's TEI source has nothing for it - which is most works, most fields, in this corpus.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Main title of the book. Required - always present, from this corpus's own reliable DB field.",
+            "example": "Poezii"
+          },
+          "subtitle": {
+            "type": "string",
+            "description": "Subtitle or descriptive heading, read live from the opus's own TEI <subtitle> when present. Often absent.",
+            "example": "(1864)"
+          },
+          "author": {
+            "type": "string",
+            "description": "Primary author or creator. Required - always present, from this corpus's own reliable DB field.",
+            "example": "Costache Negri"
+          },
+          "editor": {
+            "type": "string",
+            "description": "Editor or compiler, read live from the TEI header's titleStmt/editor. Almost always absent in this corpus."
+          },
+          "translator": {
+            "type": "string",
+            "description": "Translator, read live from the TEI header's titleStmt/editor[@role='translator']. Almost always absent in this corpus."
+          },
+          "publisher": {
+            "type": "string",
+            "description": "Publishing house / imprint name. Required - always present; this platform's own fixed value, not read from the TEI source.",
+            "example": "Biblioteca"
+          },
+          "pubPlace": {
+            "type": "string",
+            "description": "City or place of publication, read live from the TEI header's publicationStmt/pubPlace. Almost always absent in this corpus."
+          },
+          "date": {
+            "type": "string",
+            "description": "Publication year/date. Required - always present (possibly \"\"). Reads the TEI header's editionStmt/edition/date, which in this corpus is the digitization date, not an original publication date - there usually isn't one to read.",
+            "example": "2024"
+          },
+          "isbn": {
+            "type": "string",
+            "description": "ISBN identifier, read live from the TEI header's sourceDesc//idno[@type='ISBN']. Almost always absent - this corpus predates ISBNs or never recorded them."
+          },
+          "series": {
+            "type": "string",
+            "description": "Book series or collection title, read live from the TEI header's seriesStmt/title. Almost always absent in this corpus."
+          },
+          "volume": {
+            "type": "string",
+            "description": "Volume number or designation (e.g. 'I', '2', 'Vol. 1'), read live from the TEI header's seriesStmt/biblScope[@unit='volume']. Almost always absent."
+          },
+          "taglineQuote": {
+            "type": "string",
+            "description": "Epigraph quote or front-cover blurb, read live from the opus's own TEI <epigraph>. Almost always absent in this corpus."
+          },
+          "genre": {
+            "type": "string",
+            "description": "Genre / subject classification, read live from the TEI header's profileDesc/textClass/keywords. Almost always absent in this corpus."
+          },
+          "editionNotice": {
+            "type": "string",
+            "description": "Notice such as 'First Edition', 'Critical Edition', etc., read live from the TEI header's editionStmt/edition text. Almost always absent."
+          },
+          "language": {
+            "type": "string",
+            "description": "Language code, from this corpus's own reliable DB field.",
+            "example": "ro"
+          },
+          "rawTei": {
+            "type": "string",
+            "description": "Raw TEI-XML source of this opus/div, only included when the request sets ?includeRawTei=true (omitted by default - can be large)."
+          }
+        }
+      },
       "CatalogPageDtoAuthorDto": {
         "type": "object",
         "properties": {
@@ -1715,6 +1933,23 @@
           "totalPages": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "AuthorMediaDto": {
+        "type": "object",
+        "properties": {
+          "strId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "imageUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -1753,6 +1988,9 @@
             "type": "string"
           },
           "opusRemovedTopic": {
+            "type": "string"
+          },
+          "enrichWorkTopic": {
             "type": "string"
           }
         }
@@ -2363,7 +2601,7 @@
         "tags": [
           "tei-div-search-controller"
         ],
-        "operationId": "executeSearch-teidiv-get_8",
+        "operationId": "executeSearch-teidiv-get_10",
         "parameters": [
           {
             "name": "page",

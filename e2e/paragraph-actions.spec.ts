@@ -44,6 +44,8 @@ test('hover highlights immediately; clicking reveals transparent paragraph actio
   expect(markerBox.x + markerBox.width).toBeLessThanOrEqual(blockBox.x + blockBox.width - 4);
   expect(markerBox.y + markerBox.height).toBeLessThanOrEqual(blockBox.y + blockBox.height);
   await marker.click();
+  await expect(page.locator('#reader-block-popover')).toBeVisible();
+  await page.getByRole('button', { name: 'Quote selection', exact: true }).click();
   await expect(page.locator('#selection-quote-toolbar')).toBeVisible();
   expect(await page.evaluate(() => window.getSelection()?.toString().trim())).toBe(text);
   await page.keyboard.press('Escape');

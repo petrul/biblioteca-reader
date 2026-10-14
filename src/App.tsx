@@ -32,8 +32,9 @@ import { AddToCollectionModal, AddToCollectionPayload } from './components/AddTo
 
 export default function App() {
   const [dataRevision, setDataRevision] = useState(0);
-  // Navigation State
-  const [currentView, setCurrentView] = useState<AppView>('browse');
+  // Initialize from the URL so StrictMode's repeated effects cannot erase a deep link.
+  const initialRoute = useRef(parseAppPath(window.location.pathname, window.location.hash, window.location.search)).current;
+  const [currentView, setCurrentView] = useState<AppView>(initialRoute.view);
   // Set by WorkView/ReaderView when the work/chapter id in the current URL
   // doesn't exist - the not-found card below explains it.
   const [contentNotFound, setContentNotFound] = useState(false);
@@ -44,7 +45,7 @@ export default function App() {
   // (see router.ts). BrowseView remembers the last tab across sessions
   // via preferencesStore, but the URL wins - a deep link or a history
   // walk lands on exactly what the address says.
-  const [catalog, setCatalog] = useState<CatalogState>(DEFAULT_CATALOG_STATE);
+  const [catalog, setCatalog] = useState<CatalogState>(initialRoute.catalog || DEFAULT_CATALOG_STATE);
   // Reading preferences panel's open state - the navbar's settings button
   // owns the toggle; ReaderView's panel is the controlled consumer. Reset
   // on leaving the reader so a return to a book starts closed.
@@ -55,10 +56,10 @@ export default function App() {
   // while reading) returns there; chapter-to-chapter hops inside the same
   // book never change it. Deep links default to the main catalog.
   const [readerOrigin, setReaderOrigin] = useState<'browse' | 'work' | 'author' | 'search'>('browse');
-  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
-  const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
-  const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
-  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(initialRoute.authorId || null);
+  const [selectedWorkId, setSelectedWorkId] = useState<string | null>(initialRoute.workId || null);
+  const [selectedChapterId, setSelectedChapterId] = useState<string | null>(initialRoute.chapterId || null);
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(initialRoute.quoteId || null);
 
   // Admin Hamburger Sidebar State
   const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState(false);
@@ -306,7 +307,10 @@ export default function App() {
     let path: string | null = null;
     if (currentView === 'browse') path = buildAppPath({ view: 'browse', catalog });
     else if (currentView === 'work' && selectedWorkId) path = buildAppPath({ view: 'work', workId: selectedWorkId });
-    else if (currentView === 'reader' && selectedChapterId) path = buildAppPath({ view: 'reader', chapterId: selectedChapterId });
+    else if (currentView === 'reader' && selectedChapterId) {
+      const existing = parseAppPath(window.location.pathname, window.location.hash, window.location.search);
+      path = buildAppPath({ view: 'reader', chapterId: selectedChapterId, block: existing.chapterId === selectedChapterId ? existing.block : undefined });
+    }
     else if (currentView === 'quote' && selectedQuoteId) path = buildAppPath({ view: 'quote', quoteId: selectedQuoteId });
     else if (currentView === 'author' && selectedAuthorId) path = buildAppPath({ view: 'author', authorId: selectedAuthorId });
     else if (currentView === 'search') {

@@ -24,6 +24,7 @@ export interface PageSeo {
   imageType: string;
   imageAlt: string;
   canonicalUrl: string;
+  sharedUrl?: string;
   robots: string;
   jsonLd: string | null;
 }
@@ -343,6 +344,7 @@ export function renderIndexHtml(template: string, seo: PageSeo): string {
     .replaceAll('__OG_IMAGE_TYPE__', seo.imageType)
     .replaceAll('__OG_IMAGE_ALT__', escapeHtml(seo.imageAlt))
     .replaceAll('__CANONICAL_URL__', escapeHtml(seo.canonicalUrl))
+    .replaceAll('__OG_URL__', escapeHtml(seo.sharedUrl || seo.canonicalUrl))
     .replaceAll('__ROBOTS__', seo.robots)
     .replace('__JSON_LD__', jsonLdScript);
 }
@@ -381,7 +383,7 @@ export async function buildSitemapXml(origin: string, bibliotecaServerUrl: strin
     if (res.ok) {
       const authors = await res.json() as AuthorListEntry[];
       for (const author of authors) {
-        if (author.strId) urls.add(`${origin}/app/author/${encodeURIComponent(author.strId)}`);
+        if (author.strId) urls.add(`${origin}/${encodeURIComponent(author.strId)}`);
       }
     }
   } catch {
@@ -407,7 +409,7 @@ export async function buildSitemapXml(origin: string, bibliotecaServerUrl: strin
       const batch = data.items ?? [];
       for (const div of batch) {
         if (div.opus && div.path) {
-          urls.add(`${origin}/app/work/${div.path.split('/').map(encodeURIComponent).join('/')}`);
+          urls.add(`${origin}/${div.path.split('/').map(encodeURIComponent).join('/')}`);
         }
       }
       if (batch.length < pageSize) break;

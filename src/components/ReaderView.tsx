@@ -1,3 +1,4 @@
+import { resolveSelectedQuote } from '../services/serverQuoteApi';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
@@ -163,6 +164,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   onNotFoundChange
 }) => {
   useReadingAttention(workId, reallySignedIn);
+  const [quoteContext, setQuoteContext] = useState<{ context?: string; before?: string }>({});
+  const [quoteError, setQuoteError] = useState('');
+  const [quoteCreating, setQuoteCreating] = useState(false);
   const work = readerService.getWorkById(workId);
   const chapters = work ? readerService.getChaptersForWork(work.id) : [];
   const chapter = readerService.getChapter(workId, chapterId);
@@ -630,6 +634,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         // Ensure selection is inside reader container
         if (contentRef.current.contains(range.commonAncestorContainer)) {
           setSelectedText(text);
+          const start = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
+          const block = start?.closest('p,h1,h2,h3,h4,h5,h6,blockquote,li');
+          if (block && contentRef.current.contains(block)) {
+            const prefix = document.createRange(); prefix.selectNodeContents(block);
+            prefix.setEnd(range.startContainer, range.startOffset);
+            setQuoteContext({ context: block.textContent || '', before: prefix.toString() });
+          } else setQuoteContext({});
+          setQuoteError('');
           setSelectionRange({ start: range.startOffset, end: range.endOffset });
           setSelectionCoords({
             x: Math.max(10, rect.left + rect.width / 2),
@@ -706,21 +718,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const currentTheme = THEME_STYLES[theme];
 
   // Action: Create Quote Link
-  const handleGenerateQuoteLink = () => {
-    if (!selectedText) return;
-    const quote = readerService.createQuotation({
-      workId: work.id,
-      workTitle: work.title,
-      authorName: work.authorName,
-      chapterId: chapter.id,
-      chapterTitle: chapter.title,
-      chapterNumber: chapter.chapterNumber,
-      text: selectedText,
-      startOffset: selectionRange?.start || 0,
-      endOffset: selectionRange?.end || selectedText.length,
-      language: work.detectedLanguage
-    });
-    setCreatedQuote(quote);
+  const handleGenerateQuoteLink = async () => {
+    if (!selectedText || quoteCreating) return;
+    setQuoteCreating(true); setQuoteError('');
+    try {
+      const source = await resolveSelectedQuote(chapter.id, selectedText, quoteContext.context, quoteContext.before);
+      const quote = readerService.createQuotation({
+        workId: work.id, workTitle: work.title, authorName: work.authorName,
+        chapterId: chapter.id, chapterTitle: chapter.title, chapterNumber: chapter.chapterNumber,
+        text: source.text, startOffset: selectionRange?.start || 0,
+        endOffset: selectionRange?.end || selectedText.length, language: work.detectedLanguage
+      }, source.id);
+      setCreatedQuote(quote);
+    } catch (error) { setQuoteError((error as Error).message); }
+    finally { setQuoteCreating(false); }
   };
 
   // Action: Copy Citation
@@ -1305,7 +1316,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 dangerouslySetInnerHTML={contentHtml}
                 onClick={handleNoteClick}
               />
-              <ReaderBlockMarker containerRef={contentRef} contentKey={`${chapter.id}:${chapter.htmlContent}`} />
+              <ReaderBlockMarker containerRef={contentRef} contentKey={`${chapter.id}:${chapter.htmlContent}`} chapterId={chapter.id} title={work?.title || workId} chapterTitle={chapter.title} />
 
               {/* End-of-text ornament, the original server page's own
                   p.deco-end (teidiv.css: img.deco-end { max-width: 100px;
@@ -1619,14 +1630,16 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           }}
           className="z-50 bg-[#08231c] text-emerald-100 px-3 py-1.5 rounded-xl shadow-2xl border border-emerald-500/30 flex items-center space-x-2 animate-in fade-in zoom-in-95 duration-150"
         >
+          {quoteError && <p role="alert" className="absolute top-full mt-2 w-72 p-2 rounded bg-[#08231c] text-white">{quoteError}</p>}
           <button
             id="btn-sel-create-quote"
-            onClick={handleGenerateQuoteLink}
+            onClick={() => void handleGenerateQuoteLink()}
+            disabled={quoteCreating}
             className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer"
             title="Generate Shareable Quote Link"
           >
             <Quote className="w-3.5 h-3.5 text-[#f59e0b]" />
-            <span>Quote Link</span>
+            <span>{quoteCreating ? 'Resolving…' : 'Quote Link'}</span>
           </button>
 
           <span className="w-px h-4 bg-emerald-500/30" />

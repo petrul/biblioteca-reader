@@ -266,6 +266,6 @@ test('buildSitemapXml: paginates past the works endpoint\'s silent 100-item cap 
   assert.equal((xml.match(/<url>/g) ?? []).length, 1 + 2 + 101); // home + 2 authors + 101 distinct works
   assert.equal((xml.match(/author0\/work0/g) ?? []).length, 1, 'duplicate work URL must be de-duped');
   assert.ok(xml.includes(`<loc>${ORIGIN}/app</loc>`));
-  assert.ok(xml.includes(`<loc>${ORIGIN}/app/author/mitru</loc>`));
-  assert.ok(xml.includes(`<loc>${ORIGIN}/app/work/mitru/povesti</loc>`));
+  assert.ok(xml.includes(`<loc>${ORIGIN}/mitru</loc>`));
+  assert.ok(xml.includes(`<loc>${ORIGIN}/mitru/povesti</loc>`));
 });

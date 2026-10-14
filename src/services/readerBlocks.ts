@@ -1,3 +1,4 @@
+import { PARAGRAPHS, parseParagraphRange } from './paragraphLinks';
 /** One delegated listener set for all current chapter blocks; no HTML rewriting. */
 export const READER_BLOCKS = 'p, h1, h2, h3, h4, h5, h6, blockquote, li, .l, .lg';
 const INTERACTIVE = 'a, button, input, textarea, select, [contenteditable="true"], .note';
@@ -6,6 +7,15 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
   onChange: (block: HTMLElement | null) => void;
   onActivate: (block: HTMLElement) => void;
 }) {
+  container.querySelectorAll<HTMLElement>(PARAGRAPHS).forEach((block, index) => {
+    const id = `p${index + 1}`;
+    block.dataset.readerParagraph = id;
+    if (!block.id) block.id = id;
+    else if (block.id !== id && !container.querySelector(`#${id}`)) {
+      const anchor = container.ownerDocument.createElement('span');
+      anchor.id = id; anchor.setAttribute('aria-hidden', 'true'); block.prepend(anchor);
+    }
+  });
   let selected: HTMLElement | null = null;
   let hovered: HTMLElement | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -19,6 +29,7 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     hovered?.classList.add('block-hover');
   };
   const select = (block: HTMLElement) => {
+    container.querySelectorAll('.block-linked').forEach(element => element.classList.remove('block-linked'));
     selected?.classList.remove('block-active');
     selected = block;
     selected.classList.add('block-active');
@@ -71,9 +82,10 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
   const outside = (event: PointerEvent) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!selected || !target || selected.contains(target) ||
-        target.closest('#reader-block-marker, #selection-quote-toolbar, #quote-created-modal')) return;
+        target.closest('#reader-block-marker, #reader-block-popover, #selection-quote-toolbar, #quote-created-modal')) return;
     selected.classList.remove('block-active');
     selected = null;
+    container.querySelectorAll('.block-linked').forEach(element => element.classList.remove('block-linked'));
     callbacks.onChange(null);
   };
   const key = (event: KeyboardEvent) => {
@@ -85,6 +97,19 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     if (!block) return;
     event.preventDefault(); callbacks.onActivate(block);
   };
+  const applyLink = () => {
+    const range = parseParagraphRange(new URLSearchParams(location.search).get('p') || location.hash);
+    if (!range) return;
+    const first = container.querySelector<HTMLElement>(`[data-reader-paragraph="p${range.start}"]`);
+    const last = container.querySelector(`[data-reader-paragraph="p${range.end}"]`);
+    if (!first || !last) return;
+    select(first);
+    for (let n = range.start; n <= range.end; n++) container.querySelector(`[data-reader-paragraph="p${n}"]`)?.classList.add('block-linked');
+    first.scrollIntoView({ block: 'center' });
+  };
+  applyLink();
+  window.addEventListener('hashchange', applyLink);
+  window.addEventListener('popstate', applyLink);
   container.addEventListener('pointerover', over);
   container.addEventListener('pointerout', out);
   container.addEventListener('pointerdown', down);
@@ -97,6 +122,9 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
   doc.addEventListener('keydown', key);
   doc.addEventListener('scroll', end, { capture: true, passive: true });
   return () => {
+    window.removeEventListener('hashchange', applyLink);
+    window.removeEventListener('popstate', applyLink);
+    container.querySelectorAll('.block-linked').forEach(element => element.classList.remove('block-linked'));
     cancel(); selected?.classList.remove('block-active'); hovered?.classList.remove('block-hover');
     container.removeEventListener('pointerover', over);
     container.removeEventListener('pointerout', out);

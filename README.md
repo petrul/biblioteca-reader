@@ -514,3 +514,65 @@ For bare-metal thumbnail development on zmeu, use
 `rake 'run[zmeu,http://localhost:3335]'` to select the dev covers endpoint
 explicitly after loading the pass-store profile. Omitting the second argument
 keeps the configured profile endpoint.
+
+
+## Same URL reader and text edition (feat/same-url)
+
+Reading URLs follow biblioteca-server exactly: `/{authorId}/{opusId}/{div...}`.
+The author page lives at `/{authorId}`. Application pages (catalog, work details,
+search, collections, admin and settings) retain `/app/...`. Existing
+`/app/reader/...` links redirect permanently to the corresponding root URL.
+Root `.html`, `.txt`, `.xml`, `.json` and `/_binary/` requests relay the existing
+server response. Browser service requests remain same-origin under `/api/`;
+metadata and TOC access uses the generated biblioteca-server client internally.
+Reserved infrastructure prefixes include `/api`, `/assets`, `/src`, `/css`,
+`/img`, `/js`, `/image`, `/biblioteca`, `/webjars`, `/dav`, `/v2` and `/v3`.
+
+Modern browser navigations receive the JavaScript application. Curl, Lynx and
+known crawlers receive the existing server-rendered chapter HTML, rewritten to
+root reader links, without scripts or event handlers. `?view=text` explicitly
+selects that edition. `Accept: text/plain`, `text/markdown`, or `application/json`
+selects an export of the same literary content. Every reader response varies on
+`Accept`, `User-Agent` and `Sec-Fetch-Mode`; negotiated responses are private and
+require cache revalidation. The SPA advertises its text alternate in its head.
+
+Click a paragraph, then ¶, to copy its stable URL, citation or HTML. Paragraph
+ordinals are chapter-local (`?p=17#p17`, ranges `?p=17-19#p17-19`), excluding
+ornamental separators. Source IDs are retained. Ordinals can change if an edition
+is re-imported with different paragraph breaks. Sharing ranges highlights them
+in both editions, keeps the chapter canonical URL, and puts the passage in the
+crawler's description. The Edit button currently reports HTTP 501 without saving.
+
+The text twin is always anonymous: it does not forward account cookies. Premium
+metadata limits it to the first leaf chapter and preceding title pages; TOC or
+upstream failures fail closed. Current live metadata exposes free works only.
+The HTML text edition rejects documents above 8 MiB rather than silently
+truncating them; normal reader export routes remain available for large sources.
+
+### Reverse proxy deployment
+
+`test.scriptorium.ro` already forwards root paths to dev reader port 3333.
+Production currently sends root paths to biblioteca-server and strips `/app`.
+Before deploying this branch, update its Caddy site to send reading and author
+paths, `/assets/*`, `/api/*`, `/robots.txt` and `/sitemap.xml` to reader port 9032,
+and use `handle /app/*` (preserve the prefix) instead of `handle_path /app/*`.
+Keep `/biblioteca` and `/image/*` MinIO routes and internal API restrictions.
+A proposed route fragment is in `deployment/root-reader.caddy`; it is not applied
+by this development change. No Docker deployment or Caddy reload is performed.
+
+Validation: `rake test[zmeu]` covers modern browsers versus curl/Lynx/social
+crawlers, explicit formats, missing paragraphs, source IDs and premium gating.
+`npx playwright test e2e/same-url.spec.ts e2e/paragraph-actions.spec.ts` compares
+real chapter paragraphs between browser and text editions and checks sharing.
+
+
+Quotations use the same server URL in both editions:
+`/quote/{chapterPath}?start={teiDotAddress}&end={teiDotAddress}`. `/api/quote`
+GET resolves an existing quotation; POST maps a selected passage to source
+paragraphs through the generated server client and returns its permanent URL.
+New Quote Link actions use these TEI addresses and work in a fresh browser.
+Source matching preserves UTF-16 character offsets, normalizes display
+whitespace, and uses the selected block and its preceding text to disambiguate
+repeated passages. An ambiguous or unmatched passage reports a clear error
+instead of inventing an address. Previously stored browser-only quotations are
+preserved; source-addressed quotations do not depend on that browser storage.

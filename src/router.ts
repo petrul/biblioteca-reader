@@ -1,3 +1,4 @@
+import { parseParagraphRange, paragraphShareUrl, type ParagraphRange } from './services/paragraphLinks';
 import {
   AppView,
   CatalogAccessFilter,
@@ -8,29 +9,7 @@ import {
   SearchMode
 } from './types/textbase';
 
-/**
- * Real (pushState) path-based routing, replacing the old #/work/xxx hash
- * scheme. Everything the reader UI serves lives under /app/ so it can
- * share a domain/Caddy instance with textbase-server's own URLs, which
- * live at the root (/{authorId}/{opusId}/{div1}/{div2}/... - see
- * DivController.AUTHOR_REGEX/OPUS_REGEX) without any path collision.
- *
- * workId/chapterId are already textbase-server's own completePath
- * (author/opus[/div...]) - see workFromServerDiv()/chapter id in
- * serversideApi.ts - so routing them as real path segments instead of
- * one encodeURIComponent'd blob avoids the double-encoded %2F that
- * scheme produced (a chapter path nested 3+ divs deep encoded its own
- * slashes into %2F inside a single hash segment).
- *
- * The one deliberate hash use is the browse catalog: the fragment
- * carries the tab AND its query/filter/page state
- * (#authors?q=cicero&page=2, #works?lang=lat&access=premium) - fixed
- * tab tokens plus urlencoded params, no slashes to double-encode, and
- * keeping them out of the path keeps textbase-server's catch-all root
- * routes (/{authorId}/...) completely free of /app-adjacent siblings.
- * The search view is a real path route, so its mode/query state rides
- * the ordinary query string (/app/search?mode=title&q=faust).
- */
+/** Application pages use /app; author/work/chapter paths mirror biblioteca-server. */
 export const APP_PREFIX = '/app';
 
 // The catalog state every browse URL implicitly starts from - the
@@ -55,6 +34,7 @@ export interface RouteState {
   authorId?: string;
   workId?: string;
   chapterId?: string;
+  block?: ParagraphRange;
   quoteId?: string;
   search?: { mode?: SearchMode; query?: string; workSeed?: string };
 }
@@ -84,7 +64,10 @@ export function parseAppPath(pathname: string, hash = '', search = ''): RouteSta
   if (head === 'admin') return { view: 'admin' };
   if (head === 'collections') return { view: 'collections' };
   if (head === 'author' && rest[0]) return { view: 'author', authorId: rest[0] };
-  if (head === 'quote' && rest[0]) return { view: 'quote', quoteId: rest[0] };
+  if (head === 'quote' && rest[0]) {
+    const params = new URLSearchParams(search);
+    return { view: 'quote', quoteId: rest.length >= 2 && params.has('start') && params.has('end') ? `server:${rest.join('/')}?${new URLSearchParams({ start: params.get('start')!, end: params.get('end')! })}` : rest[0] };
+  }
   if (head === 'work' && rest.length >= 2) return { view: 'work', workId: rest.slice(0, 2).join('/') };
   // A work with no chapter breakdown at all is its own single readable
   // div (see fetchRealChaptersForWork's "leaves.length ? leaves :
@@ -92,7 +75,16 @@ export function parseAppPath(pathname: string, hash = '', search = ''): RouteSta
   // its work path exactly, so rest can be as short as 2 segments, not
   // just 3+.
   if (head === 'reader' && rest.length >= 2) {
-    return { view: 'reader', workId: rest.slice(0, 2).join('/'), chapterId: rest.join('/') };
+    return { view: 'reader', workId: rest.slice(0, 2).join('/'), chapterId: rest.join('/'), ...(parseParagraphRange(new URLSearchParams(search).get('p') || hash) ? { block: parseParagraphRange(new URLSearchParams(search).get('p') || hash)! } : {}) };
+  }
+  // Root reading URLs follow biblioteca-server's author/opus/div convention.
+  const reserved = new Set(['api', 'assets', 'src', 'node_modules', 'css', 'img', 'js', 'util', 'p', 'webjars', 'bootstrap-5.2.1-dist', 'image', 'biblioteca', 'v2', 'v3', 'swagger-ui', 'dav']);
+  if (!pathname.startsWith('/app/') && /^[a-z0-9_]+$/.test(head) && !reserved.has(head)) {
+    if (rest.length === 0) return { view: 'author', authorId: head };
+    if (rest.every(part => /^[\p{L}\p{N}_.-]+$/u.test(part)) && !/\.(xml|txt|json|html|js|tsx|css|jpg|png|webp)$/i.test(rest.at(-1)!)) {
+      const block = parseParagraphRange(new URLSearchParams(search).get('p') || hash);
+      return { view: 'reader', workId: [head, rest[0]].join('/'), chapterId: [head, ...rest].join('/'), ...(block ? { block } : {}) };
+    }
   }
   // A non-empty path that matches none of the above - as opposed to the
   // segments.length === 0 branch above, which is the legitimate plain-/app
@@ -178,16 +170,16 @@ export function buildAppPath(state: RouteState): string {
     case 'collections':
       return `${APP_PREFIX}/collections`;
     case 'author':
-      return state.authorId ? `${APP_PREFIX}/author/${encodeURIComponent(state.authorId)}` : APP_PREFIX;
+      return state.authorId ? `/${encodeURIComponent(state.authorId)}` : APP_PREFIX;
     case 'quote':
-      return state.quoteId ? `${APP_PREFIX}/quote/${encodeURIComponent(state.quoteId)}` : APP_PREFIX;
+      return state.quoteId ? (state.quoteId.startsWith('server:') ? `/quote/${state.quoteId.slice(7)}` : `/quote/${encodeURIComponent(state.quoteId)}`) : APP_PREFIX;
     case 'work':
       return state.workId
         ? `${APP_PREFIX}/work/${state.workId.split('/').map(encodeURIComponent).join('/')}`
         : APP_PREFIX;
     case 'reader':
       return state.chapterId
-        ? `${APP_PREFIX}/reader/${state.chapterId.split('/').map(encodeURIComponent).join('/')}`
+        ? (state.block ? paragraphShareUrl(state.chapterId, state.block) : `/${state.chapterId.split('/').map(encodeURIComponent).join('/')}`)
         : APP_PREFIX;
     case 'browse':
       return APP_PREFIX + buildCatalogFragment(state.catalog ?? DEFAULT_CATALOG_STATE);
