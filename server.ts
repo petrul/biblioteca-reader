@@ -746,11 +746,18 @@ const nestjsApi = createClient<NestjsPaths>({
 });
 
 // Synchronous: waits for nestjs to render, store and assign the new cover
-// (seconds to a minute), then answers { coverUrl, request }.
+// (seconds to a minute), then answers { coverUrl, request }. An optional
+// `request` object in the body is the admin-edited cover JSON to render
+// from; without it nestjs picks a random request as before.
 app.post('/api/admin/covers/work', asyncRoute(async (req: Request, res: Response) => {
   const path = req.body?.path;
   if (typeof path !== 'string' || !WORK_PATH.test(path)) {
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
+    return;
+  }
+  const request = req.body?.request;
+  if (request !== undefined && (request === null || typeof request !== 'object' || Array.isArray(request))) {
+    res.status(400).json({ error: 'request must be a JSON object' });
     return;
   }
   if (!(await isAdminSession(req))) {
@@ -759,9 +766,29 @@ app.post('/api/admin/covers/work', asyncRoute(async (req: Request, res: Response
   }
   try {
     const { data, error, response } = await nestjsApi.POST('/api/covers/work', {
-      body: { path },
+      body: { path, ...(request ? { request } : {}) },
       signal: AbortSignal.timeout(180_000),
     });
+    res.status(response.status).json(data ?? error ?? {});
+  } catch (error: any) {
+    res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });
+  }
+}));
+
+// A fresh random cover request JSON for the work, without rendering it -
+// the admin section's "New random JSON" button fills its editor from this.
+app.get('/api/admin/covers/work/request/random', asyncRoute(async (req: Request, res: Response) => {
+  const path = typeof req.query.path === 'string' ? req.query.path : '';
+  if (!WORK_PATH.test(path)) {
+    res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
+    return;
+  }
+  if (!(await isAdminSession(req))) {
+    res.status(403).json({ error: 'administrators only' });
+    return;
+  }
+  try {
+    const { data, error, response } = await nestjsApi.GET('/api/covers/work/request/random', { params: { query: { path } } });
     res.status(response.status).json(data ?? error ?? {});
   } catch (error: any) {
     res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });

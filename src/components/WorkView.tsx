@@ -25,8 +25,9 @@ import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
 import { bibliotecaExternalUrl, davLanguageSegment } from '../services/serversideApi';
 import { languageName } from '../services/languageNames';
 import { PaymentCheckoutModal } from './PaymentCheckoutModal';
-import { WorkCoverImage } from './DefaultWorkCover';
+import { WorkCoverImage, DefaultWorkCover } from './DefaultWorkCover';
 import { AdminCoverSection } from './AdminCoverSection';
+import { coverThumbnailUrl } from '../services/coverThumbnail';
 import { NotFoundCard } from './NotFoundCard';
 import { isPreviewPage } from '../services/tocTree';
 
@@ -67,6 +68,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
   // deliberately kept off the front face (see the Info-icon toggle
   // below), same rotate-y-180 pattern as ReaderView's chapter stats flip.
   const [showTechnicalData, setShowTechnicalData] = useState(false);
+  // Phone-style lightbox: tapping the cover shows it full screen.
+  const [showCoverModal, setShowCoverModal] = useState(false);
   // Which serializations the back face's DAV mount links expose - one
   // mountable dav:// directory per checked format (the DAV export's format
   // is a path segment, so a book in two formats is two mounts, not one).
@@ -83,6 +86,21 @@ export const WorkView: React.FC<WorkViewProps> = ({
     window.addEventListener('textbase-purchases-changed', handlePurchasesChanged);
     return () => window.removeEventListener('textbase-purchases-changed', handlePurchasesChanged);
   }, []);
+
+  useEffect(() => {
+    if (!showCoverModal) return;
+    const handleCoverModalKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        // Capture phase + stopImmediatePropagation: the flip-toggle effect
+        // below also maps Escape and must not flip the card behind the
+        // closing lightbox.
+        event.stopImmediatePropagation();
+        setShowCoverModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleCoverModalKey, { capture: true });
+    return () => window.removeEventListener('keydown', handleCoverModalKey, { capture: true });
+  }, [showCoverModal]);
 
   // Keyboard flip for the header card, mirroring its Info/X icon buttons:
   // i toggles between the faces, Escape or x turns back to the overview.
@@ -179,7 +197,8 @@ export const WorkView: React.FC<WorkViewProps> = ({
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    // As wide as the main (browse) page: max-w-7xl.
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Back button */}
       <button
         id="btn-work-back"
@@ -195,8 +214,10 @@ export const WorkView: React.FC<WorkViewProps> = ({
       <div className="relative mb-8">
         <div className="[perspective:1500px]">
           <div className={`relative transition-transform duration-700 ease-in-out transform-3d ${showTechnicalData ? 'rotate-y-180' : ''}`}>
-            {/* FRONT FACE: title, author, actions, synopsis - no technical data */}
-            <div className="relative backface-hidden bg-scriptorium-blue rounded-2xl border border-emerald-500/20 p-6 sm:p-8 shadow-xl">
+            {/* FRONT FACE: title, author, actions, synopsis - no technical data.
+                While the back is showing this face goes absolute so the card
+                container grows to the back face's full height. */}
+            <div className={`backface-hidden bg-scriptorium-blue rounded-2xl border border-emerald-500/20 p-6 sm:p-8 shadow-xl ${showTechnicalData ? 'absolute inset-0' : 'relative'}`}>
               <button
                 id="btn-work-flip-technical-front"
                 type="button"
@@ -209,7 +230,20 @@ export const WorkView: React.FC<WorkViewProps> = ({
               </button>
               <div className="flex flex-col md:flex-row items-start justify-between gap-6 pb-6 border-b border-emerald-500/15">
           <div className="w-full md:w-36 shrink-0 order-2 md:order-1">
-            <div className="aspect-[5/8] overflow-hidden rounded-xl border border-amber-500/25 bg-black/20 shadow-lg">
+            <div
+              className="aspect-[5/8] overflow-hidden rounded-xl border border-amber-500/25 bg-black/20 shadow-lg cursor-zoom-in hover:border-amber-400/60 transition-colors"
+              onClick={() => setShowCoverModal(true)}
+              role="button"
+              tabIndex={0}
+              aria-label={`View the cover of ${work.title} full screen`}
+              title="View cover full screen"
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setShowCoverModal(true);
+                }
+              }}
+            >
               <WorkCoverImage src={work.coverImage} thumbnailWidth={640} title={work.title} author={work.authorName} alt={`Cover for ${work.title}`} className="h-full w-full" imgClassName="object-cover" />
             </div>
           </div>
@@ -379,8 +413,11 @@ export const WorkView: React.FC<WorkViewProps> = ({
             </div>
 
             {/* BACK FACE: TEI/storage technical metadata, reached only by
-                tapping the Info icon - not shown on the front overview. */}
-            <div className="absolute inset-0 backface-hidden rotate-y-180 bg-scriptorium-blue rounded-2xl border border-emerald-500/20 p-6 sm:p-8 shadow-xl overflow-y-auto flex flex-col justify-start">
+                tapping the Info icon - not shown on the front overview. In
+                flow (relative) while flipped so the card extends down to
+                the back content's full height; absolute with internal
+                scrolling while the front is showing. */}
+            <div className={`backface-hidden rotate-y-180 bg-scriptorium-blue rounded-2xl border border-emerald-500/20 p-6 sm:p-8 shadow-xl flex flex-col justify-start ${showTechnicalData ? 'relative' : 'absolute inset-0 overflow-y-auto'}`}>
               <button
                 id="btn-work-flip-technical-back"
                 type="button"
@@ -463,6 +500,41 @@ export const WorkView: React.FC<WorkViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Cover lightbox - tapping the cover shows it full screen, phone
+          gallery style. Backdrop click or Escape dismisses. */}
+      {showCoverModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Cover for ${work.title}`}
+          onClick={() => setShowCoverModal(false)}
+        >
+          <button
+            id="btn-close-cover-modal"
+            type="button"
+            onClick={() => setShowCoverModal(false)}
+            className="absolute top-4 right-4 p-2 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Close cover"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          {work.coverImage ? (
+            <img
+              src={coverThumbnailUrl(work.coverImage, 640)}
+              alt={`Cover for ${work.title}`}
+              referrerPolicy="no-referrer"
+              className="max-h-[92vh] max-w-[92vw] object-contain"
+              onClick={e => e.stopPropagation()}
+            />
+          ) : (
+            <div className="h-[70vh] aspect-[5/8]" onClick={e => e.stopPropagation()}>
+              <DefaultWorkCover title={work.title} author={work.authorName} className="h-full w-full rounded-lg" />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Table of Contents modal - opened via btn-open-toc-modal, right
           under Continue Reading (same styling), not shown inline. */}

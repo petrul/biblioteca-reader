@@ -169,9 +169,9 @@ export function workFromServerDiv(div: EntityDiv | TeiDiv, authorImage?: string,
     // URL directly. Cover generation itself never happens in the browser.
     coverImage: generatedCover,
     coverArtUrl: generatedCover,
-    // 'live' only: the language is displayed as its full name by the
-    // language label (languageName), never as a raw-code tag chip.
-    tags: ['live'],
+    // No tag chips: the language rides the dedicated language label and the
+    // '#live' chip this used to add read as noise on every live work card.
+    tags: [],
     // The work's own description (TEI opening paragraphs, or the enrichment
     // summary when those were blank); empty rather than a generic stand-in.
     summary: workSummary(dto.description),
