@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { attachReaderBlocks } from '../services/readerBlocks';
 
@@ -24,11 +24,12 @@ export function ReaderBlockMarker({ containerRef, contentKey }: {
     if (!container) return;
     return attachReaderBlocks(container, { onChange: setBlock, onActivate: activate });
   }, [containerRef, contentKey]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!block) return;
     const reposition = () => {
       const rect = block.getBoundingClientRect();
-      setPosition({ left: rect.left + 4, top: rect.top + 2 });
+      // Place the persistent action button inside the selected block, at its top right.
+      setPosition({ left: Math.max(4, Math.min(rect.right - 28, (window.visualViewport?.width ?? window.innerWidth) + (window.visualViewport?.offsetLeft ?? 0) - 28)), top: rect.top });
     };
     reposition();
     window.addEventListener('scroll', reposition, { capture: true, passive: true });
@@ -45,7 +46,7 @@ export function ReaderBlockMarker({ containerRef, contentKey }: {
     aria-label="Paragraph actions"
     title="Paragraph actions (q)"
     style={{ position: 'fixed', ...position }}
-    className="z-40 w-6 h-6 flex items-center justify-center rounded-md border border-[#9ca3af]/50 bg-white/60 hover:bg-white/80 backdrop-blur-[2px] shadow-sm text-[#9ca3af] hover:text-[#6b7280] font-serif text-xl leading-none cursor-pointer"
+    className="z-40 w-6 h-6 flex items-center justify-center rounded-md border-0 bg-transparent hover:bg-transparent text-[#9ca3af] hover:text-[#6b7280] font-serif text-xl leading-none cursor-pointer"
     onMouseDown={event => event.preventDefault()}
     onClick={() => activate(block)}
   >¶</button>, document.body);

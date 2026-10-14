@@ -384,10 +384,23 @@
   color: var(--drop-cap-color, #f59e0b);
 }
 
-/* Highlight without changing paragraph/verse layout. */
+/* Mark the right edge without changing paragraph/verse layout. */
 .reader-text-container .block-active {
-  outline: 2px solid #9ca3af;
-  outline-offset: 3px;
-  border-radius: 3px;
+  position: relative;
+}
+
+.reader-text-container .block-active,
+.reader-text-container .block-hover {
   background-color: rgba(229, 231, 235, 0.35);
+}
+
+.reader-text-container .block-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -8px;
+  width: 3px;
+  height: 100%;
+  background-color: #9ca3af;
+  pointer-events: none;
 }

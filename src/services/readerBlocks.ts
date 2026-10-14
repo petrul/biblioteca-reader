@@ -6,18 +6,23 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
   onChange: (block: HTMLElement | null) => void;
   onActivate: (block: HTMLElement) => void;
 }) {
-  let active: HTMLElement | null = null;
+  let selected: HTMLElement | null = null;
+  let hovered: HTMLElement | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let pending: HTMLElement | null = null;
   let touch: { id: number; x: number; y: number } | null = null;
-  let pressed = false;
+  let pressed: HTMLElement | null = null;
   const doc = container.ownerDocument;
-  const cancel = () => { clearTimeout(timer); timer = undefined; pending = null; };
-  const setActive = (block: HTMLElement | null) => {
-    active?.classList.remove('block-active');
-    active = block;
-    active?.classList.add('block-active');
-    callbacks.onChange(active);
+  const cancel = () => { clearTimeout(timer); timer = undefined; };
+  const setHovered = (block: HTMLElement | null) => {
+    hovered?.classList.remove('block-hover');
+    hovered = block;
+    hovered?.classList.add('block-hover');
+  };
+  const select = (block: HTMLElement) => {
+    selected?.classList.remove('block-active');
+    selected = block;
+    selected.classList.add('block-active');
+    callbacks.onChange(selected);
   };
   const findBlock = (target: EventTarget | null) => {
     const element = target instanceof Element ? target : null;
@@ -25,92 +30,84 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     const block = element.closest<HTMLElement>(READER_BLOCKS);
     return block && container.contains(block) && block.textContent?.trim() ? block : null;
   };
-  const schedule = (block: HTMLElement, delay: number, activate: boolean) => {
-    cancel(); pending = block;
-    timer = setTimeout(() => {
-      pending = null;
-      if (!container.contains(block)) return;
-      setActive(block);
-      if (activate) { pressed = true; callbacks.onActivate(block); }
-    }, delay);
-  };
   const over = (event: PointerEvent) => {
     if (event.pointerType !== 'mouse' || event.buttons) return;
-    const block = findBlock(event.target);
-    if (block === active || block === pending) return;
-    cancel(); setActive(null);
-    if (block) schedule(block, 400, false);
+    setHovered(findBlock(event.target));
   };
   const out = (event: PointerEvent) => {
     if (event.pointerType !== 'mouse') return;
-    const next = event.relatedTarget instanceof Element ? event.relatedTarget : null;
-    if (next?.closest('#reader-block-marker, #selection-quote-toolbar')) return;
-    if (findBlock(event.relatedTarget) === (pending || active)) return;
-    cancel(); setActive(null);
+    setHovered(findBlock(event.relatedTarget));
+  };
+  const click = (event: MouseEvent) => {
+    const block = findBlock(event.target);
+    // A text drag still belongs to the native selection/quote toolbar.
+    if (!block || !doc.getSelection()?.isCollapsed) return;
+    select(block);
   };
   const down = (event: PointerEvent) => {
     if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
     if (touch) { cancel(); touch = null; return; }
-    pressed = false;
+    pressed = null;
     const block = findBlock(event.target);
-    cancel(); setActive(null);
+    cancel();
     if (!block) return;
     touch = { id: event.pointerId, x: event.clientX, y: event.clientY };
-    schedule(block, 500, true);
+    timer = setTimeout(() => {
+      if (!container.contains(block)) return;
+      pressed = block;
+      callbacks.onActivate(block);
+    }, 500);
   };
   const move = (event: PointerEvent) => {
     if (touch?.id !== event.pointerId) return;
     if (Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > 10) {
       cancel(); touch = null;
-      if (!pressed) setActive(null);
     }
   };
   const end = () => { cancel(); touch = null; };
-  const scrolling = () => { cancel(); touch = null; };
   const context = (event: MouseEvent) => {
-    if (pressed && findBlock(event.target) === active) event.preventDefault();
+    if (pressed && findBlock(event.target) === pressed) event.preventDefault();
   };
   const outside = (event: PointerEvent) => {
     const target = event.target instanceof Element ? event.target : null;
-    if (target && !container.contains(target) && !target.closest('#reader-block-marker, #selection-quote-toolbar, #quote-created-modal')) {
-      cancel(); setActive(null);
-    }
-  };
-  const outsideHover = (event: PointerEvent) => {
-    if (event.pointerType === 'mouse') outside(event);
+    if (!selected || !target || selected.contains(target) ||
+        target.closest('#reader-block-marker, #selection-quote-toolbar, #quote-created-modal')) return;
+    selected.classList.remove('block-active');
+    selected = null;
+    callbacks.onChange(null);
   };
   const key = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') { cancel(); setActive(null); return; }
+    if (event.key === 'Escape') { cancel(); setHovered(null); return; }
     if (event.key !== 'q' || event.ctrlKey || event.metaKey || event.altKey ||
         (event.target instanceof Element && event.target.closest(INTERACTIVE))) return;
     const caret = doc.getSelection()?.anchorNode;
-    const block = active || findBlock(caret instanceof Element ? caret : caret?.parentElement || null);
+    const block = hovered || selected || findBlock(caret instanceof Element ? caret : caret?.parentElement || null);
     if (!block) return;
-    event.preventDefault(); setActive(block); callbacks.onActivate(block);
+    event.preventDefault(); callbacks.onActivate(block);
   };
   container.addEventListener('pointerover', over);
   container.addEventListener('pointerout', out);
   container.addEventListener('pointerdown', down);
+  container.addEventListener('click', click);
   container.addEventListener('contextmenu', context);
+  doc.addEventListener('pointerdown', outside);
   doc.addEventListener('pointermove', move, { passive: true });
   doc.addEventListener('pointerup', end);
   doc.addEventListener('pointercancel', end);
-  doc.addEventListener('pointerdown', outside);
-  doc.addEventListener('pointerover', outsideHover);
   doc.addEventListener('keydown', key);
-  doc.addEventListener('scroll', scrolling, { capture: true, passive: true });
+  doc.addEventListener('scroll', end, { capture: true, passive: true });
   return () => {
-    cancel(); active?.classList.remove('block-active');
+    cancel(); selected?.classList.remove('block-active'); hovered?.classList.remove('block-hover');
     container.removeEventListener('pointerover', over);
     container.removeEventListener('pointerout', out);
     container.removeEventListener('pointerdown', down);
+    container.removeEventListener('click', click);
     container.removeEventListener('contextmenu', context);
+    doc.removeEventListener('pointerdown', outside);
     doc.removeEventListener('pointermove', move);
     doc.removeEventListener('pointerup', end);
     doc.removeEventListener('pointercancel', end);
-    doc.removeEventListener('pointerdown', outside);
-    doc.removeEventListener('pointerover', outsideHover);
     doc.removeEventListener('keydown', key);
-    doc.removeEventListener('scroll', scrolling, true);
+    doc.removeEventListener('scroll', end, true);
   };
 }
