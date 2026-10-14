@@ -418,6 +418,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/covers/work/request/random": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A fresh random cover request JSON for one work, without rendering it */
+        get: operations["CoverWorkController_randomRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -484,6 +501,12 @@ export interface components {
              * @example eminescu/poezii
              */
             path: string;
+            /**
+             * @description Optional POST /api/cover request JSON to render from (the reader admin's edited JSON). Omit for a random request.
+             */
+            request?: {
+                [key: string]: unknown;
+            } | null;
         };
     };
     responses: never;
@@ -920,6 +943,26 @@ export interface operations {
         };
     };
     CoverWorkController_request: {
+        parameters: {
+            query: {
+                /** @example eminescu/poezii */
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CoverWorkController_randomRequest: {
         parameters: {
             query: {
                 /** @example eminescu/poezii */
