@@ -15,6 +15,7 @@ import { FeaturedBookCarousel } from './FeaturedBookCarousel';
 import { WorksCatalog } from './WorksCatalog';
 import { AuthorCatalog } from './AuthorCatalog';
 import { ReadingListsCatalog } from './ReadingListsCatalog';
+import { heroCard } from '../services/heroCard';
 
 interface BrowseViewProps {
   reallySignedIn: boolean;
@@ -91,12 +92,9 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     });
     return () => { cancelled = true; };
   }, [reallySignedIn, identityKnown, dataRevision]);
-  // Neither hero card until the shelf is known: the Explore card used to
-  // flash for long-engaged signed-in readers while the sign-in check and
-  // the shelf's works were still loading. An engaged reader whose works
-  // have not resolved yet still gets no Explore card - the shelf follows.
-  const showWorkspace = shelfKnown && isEngagedReader && myBooks.length > 0;
-  const showExplore = shelfKnown && !isEngagedReader;
+  // Neither hero until the shelf is known for the reader's real identity -
+  // see heroCard (and its unit test) for the rule.
+  const hero = heroCard({ shelfKnown, isEngagedReader, shelfWorks: myBooks.length });
 
   // Arrow keys follow the last catalog section the reader used. This keeps
   // keyboard navigation unambiguous when Featured and Works are both
@@ -258,7 +256,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       {/* Hero: "Explore..." card for new/logged-out visitors, or a
           "Workspace" carousel of recently consulted works for returning
           logged-in users. */}
-      {showExplore ? (
+      {hero === 'explore' ? (
         <div id="hero-explore-card" className="relative overflow-hidden rounded-2xl bg-white/12 backdrop-blur-xl border border-white/30 p-6 sm:p-8 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.25)] mb-8 transition-all">
           <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
           <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-amber-400/10 rounded-full blur-2xl pointer-events-none"></div>
@@ -296,7 +294,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             </div>
           </div>
         </div>
-      ) : showWorkspace ? (
+      ) : hero === 'workspace' ? (
         <div id="hero-workspace-carousel" className="mb-8">
           <FeaturedBookCarousel
             instanceId="my-books"
