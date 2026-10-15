@@ -2,7 +2,7 @@
   "name": "biblioteca-reader",
   "private": true,
   "version": "0.1.17-SNAPSHOT",
-  "releaseName": "Dusky Discus",
+  "releaseName": "Ethereal Exedra",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
