@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { bookmarkStoreFor } from '../services/identity';
+import { AttentionMeter } from '../services/attentionMeter';
 
 const HEARTBEAT_MS = 30_000;
 
@@ -16,30 +17,20 @@ const HEARTBEAT_MS = 30_000;
  * work doesn't reset or re-flush the accumulator.
  */
 export function useReadingAttention(workId: string, signedIn: boolean): void {
-  const secondsRef = useRef(0);
-  const lastTickRef = useRef<number | null>(null);
+  const meterRef = useRef<AttentionMeter | null>(null);
 
   useEffect(() => {
     const store = bookmarkStoreFor(signedIn);
+    const meter = (meterRef.current ??= new AttentionMeter());
 
-    const tick = () => {
-      const now = Date.now();
-      if (lastTickRef.current != null) {
-        secondsRef.current += (now - lastTickRef.current) / 1000;
-      }
-      lastTickRef.current = document.visibilityState === 'visible' ? now : null;
-    };
+    const tick = () => meter.tick();
 
     const flush = () => {
-      tick();
-      const whole = Math.floor(secondsRef.current);
-      if (whole > 0) {
-        secondsRef.current -= whole;
-        void store.addAttention(workId, whole);
-      }
+      const whole = meter.takeWholeSeconds();
+      if (whole > 0) void store.addAttention(workId, whole);
     };
 
-    lastTickRef.current = document.visibilityState === 'visible' ? Date.now() : null;
+    meter.start();
     const interval = setInterval(flush, HEARTBEAT_MS);
     document.addEventListener('visibilitychange', tick);
     window.addEventListener('beforeunload', flush);

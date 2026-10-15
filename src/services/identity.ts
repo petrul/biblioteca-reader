@@ -21,6 +21,7 @@ import {
   requestGoogleProfileAccessToken,
 } from './googleOneTapAuth';
 import { readerService } from './readerService';
+import { isEngagedReader } from './heroCard';
 import { Work } from '../types/textbase';
 
 // isAdmin comes from the server's ADMIN_USERS allow-list (see biblioteca-server's
@@ -135,17 +136,10 @@ export function preferencesStoreFor(signedIn: boolean): PreferencesStore {
   return signedIn ? new RemotePreferencesStore() : new LocalPreferencesStore();
 }
 
-// How long a reader must have spent (tab-visible, on any single work) to
-// count as a real reader rather than someone who clicked in once and
-// bounced - gates whether they see "My Books" at all vs. the first-time
-// Explore/Discover card (see BrowseView.tsx). Deliberately per-work, not
-// summed across works - "read this or that work for five minutes."
-const REAL_READER_THRESHOLD_SECONDS = 5 * 60;
-
 export type MyBooksShelf = {
   works: Work[];
   // Whether this reader has demonstrated real engagement (not just
-  // clicking around) - see REAL_READER_THRESHOLD_SECONDS. `works` itself
+  // clicking around) - see heroCard.ts's REAL_READER_THRESHOLD_SECONDS. `works` itself
   // is NOT filtered by this - once a reader qualifies, they see every
   // touched work on the shelf, not just the one that crossed the bar.
   isEngagedReader: boolean;
@@ -175,9 +169,5 @@ export async function getMyBooksShelf(signedIn: boolean, limit = 20): Promise<My
     .map(([workId]) => readerService.getWorkById(workId))
     .filter((work): work is Work => Boolean(work));
 
-  const isEngagedReader = entries.some(
-    ([, position]) => (position.attentionSeconds ?? 0) >= REAL_READER_THRESHOLD_SECONDS
-  );
-
-  return { works, isEngagedReader };
+  return { works, isEngagedReader: isEngagedReader(all) };
 }
