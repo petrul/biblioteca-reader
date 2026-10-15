@@ -511,6 +511,7 @@ export default function App() {
         {currentView === 'browse' && (
           <BrowseView
             reallySignedIn={Boolean(reallySignedIn)}
+            identityKnown={reallySignedIn !== null}
             dataRevision={dataRevision}
             catalog={catalog}
             onCatalogChange={handleCatalogChange}

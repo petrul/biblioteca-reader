@@ -18,6 +18,9 @@ import { ReadingListsCatalog } from './ReadingListsCatalog';
 
 interface BrowseViewProps {
   reallySignedIn: boolean;
+  // False while the sign-in check is still running: reallySignedIn is then
+  // a provisional false, and a signed-in reader's shelf is not known yet.
+  identityKnown?: boolean;
   // Bumped by App.tsx whenever readerService's real catalog data changes
   // (see readerService.subscribe) - the My Books shelf below resolves
   // each touched workId through that catalog, which loads asynchronously
@@ -45,6 +48,7 @@ interface BrowseViewProps {
 
 export const BrowseView: React.FC<BrowseViewProps> = ({
   reallySignedIn,
+  identityKnown = true,
   dataRevision,
   catalog,
   onCatalogChange,
@@ -77,14 +81,22 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   // the pitch that has to earn a first-time visitor's interest, on purpose.
   const [myBooks, setMyBooks] = useState<Work[]>([]);
   const [isEngagedReader, setIsEngagedReader] = useState(false);
+  // Whether the shelf has been read for the reader's actual identity.
+  const [shelfKnown, setShelfKnown] = useState(false);
   useEffect(() => {
+    if (!identityKnown) return; // a signed-in reader would read the wrong (local) store
     let cancelled = false;
     void getMyBooksShelf(reallySignedIn).then(({ works, isEngagedReader }) => {
-      if (!cancelled) { setMyBooks(works); setIsEngagedReader(isEngagedReader); }
+      if (!cancelled) { setMyBooks(works); setIsEngagedReader(isEngagedReader); setShelfKnown(true); }
     });
     return () => { cancelled = true; };
-  }, [reallySignedIn, dataRevision]);
-  const showWorkspace = isEngagedReader && myBooks.length > 0;
+  }, [reallySignedIn, identityKnown, dataRevision]);
+  // Neither hero card until the shelf is known: the Explore card used to
+  // flash for long-engaged signed-in readers while the sign-in check and
+  // the shelf's works were still loading. An engaged reader whose works
+  // have not resolved yet still gets no Explore card - the shelf follows.
+  const showWorkspace = shelfKnown && isEngagedReader && myBooks.length > 0;
+  const showExplore = shelfKnown && !isEngagedReader;
 
   // Arrow keys follow the last catalog section the reader used. This keeps
   // keyboard navigation unambiguous when Featured and Works are both
@@ -246,7 +258,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       {/* Hero: "Explore..." card for new/logged-out visitors, or a
           "Workspace" carousel of recently consulted works for returning
           logged-in users. */}
-      {!showWorkspace ? (
+      {showExplore ? (
         <div id="hero-explore-card" className="relative overflow-hidden rounded-2xl bg-white/12 backdrop-blur-xl border border-white/30 p-6 sm:p-8 text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.25)] mb-8 transition-all">
           <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
           <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-amber-400/10 rounded-full blur-2xl pointer-events-none"></div>
@@ -284,7 +296,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             </div>
           </div>
         </div>
-      ) : (
+      ) : showWorkspace ? (
         <div id="hero-workspace-carousel" className="mb-8">
           <FeaturedBookCarousel
             instanceId="my-books"
@@ -296,7 +308,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
             subtitle="Your Scriptorium classical readings"
           />
         </div>
-      )}
+      ) : null}
 
       {/* The site's featured shelf, above the works/authors/lists
           toolbar on every tab - where the reader's eye lands before the
