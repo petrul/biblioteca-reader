@@ -70,10 +70,14 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const [showTechnicalData, setShowTechnicalData] = useState(false);
   // Phone-style lightbox: tapping the cover shows it full screen.
   const [showCoverModal, setShowCoverModal] = useState(false);
-  // Which serializations the back face's DAV mount links expose - one
-  // mountable dav:// directory per checked format (the DAV export's format
-  // is a path segment, so a book in two formats is two mounts, not one).
-  const [davFormats, setDavFormats] = useState<Record<'txt' | 'json' | 'xml', boolean>>({ txt: true, json: false, xml: false });
+  // The lightbox shows the work's cover - or, opened from the admin section
+  // on the back face, exactly the cover shown there.
+  const [coverModalSrc, setCoverModalSrc] = useState<string | undefined>(undefined);
+  useEffect(() => { if (!showCoverModal) setCoverModalSrc(undefined); }, [showCoverModal]);
+  // Which serialization the back face's DAV mount link exposes - one format
+  // at a time (mutually exclusive): the DAV export's format is a path
+  // segment, so each format is its own mountable dav:// directory.
+  const [davFormat, setDavFormat] = useState<'txt' | 'json' | 'xml'>('txt');
   // "resume where you left off" - see services/bookmarkStore.ts. null while
   // still checking, '' once checked and found nothing (distinct from "still
   // checking" so the button doesn't flash between labels).
@@ -144,7 +148,7 @@ export const WorkView: React.FC<WorkViewProps> = ({
   const isPremium = work?.accessType === 'premium';
   const priceStr = `$${(((work?.priceCents || 499)) / 100).toFixed(2)}`;
 
-  // Mountable dav:// directories for this book, one per checked format:
+  // The mountable dav:// directory for this book, in the chosen format:
   // the server's DAV export in its path-configured form (mount-safe - no
   // query strings), fragmentation 1.1 so the book opens as a directory of
   // chapter files. Clicking hands the URL to the platform's DAV mounter
@@ -157,12 +161,10 @@ export const WorkView: React.FC<WorkViewProps> = ({
     const [authorId, opusId] = work.id.split('/');
     const lang = davLanguageSegment(work.detectedLanguage);
     if (!authorId || !opusId || !lang) return [];
-    return (['txt', 'json', 'xml'] as const)
-      .filter(format => davFormats[format])
-      .map(format => ({
-        format,
-        url: `dav://${host}/dav/_export/${format}/1.1/all/all/${encodeURIComponent(lang)}/${encodeURIComponent(authorId)}/${encodeURIComponent(opusId)}/`
-      }));
+    return [{
+      format: davFormat,
+      url: `dav://${host}/dav/_export/${davFormat}/1.1/all/all/${encodeURIComponent(lang)}/${encodeURIComponent(authorId)}/${encodeURIComponent(opusId)}/`
+    }];
   })();
 
   useEffect(() => {
@@ -464,19 +466,22 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   <p className="italic font-serif-reading">{work.teiHeaderSummary.sourceDesc}</p>
                 </div>
 
-                {/* DAV mounts: one dav:// directory per checked format; the
-                    address itself is each link's label, and the OS's DAV
-                    mounter opens it. */}
+                {/* DAV mount: one dav:// directory in the chosen format (radio
+                    buttons - one format at a time); the address itself is
+                    the link's label, and the OS's DAV mounter opens it. */}
                 {davLinks.length > 0 && (
                   <div className="pt-2 border-t border-emerald-500/20 text-[10px] leading-relaxed">
                     <p className="font-semibold text-emerald-200/90 mb-1">Open as DAV folder:</p>
-                    <div className="flex items-center gap-3 mb-1.5">
+                    <div role="radiogroup" aria-label="DAV folder format" className="flex items-center gap-3 mb-1.5">
                       {(['txt', 'json', 'xml'] as const).map(format => (
                         <label key={format} className="inline-flex items-center gap-1 cursor-pointer text-emerald-200/80">
                           <input
-                            type="checkbox"
-                            checked={davFormats[format]}
-                            onChange={event => setDavFormats(prev => ({ ...prev, [format]: event.target.checked }))}
+                            type="radio"
+                            name={`dav-format-${work.id}`}
+                            value={format}
+                            data-testid={`dav-format-${format}`}
+                            checked={davFormat === format}
+                            onChange={() => setDavFormat(format)}
                             className="accent-amber-500"
                           />
                           {format}
@@ -495,7 +500,13 @@ export const WorkView: React.FC<WorkViewProps> = ({
                   </div>
                 )}
               </div>
-              {isAdmin && <AdminCoverSection workId={workId} />}
+              {isAdmin && (
+                <AdminCoverSection
+                  workId={workId}
+                  onCoverChanged={coverUrl => readerService.setWorkCover(workId, coverUrl)}
+                  onOpenCover={coverUrl => { setCoverModalSrc(coverUrl); setShowCoverModal(true); }}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -520,9 +531,9 @@ export const WorkView: React.FC<WorkViewProps> = ({
           >
             <X className="w-6 h-6" />
           </button>
-          {work.coverImage ? (
+          {(coverModalSrc ?? work.coverImage) ? (
             <img
-              src={coverThumbnailUrl(work.coverImage, 640)}
+              src={coverThumbnailUrl(coverModalSrc ?? work.coverImage, 640)}
               alt={`Cover for ${work.title}`}
               referrerPolicy="no-referrer"
               className="max-h-[92vh] max-w-[92vw] object-contain"

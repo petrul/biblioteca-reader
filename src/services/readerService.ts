@@ -804,6 +804,28 @@ export const readerService = {
     }));
   },
 
+  /**
+   * A work's cover changed (the admin's "Generate cover"): every copy of it
+   * held here - the loaded catalog page, the featured shelf, single-work
+   * loads, author pages - shows the new one at once. Without this, going
+   * back to an already-loaded catalog page kept the old cover: the page is
+   * not fetched again. (Each render has a new object URL, so no HTTP cache
+   * is involved.)
+   */
+  setWorkCover(workId: string, coverUrl: string): void {
+    const withCover = (work: Work): Work =>
+      work.id === workId ? { ...work, coverImage: coverUrl, coverArtUrl: coverUrl } : work;
+    realWorks = realWorks.map(withCover);
+    realFeaturedWorks = realFeaturedWorks.map(withCover);
+    const pending = pendingWorks.get(workId);
+    if (pending) pendingWorks.set(workId, withCover(pending));
+    for (const [authorId, entry] of hydratedAuthors) {
+      if (entry.works.some(work => work.id === workId))
+        hydratedAuthors.set(authorId, { ...entry, works: entry.works.map(withCover) });
+    }
+    notify();
+  },
+
   getWorkById(id: string): Work | undefined {
     const work = realWorks.find(w => w.id === id)
       || realFeaturedWorks.find(w => w.id === id)

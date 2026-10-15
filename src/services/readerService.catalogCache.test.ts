@@ -147,3 +147,33 @@ test('a failed TOC request is not retried on every render', async () => {
     console.warn = originalWarn;
   }
 });
+
+test('a new cover shows on an already-loaded catalog page without fetching it again', async () => {
+  const requests: string[] = [];
+  const { mod } = await boot(async url => {
+    requests.push(url);
+    if (url.includes('/api/works')) {
+      return Response.json(page([
+        { completePath: 'freud/das_motiv', head: 'Das Motiv', opus: true, coverUrl: 'https://minio/covers/freud/das_motiv-old.png' },
+        { completePath: 'freud/other', head: 'Other', opus: true, coverUrl: 'https://minio/covers/freud/other-a.png' },
+      ], 3, 30));
+    }
+    if (url.includes('/api/collections/system/')) return Response.json([]);
+    return new Response('', { status: 404 });
+  });
+
+  await mod.readerService.loadWorksPage(3);
+  const byId = (id: string) => mod.readerService.getWorks().works.find((work: any) => work.id === id);
+  assert.equal(byId('freud/das_motiv')?.coverImage, 'https://minio/covers/freud/das_motiv-old.png');
+  const fetched = requests.length;
+
+  // The admin's "Generate cover" on the work card
+  mod.readerService.setWorkCover('freud/das_motiv', 'https://minio/covers/freud/das_motiv-new.png');
+
+  // Back on the same catalog page: same page key, so it is not fetched again...
+  await mod.readerService.loadWorksPage(3);
+  assert.equal(requests.length, fetched);
+  // ...and it still shows the new cover; other works keep theirs.
+  assert.equal(byId('freud/das_motiv')?.coverImage, 'https://minio/covers/freud/das_motiv-new.png');
+  assert.equal(byId('freud/other')?.coverImage, 'https://minio/covers/freud/other-a.png');
+});

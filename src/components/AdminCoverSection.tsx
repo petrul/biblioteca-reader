@@ -14,7 +14,12 @@ type CoverWork = { coverUrl?: string; request: Record<string, unknown> | null };
  * synchronously (POST /api/admin/covers/work - same-origin, gated
  * server-side to administrators, proxied to biblioteca-nestjs).
  */
-export function AdminCoverSection({ workId, onCoverChanged }: { workId: string; onCoverChanged?: (coverUrl: string) => void }) {
+export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
+  workId: string;
+  onCoverChanged?: (coverUrl: string) => void;
+  /** Tapping the cover: show it full screen (the work card's own lightbox). */
+  onOpenCover?: (coverUrl: string) => void;
+}) {
   const [current, setCurrent] = useState<CoverWork | null>(null);
   // The editable JSON text - initialized from the stored request, replaced
   // wholesale by "New random JSON" and by a finished render.
@@ -125,9 +130,19 @@ export function AdminCoverSection({ workId, onCoverChanged }: { workId: string; 
           narrow screens). */}
       <div className={`grid gap-3 items-start ${current?.coverUrl ? 'sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]' : ''}`}>
         {current?.coverUrl && (
-          <img src={coverThumbnailUrl(current.coverUrl)} alt="Current cover" referrerPolicy="no-referrer"
-            data-testid="admin-cover-image"
-            className="w-full max-w-[13rem] rounded border border-emerald-500/20 object-contain bg-black/20" />
+          <button
+            type="button"
+            data-testid="admin-cover-open"
+            onClick={() => onOpenCover?.(current.coverUrl!)}
+            disabled={!onOpenCover}
+            title="View cover full screen"
+            aria-label="View the cover full screen"
+            className="block w-full max-w-[13rem] rounded border border-emerald-500/20 bg-black/20 cursor-zoom-in hover:border-amber-400/60 transition-colors disabled:cursor-default"
+          >
+            <img src={coverThumbnailUrl(current.coverUrl)} alt="Current cover" referrerPolicy="no-referrer"
+              data-testid="admin-cover-image"
+              className="w-full rounded object-contain" />
+          </button>
         )}
         {jsonText ? (
           <div className="relative min-w-0">
