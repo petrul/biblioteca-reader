@@ -15,7 +15,6 @@ import {
 import { AppView, SearchResult } from '../types/textbase';
 import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
 import { readerService } from '../services/readerService';
-import { getLastSearch, setLastSearch } from '../services/lastSearchCache';
 import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
 
 // Waits this long after the last keystroke before actually searching -
@@ -105,13 +104,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const brandSubtitle = pageTitle ? pageSubtitle : 'Your Scriptorium classical readings';
-  // Pre-populated from the last completed search (see lastSearchCache.ts) -
-  // tapping the search icon, even after a reload, starts showing what was
-  // last searched instead of a blank box every time. Navbar itself never
-  // unmounts while the app is open, so this lazy init is the only restore
-  // point needed - the value/results just persist in this state across
-  // the overlay being opened and closed again within the same session.
-  const [searchInputValue, setSearchInputValue] = useState(() => getLastSearch()?.query ?? '');
+  // Starts empty on every page load: a search runs only when the reader
+  // types. (A remembered last query used to be restored here, and the
+  // search effect below then re-ran it on every load - a long pasted query
+  // made opening any page fail.) The value still persists across the
+  // overlay being opened and closed within the session.
+  const [searchInputValue, setSearchInputValue] = useState('');
+  // Drop what the removed last-search cache left in this browser.
+  useEffect(() => {
+    try { window.localStorage.removeItem('biblioteca.reader.lastSearch.v1'); } catch { /* storage unavailable */ }
+  }, []);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Live-as-you-type combined results (all 5 search modes at once, tiered
@@ -120,7 +122,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   // are dropped via `cancelled` rather than clearTimeout alone, since a
   // request already in flight when the next keystroke lands can't be
   // cancelled, only ignored when it resolves late.
-  const [dropdownResults, setDropdownResults] = useState<SearchResult[]>(() => getLastSearch()?.results ?? []);
+  const [dropdownResults, setDropdownResults] = useState<SearchResult[]>([]);
   const [isDropdownSearching, setIsDropdownSearching] = useState(false);
   const [highlightedDropdownIndex, setHighlightedDropdownIndex] = useState(-1);
   const visibleDropdownResults = dropdownResults.slice(0, 8);
@@ -151,12 +153,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       void readerService.searchCombined(trimmed, 5, results => {
         if (cancelled) return;
         setDropdownResults(results);
-      }).then(finalResults => {
+      }).then(() => {
         if (cancelled) return;
         setIsDropdownSearching(false);
-        // Cached for next time the search icon is tapped - see
-        // lastSearchCache.ts's lazy-init above.
-        setLastSearch(trimmed, finalResults);
       });
     }, SEARCH_DEBOUNCE_MS);
     return () => { cancelled = true; clearTimeout(timer); };

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { readerService } from '../services/readerService';
 import { SERVER_ERROR_EVENT } from '../services/serversideApi';
-import { SERVER_ERROR_THUMB } from '../assets/serverErrorThumb';
 
 // Bottom-right connection toast. With no offline fallback data anymore,
 // an unreachable textbase-server renders exactly like an empty library -
@@ -45,10 +44,6 @@ export function ServerStatusToast() {
       role="alert"
       className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 max-w-sm rounded-xl border border-white/15 bg-black/65 backdrop-blur-lg p-3 text-xs flex items-center gap-3 shadow-2xl animate-in fade-in"
     >
-      {/* Inlined into the bundle, not public/500.jpeg: this toast shows
-          exactly when the server (or the reader behind the proxy) is
-          unreachable, and a fetched image would fail along with it. */}
-      <img src={SERVER_ERROR_THUMB} alt="Server error (5xx)" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
       <div className="min-w-0">
         <span className="block font-mono font-bold uppercase tracking-wider text-white/90">
           {serverError === null ? 'Server down' : `Server error (${serverError})`}
