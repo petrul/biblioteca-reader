@@ -588,3 +588,41 @@ loading/empty/error states, retry, and links back to the matching divisions.
 Arrow keys page within the modal; Escape closes it. **Save search** stores the
 query, vector mode, and results from visited pages through the existing saved
 search store (account storage when signed in, browser storage otherwise).
+
+
+# Modelling collections, text iterables, table of contents
+
+Spec needed, then implementation. 
+
+# Ease of use, citations, quotations, finding by 
+
+Am nevoie de un package typescript în biblioteca-reader care să abstratizeze collecțiile și search queries sub o singură interfață. Colecțiile sînt workspaceuri importante, ele sînt persistate în DB. 
+
+Make a mermaid class diagram and then implement the abstraction.
+
+Toate colecțiile trebuie să fie niște iterables. Item-urile, că sînt works, chapters, subchapters, paragraphs or quotes, trebuie să implementeze aceeași interfață 
+
+pagina cu colecțiile este ca o pagină de management de workspaces. adăugarea, editarea unei colecții va trebuie să fie foarte ușoară din UI. 
+
+searchurile toate sînt înregistrate într-un search history care înregistrează numai termenul căutat (sau paragraphul similarity searched) și particularitățile căutării (title, lucene, vector)
+
+când sîntem la nivel global, căutăm la nivel global. dar cînd suntem pe o carte căutăm doar pe carte. 
+
+There is a current collection notion which the UI must know and manage. There must be a correct distinction between the last search query and the last loaded current collection -- since search query is also a collection, the distinction must be made. I may do a search and inspect and work on the last search, inspecting element by element, saving the search under a name, coming back to the search, retrieving another element. the search must not be lost. 
+
+The current collection may be the last search. or may be a 
+
+ultima căutare trebuie să rămână persistentă. inspectabilă cu up down page up page down, on enter the selected item gets open and then when user presses / again, the search appears again alrady hydrated, ready to navigate to next item.
+
+On the UI : components must share as much as possible avoiding duplicated code.
+
+- there is a dedicated page Collection. it must be curated. there will be a search in search box at the top which allows easy refind of a collection after title or search contents and loading it into the 
+
+
+- for example, having a Bible open and inputting 1 Samuel 17 into the search box, should open the Bible at said chapter.
+- last search
+- history of searches. simply storing the history of searches with their options (Author-only, semantic only, for quick re-run)
+- de rafinat căutarea. trebuie să existe un searchbox care să se afișeze în față, pe mijlocul ecranului. 
+există 
+- modal search (nothing else matters)
+- dar există filtering (în care refolosești componente UI pentru a arăta ce caută utilizatorul)
