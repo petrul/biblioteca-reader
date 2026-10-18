@@ -18,7 +18,8 @@ import {
   ToggleLeft,
   ToggleRight,
   Info,
-  X
+  X,
+  CornerDownLeft
 } from 'lucide-react';
 import { SearchMode, SearchResult, LanguageCode, PersonalCollection } from '../types/textbase';
 import { languageName } from '../services/languageNames';
@@ -201,6 +202,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
   // (see Navbar.tsx's SEARCH_DEBOUNCE_MS) - this used to search on every
   // single keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState(query);
+  // Bumped by Enter / the Search button: runs the search now, and again even
+  // when the debounce already delivered this exact query.
+  const [searchRun, setSearchRun] = useState(0);
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 400);
     return () => clearTimeout(timer);
@@ -247,7 +251,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       workIdSeed: initialWorkSeed
     }).then(response => { if (current) setSearchResponse(response); });
     return () => { current = false; };
-  }, [combinedMode, activeMode, debouncedQuery, page, langFilter, caseSensitive, useRegex, fuzzySearch, initialWorkSeed]);
+  }, [combinedMode, activeMode, debouncedQuery, searchRun, page, langFilter, caseSensitive, useRegex, fuzzySearch, initialWorkSeed]);
 
   const adminStatus = readerService.getAdminStatus();
   const vectorAvailable = adminStatus.vectorSearchStatus.available;
@@ -384,6 +388,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
             event.preventDefault();
             setPage(1);
             setDebouncedQuery(query);
+            setSearchRun(run => run + 1);
           }}
         >
           <button
@@ -416,11 +421,20 @@ export const SearchView: React.FC<SearchViewProps> = ({
                 setPage(1);
               }}
               title="Clear input"
-              className="absolute right-4 p-1.5 rounded-md text-white/70 hover:text-white hover:bg-white/15 cursor-pointer transition-all"
+              className="absolute right-[6.75rem] p-1.5 rounded-md text-white/70 hover:text-white hover:bg-white/15 cursor-pointer transition-all"
             >
               <X className="w-4 h-4" />
             </button>
           )}
+          <button
+            id="btn-search-submit"
+            type="submit"
+            title="Search now (Enter)"
+            className="absolute right-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f59e0b] text-black text-sm font-semibold hover:bg-[#fbbf24] cursor-pointer transition-all"
+          >
+            Search
+            <CornerDownLeft className="w-4 h-4" aria-hidden="true" />
+          </button>
         </form>
 
         {/* Mode-Specific Fine-tuning Toggles */}
