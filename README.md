@@ -620,9 +620,18 @@ On the UI : components must share as much as possible avoiding duplicated code.
 
 
 - for example, having a Bible open and inputting 1 Samuel 17 into the search box, should open the Bible at said chapter.
+
 - last search
+
 - history of searches. simply storing the history of searches with their options (Author-only, semantic only, for quick re-run)
+
 - de rafinat căutarea. trebuie să existe un searchbox care să se afișeze în față, pe mijlocul ecranului. 
+
 există 
 - modal search (nothing else matters)
+
 - dar există filtering (în care refolosești componente UI pentru a arăta ce caută utilizatorul)
+
+
+use case: iau 1 kgs 21:6 (ep cu David care cere pâinile puneri înainte: trebuie să pot să citez capitolul) ușor cu sa fără text etc., apăsînd pe Similar (e foarte util) -- să găsesc paragraful din NT care face referință la el. 
+

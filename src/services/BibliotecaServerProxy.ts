@@ -2,8 +2,8 @@ import type { Express, NextFunction, Request, Response } from 'express';
 
 /** Explicit same-origin gateway for biblioteca-server's public surface. */
 export class BibliotecaServerProxy {
-  // Read-only deployments (READER_READ_ONLY) pass a rejection handler for
-  // the state-changing routes; null keeps forwarding them.
+  // Read-only deployments pass a rejection handler for the state-changing
+  // routes; null keeps forwarding them.
   constructor(private readonly baseUrl: string, private readonly rejectWrite: ((req: Request, res: Response, next: NextFunction) => unknown) | null = null) {}
   private static readonly PUBLIC_GET_ROUTES = [
     '/api/users/me', '/api/lucene/status', '/api/reading-progress', '/api/reading-progress/one',

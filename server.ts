@@ -13,6 +13,11 @@ import { createServer as createViteServer } from 'vite';
 // schemas - see that script's header comment. Not hand-edited.
 import openApiPublicDoc from './openapi-public.json';
 
+// Deployment behavior toggle (server-side only). Checked in with safe
+// defaults; edit it and restart to change - deliberately a plain source
+// file, not a pass-store/env value, so it stays visible and reviewable.
+import readerConfig from './reader.config.json';
+
 // Inlined by esbuild into dist/server.cjs at build time: the deployed
 // artifact reports the version it was built from, not whatever
 // package.json happens to sit next to it at runtime.
@@ -276,17 +281,18 @@ const NESTJS_URL = process.env.NESTJS_URL || 'http://localhost:3334';
 const COVERS_API_URL = (process.env.COVERS_API_URL || 'http://localhost:3335').replace(/\/$/, '');
 
 // Read-only deployments: a local reader pointed at a production
-// biblioteca-server it must never mutate (pass-store READER_READ_ONLY=true,
-// e.g. biblioteca/yoga2). Every state-changing proxy route is swapped for
-// an explicit 403 instead of being forwarded upstream; reads (the GET
-// relays, /graphql queries, the cover render, and the local-only
-// /api/log + payment sandbox, which never reach biblioteca-server) keep
-// working, so the whole public catalog stays browsable with zero write
-// traffic reaching the upstream server. Express calls a handler with
-// (req, res, next), so a narrower-arity replacement stays drop-in.
-const READ_ONLY = process.env.READER_READ_ONLY === 'true';
+// biblioteca-server it must never mutate (reader.config.json's readOnly,
+// checked in with default false - flip it locally and restart to change).
+// Every state-changing proxy route is swapped for an explicit 403 instead
+// of being forwarded upstream; reads (the GET relays, /graphql queries,
+// the cover render, and the local-only /api/log + payment sandbox, which
+// never reach biblioteca-server) keep working, so the whole public
+// catalog stays browsable with zero write traffic reaching the upstream
+// server. Express calls a handler with (req, res, next), so a
+// narrower-arity replacement stays drop-in.
+const READ_ONLY = readerConfig.readOnly === true;
 function rejectReadOnly(req: Request, res: Response) {
-  res.status(403).json({ error: `reader is in read-only mode (READER_READ_ONLY) - refusing to forward ${req.method} ${req.originalUrl} to biblioteca-server` });
+  res.status(403).json({ error: `reader is in read-only mode (reader.config.json readOnly) - refusing to forward ${req.method} ${req.originalUrl} to biblioteca-server` });
 }
 type RouteHandler = (req: Request, res: Response, next: NextFunction) => unknown;
 function unlessReadOnly(handler: RouteHandler): RouteHandler {
@@ -1194,7 +1200,7 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Bilioteca Reader server listening on http://0.0.0.0:${PORT}`);
     if (READ_ONLY) {
-      console.log('Read-only mode (READER_READ_ONLY=true): all state-changing routes return 403; ' +
+      console.log('Read-only mode (reader.config.json readOnly): all state-changing routes return 403; ' +
         `read traffic proxies to ${BIBLIOTECA_SERVER_URL}`);
     }
   });
