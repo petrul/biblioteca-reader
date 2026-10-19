@@ -275,11 +275,29 @@ const NESTJS_URL = process.env.NESTJS_URL || 'http://localhost:3334';
 // local development default without adding another public origin.
 const COVERS_API_URL = (process.env.COVERS_API_URL || 'http://localhost:3335').replace(/\/$/, '');
 
+// Read-only deployments: a local reader pointed at a production
+// biblioteca-server it must never mutate (pass-store READER_READ_ONLY=true,
+// e.g. biblioteca/yoga2). Every state-changing proxy route is swapped for
+// an explicit 403 instead of being forwarded upstream; reads (the GET
+// relays, /graphql queries, the cover render, and the local-only
+// /api/log + payment sandbox, which never reach biblioteca-server) keep
+// working, so the whole public catalog stays browsable with zero write
+// traffic reaching the upstream server. Express calls a handler with
+// (req, res, next), so a narrower-arity replacement stays drop-in.
+const READ_ONLY = process.env.READER_READ_ONLY === 'true';
+function rejectReadOnly(req: Request, res: Response) {
+  res.status(403).json({ error: `reader is in read-only mode (READER_READ_ONLY) - refusing to forward ${req.method} ${req.originalUrl} to biblioteca-server` });
+}
+type RouteHandler = (req: Request, res: Response, next: NextFunction) => unknown;
+function unlessReadOnly(handler: RouteHandler): RouteHandler {
+  return READ_ONLY ? rejectReadOnly : handler;
+}
+
 // Keep all structured biblioteca-server forwarding in one object. The legacy
 // helpers below remain temporarily for compatibility with older route blocks;
 // this proxy is registered first and therefore owns the public routes.
 registerReaderThumbnails(app, { coversUrl: COVERS_API_URL, apiDocument: openApiPublicDoc });
-new BibliotecaServerProxy(BIBLIOTECA_SERVER_URL).register(app);
+new BibliotecaServerProxy(BIBLIOTECA_SERVER_URL, READ_ONLY ? rejectReadOnly : null).register(app);
 const COVER_LAYOUTS = ['archival_monograph', 'folio_heritage', 'criterion_minimal', 'faber_poetry'] as const;
 const COVER_PALETTES = [
   'archival_alabaster', 'oxford_blue', 'imperial_crimson', 'forest_emerald',
@@ -475,11 +493,13 @@ async function relayPutToBiblioteca(req: Request, res: Response) {
   }
 }
 
-// Every PUT this app actually needs - bookmarkStore.ts's
-// RemoteBookmarkStore and preferencesStore.ts's RemotePreferencesStore
-// call these.
-['/api/reading-progress', '/api/reading-progress/attention', '/api/reading-progress/scroll', '/api/users/me/preferences']
-  .forEach(route => app.put(route, relayPutToBiblioteca));
+// Every other PUT this app actually needs - preferencesStore.ts's
+// RemotePreferencesStore calls this one. (The /api/reading-progress* PUTs
+// belong to BibliotecaServerProxy, which registers them earlier and owns
+// them - its constructor takes the same read-only rejection handler.)
+// Write traffic, so read-only deployments 403 them.
+['/api/users/me/preferences']
+  .forEach(route => app.put(route, unlessReadOnly(relayPutToBiblioteca)));
 
 // Saved searches and collection edits (biblioteca-server's /api/collections/mine
 // family) - explicit routes like every other one here, never a wildcard.
@@ -501,12 +521,13 @@ function relayBodyToBiblioteca(method: 'POST' | 'PATCH' | 'DELETE') {
     }
   };
 }
-app.post('/api/collections/mine/searches', relayBodyToBiblioteca('POST'));
-app.patch('/api/collections/mine/:id', relayBodyToBiblioteca('PATCH'));
-app.delete('/api/collections/mine/:id', relayBodyToBiblioteca('DELETE'));
-app.put('/api/collections/mine/:id/order', relayPutToBiblioteca);
+app.post('/api/collections/mine/searches', unlessReadOnly(relayBodyToBiblioteca('POST')));
+app.patch('/api/collections/mine/:id', unlessReadOnly(relayBodyToBiblioteca('PATCH')));
+app.delete('/api/collections/mine/:id', unlessReadOnly(relayBodyToBiblioteca('DELETE')));
+app.put('/api/collections/mine/:id/order', unlessReadOnly(relayPutToBiblioteca));
 // The server's own /graphql, same-origin: read access to the signed-in
-// reader's collections (myCollections) goes through here.
+// reader's collections (myCollections) goes through here. Queries only, so
+// it stays reachable in read-only mode.
 app.post('/graphql', relayBodyToBiblioteca('POST'));
 
 // Same-origin proxy for biblioteca-nestjs's own unauthenticated status
@@ -749,7 +770,9 @@ const nestjsApi = createClient<NestjsPaths>({
 // (seconds to a minute), then answers { coverUrl, request }. An optional
 // `request` object in the body is the admin-edited cover JSON to render
 // from; without it nestjs picks a random request as before.
-app.post('/api/admin/covers/work', asyncRoute(async (req: Request, res: Response) => {
+// Renders, stores and assigns a cover upstream - write traffic, 403 in
+// read-only deployments.
+app.post('/api/admin/covers/work', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
   const path = req.body?.path;
   if (typeof path !== 'string' || !WORK_PATH.test(path)) {
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
@@ -773,7 +796,7 @@ app.post('/api/admin/covers/work', asyncRoute(async (req: Request, res: Response
   } catch (error: any) {
     res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });
   }
-}));
+})));
 
 // A fresh random cover request JSON for the work, without rendering it -
 // the admin section's "New random JSON" button fills its editor from this.
@@ -824,13 +847,13 @@ app.get('/api/admin/covers/work/request', asyncRoute(async (req: Request, res: R
 // state within a few seconds regardless of when (or whether) this
 // resolves. :action is constrained to the three real controls - anything
 // else 404s before ever reaching nestjs.
-app.post('/api/vectorizing/:action(start|pause|resume)', (req: Request, res: Response) => {
+app.post('/api/vectorizing/:action(start|pause|resume)', unlessReadOnly((req: Request, res: Response) => {
   const upstreamUrl = `${NESTJS_URL}/api/vectorizing/${req.params.action}`;
   fetch(upstreamUrl, { method: 'POST' }).catch((error: any) => {
     console.error(`[vz-proxy] POST ${upstreamUrl} failed: ${error.message}`);
   });
   res.status(202).json({ accepted: true });
-});
+}));
 
 // The one deliberately broad route: the reading surface itself (author/
 // opus/chapter content, four content-negotiated formats - see
@@ -882,7 +905,9 @@ app.use('/api/ui', swaggerUi.serve, swaggerUi.setup(openApiPublicDoc));
 // its redirect-shaped response into a plain JSON success/failure the
 // widget's fetch call can actually use - while still relaying the real
 // session cookie back to the browser on success.
-app.post('/api/auth/google', asyncRoute(async (req: Request, res: Response) => {
+// Sign-in mints a session upstream (a write), so read-only deployments 403
+// the whole auth family - the reader degrades to anonymous public browsing.
+app.post('/api/auth/google', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
   const credential = req.body?.credential;
   console.debug(`[tb-proxy][google-auth] request received, credential present=${Boolean(credential)}, length=${credential?.length ?? 0}, incoming cookie present=${Boolean(req.headers.cookie)}`);
   if (!credential) {
@@ -919,12 +944,12 @@ app.post('/api/auth/google', asyncRoute(async (req: Request, res: Response) => {
     console.debug(`[tb-proxy][google-auth] FAILED to reach textbase-server: ${error.message}`);
     res.status(502).json({ success: false, error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
   }
-}));
+})));
 
 // Refresh the signed-in user's Google profile photo. The access token never
 // leaves this same-origin proxy and is sent only to biblioteca-server, which
 // validates it against the current session before persisting the photo URL.
-app.post('/api/auth/google/profile', asyncRoute(async (req: Request, res: Response) => {
+app.post('/api/auth/google/profile', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
   const accessToken = req.body?.access_token;
   if (!accessToken) {
     res.status(400).json({ success: false, error: 'missing access token' });
@@ -942,7 +967,7 @@ app.post('/api/auth/google/profile', asyncRoute(async (req: Request, res: Respon
   } catch (error: any) {
     res.status(502).json({ success: false, error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
   }
-}));
+})));
 
 // Real sign-out. textbase-server has no custom logout endpoint - this is
 // Spring Security's own default POST /logout (invalidates the session,
@@ -951,7 +976,7 @@ app.post('/api/auth/google/profile', asyncRoute(async (req: Request, res: Respon
 // above: relay the browser's cookie up, relay whatever Set-Cookie (the
 // now-invalidated session) comes back, and report plain JSON success
 // rather than following textbase-server's own redirect.
-app.post('/api/auth/logout', asyncRoute(async (req: Request, res: Response) => {
+app.post('/api/auth/logout', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
   console.debug('[tb-proxy][google-auth] sign-out requested, incoming cookie present=', Boolean(req.headers.cookie));
   try {
     const upstreamRes = await fetch(`${BIBLIOTECA_SERVER_URL}/logout`, {
@@ -966,7 +991,7 @@ app.post('/api/auth/logout', asyncRoute(async (req: Request, res: Response) => {
     console.debug(`[tb-proxy][google-auth] sign-out FAILED to reach textbase-server: ${error.message}`);
     res.status(502).json({ success: false, error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
   }
-}));
+})));
 
 // 4. Check user book unlock & purchase status
 app.get('/api/payment/purchases/:userId', (req: Request, res: Response) => {
@@ -981,9 +1006,10 @@ app.get('/api/payment/purchases/:userId', (req: Request, res: Response) => {
 
 // Health check endpoint
 app.get('/api/health', (req: Request, res: Response) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     service: 'textbase-reader-api',
+    readOnly: READ_ONLY,
     stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
     timestamp: new Date().toISOString()
   });
@@ -1167,6 +1193,10 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Bilioteca Reader server listening on http://0.0.0.0:${PORT}`);
+    if (READ_ONLY) {
+      console.log('Read-only mode (READER_READ_ONLY=true): all state-changing routes return 403; ' +
+        `read traffic proxies to ${BIBLIOTECA_SERVER_URL}`);
+    }
   });
 }
 
