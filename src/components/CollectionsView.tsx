@@ -88,7 +88,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
             <Bookmark className="w-5 h-5 text-[#f59e0b] shrink-0" />
             <div>
               <p className="font-bold text-white">Browsing Collections in Guest Session</p>
-              <p className="text-amber-200/80">Your collections are saved locally in this browser. Sign in with Google to sync collections across devices.</p>
+              <p className="text-amber-200/80">Your collections are saved locally in this browser. Sign in to sync collections across devices.</p>
             </div>
           </div>
           <button

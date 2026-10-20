@@ -519,6 +519,7 @@ export default function App() {
             onSelectAuthor={handleSelectAuthor}
             onSelectChapter={handleSelectChapter}
             onRandomDiscovery={handleRandomDiscovery}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
             onOpenAddToCollection={handleOpenAddToCollection}
           />
         )}

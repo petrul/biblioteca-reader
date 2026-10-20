@@ -151,6 +151,35 @@ test('an upstream redirect is relayed as data, never as a browser-followable red
   }
 });
 
+test('an upstream READER (dev profile pointed at the public prod URL) is asked on the public path after a 404', async () => {
+  const location = 'http://server:8080/goethe/afinitatile_elective/partea_a_doua/capitolul_i';
+  const requestedUrls: string[] = [];
+  const realFetch = globalThis.fetch;
+  (globalThis as any).fetch = async (input: any, init?: any) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes('upstream.test')) {
+      requestedUrls.push(url);
+      // The prod reader serves only /api/util/random, already as data.
+      return url.endsWith('/api/util/random') ? Response.json({ location }) : new Response('', { status: 404 });
+    }
+    return nodeFetch(input, init);
+  };
+  const app = express();
+  new BibliotecaServerProxy('http://upstream.test').register(app);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>(resolve => server.once('listening', resolve));
+  try {
+    const { port } = server.address() as AddressInfo;
+    const res = await nodeFetch(`http://127.0.0.1:${port}/api/util/random`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { location });
+    assert.deepEqual(requestedUrls, ['http://upstream.test/util/random', 'http://upstream.test/api/util/random']);
+  } finally {
+    server.close();
+    (globalThis as any).fetch = realFetch;
+  }
+});
+
 test('non-redirect upstream responses pass through with status and body intact', async () => {
   const realFetch = globalThis.fetch;
   (globalThis as any).fetch = async (input: any, init?: any) => {

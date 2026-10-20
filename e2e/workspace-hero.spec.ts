@@ -42,6 +42,32 @@ test('a first-time visitor with no reading history sees the Explore card, not My
   await expect(page.locator('#hero-workspace-carousel')).toHaveCount(0);
 });
 
+test('the Explore card invites a signed-out visitor to sign in, and the button opens the sign-in modal', async ({ page }) => {
+  const invitation = page.locator('#hero-sign-in-invitation');
+  await expect(invitation).toBeVisible();
+  await expect(invitation).toContainText('Sign in to sync your collections across devices.');
+  // Beneath Discover, in Discover's own button theme.
+  const discover = await page.locator('#btn-hero-random').boundingBox();
+  const signIn = page.locator('#btn-hero-sign-in');
+  const signInBox = await signIn.boundingBox();
+  expect(signInBox!.y).toBeGreaterThan(discover!.y + discover!.height - 1);
+  for (const property of ['background-color', 'border-radius', 'padding-top', 'font-size']) {
+    await expect(signIn).toHaveCSS(property, await page.locator('#btn-hero-random').evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), property));
+  }
+  await signIn.click();
+  await expect(page.getByText('Textbase Authentication')).toBeVisible();
+});
+
+test('a signed-in reader still on the Explore card gets no sign-in invitation', async ({ page }) => {
+  await page.route('**/api/users/me', route => route.fulfill({
+    json: { authenticated: true, username: 'reader@example.com', avatarUrl: 'https://example.com/avatar.jpg' },
+  }));
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(page.locator('#nav-avatar-real')).toBeVisible();
+  await expect(page.locator('#hero-sign-in-invitation')).toHaveCount(0);
+  await expect(page.locator('#btn-hero-sign-in')).toHaveCount(0);
+});
+
 test('merely opening a chapter is not enough - Explore card still shows until real reading time accrues', async ({ page }) => {
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();

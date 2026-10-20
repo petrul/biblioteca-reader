@@ -3,7 +3,7 @@ import {
   BookOpen,
   User as UserIcon,
   Layers,
-  Sparkles, ChevronRight
+  Sparkles, ChevronRight, LogIn
 } from 'lucide-react';
 import { Work, CatalogState } from '../types/textbase';
 import { readerService } from '../services/readerService';
@@ -44,6 +44,8 @@ interface BrowseViewProps {
   onSelectAuthor: (authorId: string) => void;
   onSelectChapter: (workId: string, chapterId: string) => void;
   onRandomDiscovery?: () => void;
+  // Opens the sign-in modal - the explore card invites signed-out visitors.
+  onOpenAuth: () => void;
   onOpenAddToCollection: (item: { type: 'work'; referenceId: string; workId: string; workTitle: string; authorName: string }) => void;
 }
 
@@ -57,6 +59,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   onSelectAuthor,
   onSelectChapter,
   onRandomDiscovery,
+  onOpenAuth,
   onOpenAddToCollection
 }) => {
 
@@ -95,6 +98,9 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   // Neither hero until the shelf is known for the reader's real identity -
   // see heroCard (and its unit test) for the rule.
   const hero = heroCard({ shelfKnown, isEngagedReader, shelfWorks: myBooks.length });
+  // Only once identity is known - never flash the invitation at a reader
+  // whose sign-in check is still running.
+  const showSignInInvitation = identityKnown && !reallySignedIn;
 
   // Arrow keys follow the last catalog section the reader used. This keeps
   // keyboard navigation unambiguous when Featured and Works are both
@@ -266,11 +272,24 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 Explore Classical & Philosophical Texts
               </h1>
               <p className="text-white/90 text-sm sm:text-base leading-relaxed font-serif-reading drop-shadow-xs">
-                Your Scriptorium classical readings
+                Your Scriptorium classical readings. 
+
+                {/* The explore card also greets signed-in readers who are not
+                  yet engaged - invite only visitors known to be signed out
+                  (the Sign In button beside Discover follows the same rule). */}
+                {showSignInInvitation && (
+                <span id="hero-sign-in-invitation" className="mt-3 text-white/80 text-sm sm:text-base font-serif-reading drop-shadow-xs">
+                  &nbsp;Sign in to sync your collections across devices.
+                </span>
+              )}
+              
               </p>
+              
+
+             
             </div>
 
-            <div className="flex items-center justify-end">
+            <div className="flex flex-col items-stretch justify-center gap-3">
               {onRandomDiscovery && (
                 <button
                   id="btn-hero-random"
@@ -288,6 +307,17 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
                 >
                   <Sparkles className="w-4 h-4 text-black" />
                   <span>Discover</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-black" />
+                </button>
+              )}
+              {showSignInInvitation && (
+                <button
+                  id="btn-hero-sign-in"
+                  onClick={onOpenAuth}
+                  className="flex items-center justify-center space-x-2 px-5 py-3 rounded-xl bg-[#f59e0b] hover:bg-amber-400 text-black font-bold text-xs uppercase tracking-wider shadow-lg shadow-black/30 hover:shadow-amber-500/20 transition-all cursor-pointer shrink-0 active:scale-95 active:brightness-90"
+                >
+                  <LogIn className="w-4 h-4 text-black" />
+                  <span>Sign In</span>
                   <ChevronRight className="w-3.5 h-3.5 text-black" />
                 </button>
               )}

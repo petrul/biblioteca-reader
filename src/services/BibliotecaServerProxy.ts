@@ -22,7 +22,7 @@ export class BibliotecaServerProxy {
 
   register(app: Express): void {
     BibliotecaServerProxy.PUBLIC_GET_ROUTES.forEach(route =>
-      app.get(route, (req, res) => void this.relayGet(req, res, BibliotecaServerProxy.UPSTREAM_GET_PATHS[route] ?? req.originalUrl)));
+      app.get(route, (req, res) => void this.relayGet(req, res, BibliotecaServerProxy.UPSTREAM_GET_PATHS[route])));
     const putHandler = this.rejectWrite ?? ((req: Request, res: Response) => void this.relayPut(req, res));
     ['/api/reading-progress', '/api/reading-progress/attention', '/api/reading-progress/scroll']
       .forEach(route => app.put(route, putHandler));
@@ -40,11 +40,18 @@ export class BibliotecaServerProxy {
     if (cookies.length) res.setHeader('Set-Cookie', cookies);
   }
 
-  private async relayGet(req: Request, res: Response, upstreamPath = req.originalUrl): Promise<void> {
+  // A remapped route's upstream may be ANOTHER reader rather than
+  // biblioteca-server: a dev profile (biblioteca/yoga2) points the base URL
+  // at the public production address, where /api/* reaches the prod reader.
+  // That reader serves only the public path, so a 404 on the server path
+  // retries there once.
+  private async relayGet(req: Request, res: Response, serverPath?: string): Promise<void> {
     try {
-      const upstream = await fetch(`${this.baseUrl}${upstreamPath}`, {
+      const get = (path: string) => fetch(`${this.baseUrl}${path}`, {
         headers: this.forwardedHeaders(req, req.get('Accept') || 'application/json'), redirect: 'manual'
       });
+      let upstream = await get(serverPath ?? req.originalUrl);
+      if (serverPath && upstream.status === 404) upstream = await get(req.originalUrl);
       this.relayCookies(upstream, res);
       if (upstream.status >= 300 && upstream.status < 400) {
         // Relay the upstream redirect as data, never as a browser-observable

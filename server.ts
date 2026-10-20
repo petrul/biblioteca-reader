@@ -911,9 +911,16 @@ app.use('/api/ui', swaggerUi.serve, swaggerUi.setup(openApiPublicDoc));
 // its redirect-shaped response into a plain JSON success/failure the
 // widget's fetch call can actually use - while still relaying the real
 // session cookie back to the browser on success.
+// The upstream may instead be ANOTHER reader - a dev reader whose profile
+// (biblioteca/yoga2) points BIBLIOTECA_EXTERNAL_URL at the public
+// production URL, where Caddy routes /api/* to the prod reader. That
+// reader answers in this bridge's own JSON {success} shape instead of a
+// redirect, so its answer is relayed as-is; a reader from before this
+// route accepted the form shape rejects it as a missing credential, and
+// gets the credential again as JSON.
 // Sign-in mints a session upstream (a write), so read-only deployments 403
 // the whole auth family - the reader degrades to anonymous public browsing.
-app.post('/api/auth/google', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
+app.post('/api/auth/google', express.urlencoded({ extended: false }), unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
   const credential = req.body?.credential;
   console.debug(`[tb-proxy][google-auth] request received, credential present=${Boolean(credential)}, length=${credential?.length ?? 0}, incoming cookie present=${Boolean(req.headers.cookie)}`);
   if (!credential) {
@@ -923,20 +930,34 @@ app.post('/api/auth/google', unlessReadOnly(asyncRoute(async (req: Request, res:
   }
   try {
     console.debug(`[tb-proxy][google-auth] forwarding to ${BIBLIOTECA_SERVER_URL}/api/auth/google`);
-    const upstreamRes = await fetch(`${BIBLIOTECA_SERVER_URL}/api/auth/google`, {
+    const postCredential = (contentType: string, body: string) => fetch(`${BIBLIOTECA_SERVER_URL}/api/auth/google`, {
       method: 'POST',
-      headers: { ...forwardedHeaders(req, 'text/html'), 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ credential }).toString(),
+      headers: { ...forwardedHeaders(req, 'text/html'), 'Content-Type': contentType },
+      body,
       redirect: 'manual'
     });
+    let upstreamRes = await postCredential('application/x-www-form-urlencoded', new URLSearchParams({ credential }).toString());
+    let readerAnswer = await readerAuthAnswer(upstreamRes);
+    if (readerAnswer && upstreamRes.status === 400 && readerAnswer.error === 'missing credential') {
+      console.debug('[tb-proxy][google-auth] upstream is a reader that wants JSON - resending the credential as JSON');
+      upstreamRes = await postCredential('application/json', JSON.stringify({ credential }));
+      readerAnswer = await readerAuthAnswer(upstreamRes);
+    }
     const cookiesOut = upstreamRes.headers.getSetCookie?.() ?? [];
     console.debug(`[tb-proxy][google-auth] upstream responded status=${upstreamRes.status}, location=${upstreamRes.headers.get('location')}, set-cookie count=${cookiesOut.length}`);
     relaySetCookie(upstreamRes, res);
+    if (readerAnswer) {
+      console.debug(`[tb-proxy][google-auth] upstream reader answered success=${readerAnswer.success} - relayed as-is`);
+      res.status(upstreamRes.status).json(readerAnswer);
+      return;
+    }
     const location = upstreamRes.headers.get('location') || '';
     const errorMatch = location.match(/[?&]googleSignInError=([^&]*)/);
     if (errorMatch) {
-      console.debug(`[tb-proxy][google-auth] upstream reported a sign-in error: ${decodeURIComponent(errorMatch[1])}`);
-      res.status(401).json({ success: false, error: decodeURIComponent(errorMatch[1]) });
+      // GoogleAuthController encodes with java.net.URLEncoder: spaces as '+'.
+      const signInError = decodeURIComponent(errorMatch[1].replace(/\+/g, ' '));
+      console.debug(`[tb-proxy][google-auth] upstream reported a sign-in error: ${signInError}`);
+      res.status(401).json({ success: false, error: signInError });
       return;
     }
     if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
@@ -951,6 +972,15 @@ app.post('/api/auth/google', unlessReadOnly(asyncRoute(async (req: Request, res:
     res.status(502).json({ success: false, error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
   }
 })));
+
+// The JSON {success, error?} answer of an upstream READER's own
+// /api/auth/google (see the bridge above), or null for any other response
+// - biblioteca-server itself answers with a redirect.
+async function readerAuthAnswer(upstreamRes: globalThis.Response): Promise<{ success: boolean; error?: string } | null> {
+  if (!(upstreamRes.headers.get('content-type') || '').includes('application/json')) return null;
+  const body = await upstreamRes.clone().json().catch(() => null);
+  return body && typeof body.success === 'boolean' ? body : null;
+}
 
 // Refresh the signed-in user's Google profile photo. The access token never
 // leaves this same-origin proxy and is sent only to biblioteca-server, which
@@ -985,11 +1015,15 @@ app.post('/api/auth/google/profile', unlessReadOnly(asyncRoute(async (req: Reque
 app.post('/api/auth/logout', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
   console.debug('[tb-proxy][google-auth] sign-out requested, incoming cookie present=', Boolean(req.headers.cookie));
   try {
-    const upstreamRes = await fetch(`${BIBLIOTECA_SERVER_URL}/logout`, {
+    const postLogout = (path: string) => fetch(`${BIBLIOTECA_SERVER_URL}${path}`, {
       method: 'POST',
       headers: forwardedHeaders(req, 'text/html'),
       redirect: 'manual'
     });
+    let upstreamRes = await postLogout('/logout');
+    // An upstream READER (see /api/auth/google above) has no /logout -
+    // its own bridge is this same /api/auth/logout.
+    if (upstreamRes.status === 404) upstreamRes = await postLogout('/api/auth/logout');
     console.debug(`[tb-proxy][google-auth] sign-out upstream status=${upstreamRes.status}`);
     relaySetCookie(upstreamRes, res);
     res.json({ success: true });
