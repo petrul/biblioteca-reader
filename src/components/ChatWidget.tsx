@@ -1,5 +1,6 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Check, MessageCircle, Palette, RotateCcw, Send, X } from 'lucide-react';
+import { parseAppPath } from '../router';
 
 type ChatTheme = 'emerald' | 'amber' | 'rose' | 'cyan' | 'azure' | 'mint' | 'slate';
 
@@ -8,6 +9,55 @@ type ChatMessage = {
   role: 'user' | 'assistant';
   text: string;
 };
+
+// The assistant returns prose with a small, predictable Markdown subset. Keep
+// this renderer deliberately dependency-free and never inject HTML: common
+// emphasis, code, links, and list markers become safe React elements.
+export function markdownInline(text: string): ReactNode[] {
+  const token = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\)|(?<!\*)\*[^*]+\*(?!\*))/g;
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = token.exec(text))) {
+    if (match.index > cursor) nodes.push(text.slice(cursor, match.index));
+    const value = match[0];
+    if (value.startsWith('**') || value.startsWith('__')) nodes.push(<strong key={`${match.index}-strong`}>{value.slice(2, -2)}</strong>);
+    else if (value.startsWith('`')) nodes.push(<code key={`${match.index}-code`} className="rounded bg-black/25 px-1 py-0.5">{value.slice(1, -1)}</code>);
+    else if (value.startsWith('[')) {
+      const link = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(value);
+      if (link) nodes.push(<a key={`${match.index}-link`} href={link[2]} target="_blank" rel="noreferrer" className="underline decoration-white/40 underline-offset-2">{link[1]}</a>);
+      else nodes.push(value);
+    } else nodes.push(<em key={`${match.index}-em`}>{value.slice(1, -1)}</em>);
+    cursor = match.index + value.length;
+  }
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return nodes;
+}
+
+function MarkdownMessage({ text }: { text: string }) {
+  const lines = text.split('\n');
+  const content: ReactNode[] = [];
+  let list: { ordered: boolean; items: string[] } | undefined;
+  const flushList = () => {
+    if (!list) return;
+    const Tag = list.ordered ? 'ol' : 'ul';
+    content.push(<Tag key={`list-${content.length}`} className="my-1 list-inside space-y-0.5">{list.items.map((item, index) => <li key={index}>{markdownInline(item)}</li>)}</Tag>);
+    list = undefined;
+  };
+  lines.forEach((line, index) => {
+    const marker = /^(?:\s*)([-*]|\d+\.)\s+(.+)$/.exec(line);
+    if (marker) {
+      const ordered = /\d+\./.test(marker[1]);
+      if (!list || list.ordered !== ordered) { flushList(); list = { ordered, items: [] }; }
+      list.items.push(marker[2]);
+    } else {
+      flushList();
+      if (line.trim()) content.push(<p key={`line-${index}`} className="my-1 first:mt-0 last:mb-0">{markdownInline(line)}</p>);
+    }
+  });
+  flushList();
+  return <>{content}</>;
+}
 
 const THEMES: Record<ChatTheme, {
   name: string;
@@ -90,7 +140,10 @@ export function ChatWidget() {
   const [showThemes, setShowThemes] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | undefined>();
+  const [, setConversationId] = useState<string | undefined>();
+  // Keep one backend conversation per work, so returning to a book restores
+  // its context instead of mixing it with another book or the library chat.
+  const conversationIdsRef = useRef<Record<string, string>>({});
   const [messages, setMessages] = useState<ChatMessage[]>([initialMessage()]);
   const endRef = useRef<HTMLDivElement>(null);
   const currentTheme = useMemo(() => THEMES[theme], [theme]);
@@ -103,7 +156,13 @@ export function ChatWidget() {
     if (open) endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [open, messages, loading]);
 
-  const reset = () => { setMessages([initialMessage()]); setConversationId(undefined); };
+  const reset = () => {
+    setMessages([initialMessage()]);
+    const route = parseAppPath(window.location.pathname, window.location.hash, window.location.search);
+    const scopeKey = route.view === 'reader' && route.workId ? route.workId : '__library__';
+    delete conversationIdsRef.current[scopeKey];
+    setConversationId(undefined);
+  };
 
   const send = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -114,15 +173,27 @@ export function ChatWidget() {
     setMessages(previous => [...previous, userMessage]);
     setLoading(true);
     try {
+      // A reader conversation is deliberately narrowed to the open work;
+      // every other page searches the whole library. Resolve this at send
+      // time so in-app navigation is reflected even while the widget stays
+      // mounted.
+      const route = parseAppPath(window.location.pathname, window.location.hash, window.location.search);
+      const opusPath = route.view === 'reader' ? route.workId : undefined;
+      const scopeKey = opusPath ?? '__library__';
+      const scope = opusPath ? { opusPaths: [opusPath] } : undefined;
+      const continuedConversationId = conversationIdsRef.current[scopeKey];
       const response = await fetch('/api/rag/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, ...(conversationId ? { conversationId } : {}) }),
+        body: JSON.stringify({ message: text, ...(continuedConversationId ? { conversationId: continuedConversationId } : {}), ...(scope ? { scope } : {}) }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok || typeof payload.message !== 'string') throw new Error('chat unavailable');
-      if (typeof payload.conversationId === 'string') setConversationId(payload.conversationId);
-      setMessages(previous => [...previous, { id: Date.now() + 1, role: 'assistant', text: payload.message }]);
+      if (!response.ok || typeof payload.answer !== 'string') throw new Error('chat unavailable');
+      if (typeof payload.conversationId === 'string') {
+        conversationIdsRef.current[scopeKey] = payload.conversationId;
+        setConversationId(payload.conversationId);
+      }
+      setMessages(previous => [...previous, { id: Date.now() + 1, role: 'assistant', text: payload.answer }]);
     } catch {
       setMessages(previous => [...previous, {
         id: Date.now() + 1,
@@ -175,7 +246,7 @@ export function ChatWidget() {
             {messages.map(message => (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className="max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap" style={message.role === 'user' ? { background: currentTheme.user } : { background: 'rgba(0,0,0,.25)', border: `1px solid ${currentTheme.accentSoft}` }}>
-                  {message.text}
+                  {message.role === 'assistant' ? <MarkdownMessage text={message.text} /> : message.text}
                 </div>
               </div>
             ))}

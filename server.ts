@@ -861,23 +861,37 @@ app.post('/api/vectorizing/:action(start|pause|resume)', unlessReadOnly((req: Re
   res.status(202).json({ accepted: true });
 }));
 
-// Public reader chat bridge. Keep the browser on the reader origin while
-// forwarding the conversation to biblioteca-nestjs's RAG endpoint selected
-// by the active profile (production for yoga2). The response shape is passed
-// through so the widget can preserve conversationId for follow-up questions.
-app.post('/api/rag/chat', asyncRoute(async (req: Request, res: Response) => {
+// Public reader RAG bridge. Keep the browser on the reader origin while
+// forwarding the explicit RAG contract to biblioteca-nestjs selected by the
+// active profile. The typed client is regenerated from Nest's live Swagger
+// document; no wildcard forwarding or browser-visible upstream URL exists.
+async function relayRagPost(path: '/api/rag/search' | '/api/rag/ask' | '/api/rag/chat', req: Request, res: Response) {
   try {
-    const upstreamRes = await fetch(`${NESTJS_URL}/api/rag/chat`, {
+    const { data, error, response } = await nestjsApi.POST(path, {
+      body: req.body,
+      signal: AbortSignal.timeout(120_000),
+    } as any);
+    res.status(response.status).json(data ?? error ?? {});
+  } catch (error: any) {
+    res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });
+  }
+}
+app.post('/api/rag/search', asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/search', req, res)));
+app.post('/api/rag/ask', asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/ask', req, res)));
+app.post('/api/rag/chat', asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/chat', req, res)));
+
+// Streaming answers stay a raw NDJSON response; openapi-fetch is intentionally
+// not used because it would eagerly parse the stream as one JSON document.
+app.post('/api/rag/ask/stream', asyncRoute(async (req: Request, res: Response) => {
+  try {
+    const upstreamRes = await fetch(`${NESTJS_URL}/api/rag/ask/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        message: req.body?.message,
-        conversationId: req.body?.conversationId,
-      }),
+      headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },
+      body: JSON.stringify(req.body ?? {}),
       signal: AbortSignal.timeout(120_000),
     });
     res.status(upstreamRes.status);
-    res.setHeader('Content-Type', upstreamRes.headers.get('content-type') || 'application/json');
+    res.setHeader('Content-Type', upstreamRes.headers.get('content-type') || 'application/x-ndjson');
     res.send(Buffer.from(await upstreamRes.arrayBuffer()));
   } catch (error: any) {
     res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });

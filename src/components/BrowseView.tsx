@@ -289,7 +289,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
              
             </div>
 
-            <div className="flex flex-col items-stretch justify-center gap-3">
+            <div className="flex flex-row flex-wrap items-center justify-center gap-3">
               {onRandomDiscovery && (
                 <button
                   id="btn-hero-random"

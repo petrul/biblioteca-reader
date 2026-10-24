@@ -391,10 +391,30 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Render a new random cover for one work, synchronously, replacing its current cover
-         * @description Waits for the render and the MinIO upload (seconds to a minute). Responds with the new cover URL and the request JSON it was rendered from.
+         * Render a new cover for one work, synchronously, replacing its current cover
+         * @description Waits for the render and the MinIO upload (seconds to a minute). Responds with the new cover URL and the request JSON it was rendered from. Pass a request JSON to render from it; omit it for a random one.
          */
         post: operations["CoverWorkController_generate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/covers/work/request/random": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A fresh random cover request JSON for one work, without rendering it
+         * @description What POST /work would have rendered from at this moment. The reader admin's "New random JSON" fills its editor with this; coverUrl is the work's current cover, untouched.
+         */
+        get: operations["CoverWorkController_randomRequest"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -418,17 +438,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/covers/work/request/random": {
+    "/api/rag/search": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** A fresh random cover request JSON for one work, without rendering it */
-        get: operations["CoverWorkController_randomRequest"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** The paragraphs nearest in meaning to the query, within the scope */
+        post: operations["RagController_search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rag/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** An answer generated from the passages nearest to the question, citing them as [n] */
+        post: operations["RagController_ask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rag/ask/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * As /ask, streamed as newline-delimited JSON
+         * @description First line {"passages": [...], "question", "scope"}, then {"delta": "..."} lines as the answer is generated, then {"done": true} (or {"error": "..."}).
+         */
+        post: operations["RagController_askStream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rag/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The next turn of a conversation over the scope: follow-ups are rewritten from the conversation before searching */
+        post: operations["RagController_chat"];
         delete?: never;
         options?: never;
         head?: never;
@@ -501,12 +575,82 @@ export interface components {
              * @example eminescu/poezii
              */
             path: string;
-            /**
-             * @description Optional POST /api/cover request JSON to render from (the reader admin's edited JSON). Omit for a random request.
-             */
+            /** @description Optional POST /api/cover request JSON to render from (the reader admin's edited JSON). Omit for a random request. */
             request?: {
                 [key: string]: unknown;
             } | null;
+        };
+        RagScopeDto: {
+            /**
+             * @description The works to search, as author/opus paths: one work to chat with a book, several for a collection. Omit (or leave empty) for the whole library.
+             * @example [
+             *       "creanga/amintiri_din_copilarie"
+             *     ]
+             */
+            opusPaths?: string[];
+        };
+        RagSearchDto: {
+            scope?: components["schemas"]["RagScopeDto"];
+            /**
+             * @description Leave out passages farther than this Euclid distance from the question (bge-m3: ~0.8 close, ~1.1 loosely related).
+             * @example 0.9
+             */
+            maxDistance?: number;
+            /**
+             * @description What to look for, in any language.
+             * @example copilăria la Humulești
+             */
+            query: string;
+            /**
+             * @description Passages returned, 1-50. Default 10.
+             * @example 10
+             */
+            topK?: number;
+        };
+        RagTurnDto: {
+            /** @enum {string} */
+            role: "user" | "assistant";
+            content: string;
+        };
+        RagAskDto: {
+            scope?: components["schemas"]["RagScopeDto"];
+            /**
+             * @description Leave out passages farther than this Euclid distance from the question (bge-m3: ~0.8 close, ~1.1 loosely related).
+             * @example 0.9
+             */
+            maxDistance?: number;
+            /**
+             * @description The question, in any language; the answer comes in the same one.
+             * @example Ce făcea Nică la școala din Humulești?
+             */
+            question: string;
+            /**
+             * @description Passages the answer is generated from, 1-12. Default 6.
+             * @example 6
+             */
+            topK?: number;
+            /** @description The conversation so far, oldest first (at most 20 turns), when the caller keeps it. */
+            history?: components["schemas"]["RagTurnDto"][];
+        };
+        RagChatDto: {
+            scope?: components["schemas"]["RagScopeDto"];
+            /**
+             * @description Leave out passages farther than this Euclid distance from the question (bge-m3: ~0.8 close, ~1.1 loosely related).
+             * @example 0.9
+             */
+            maxDistance?: number;
+            /**
+             * @description The next message; follow-ups are understood from the conversation.
+             * @example Și ce a pățit apoi?
+             */
+            message: string;
+            /** @description The conversationId of a previous reply, to continue that conversation. Conversations are kept in memory: a restart forgets them. */
+            conversationId?: string;
+            /**
+             * @description Passages each answer is generated from, 1-12. Default 6.
+             * @example 6
+             */
+            topK?: number;
         };
     };
     responses: never;
@@ -942,6 +1086,26 @@ export interface operations {
             };
         };
     };
+    CoverWorkController_randomRequest: {
+        parameters: {
+            query: {
+                /** @example eminescu/poezii */
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     CoverWorkController_request: {
         parameters: {
             query: {
@@ -962,17 +1126,81 @@ export interface operations {
             };
         };
     };
-    CoverWorkController_randomRequest: {
+    RagController_search: {
         parameters: {
-            query: {
-                /** @example eminescu/poezii */
-                path: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RagSearchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RagController_ask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RagAskDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RagController_askStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RagAskDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RagController_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RagChatDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {
