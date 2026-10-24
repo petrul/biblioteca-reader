@@ -29,6 +29,7 @@ import { NotFoundCard } from './components/NotFoundCard';
 import { GoogleOneTapAuto, googleIdentityPresentation } from './components/GoogleOneTap';
 import { fetchWhoAmI, submitGoogleCredential, refreshGoogleProfile, cachedGoogleAvatar, restoreStoredGoogleCredential, signOut, bookmarkStoreFor, preferencesStoreFor, WhoAmI } from './services/identity';
 import { AddToCollectionModal, AddToCollectionPayload } from './components/AddToCollectionModal';
+import { ChatWidget } from './components/ChatWidget';
 
 export default function App() {
   const [dataRevision, setDataRevision] = useState(0);
@@ -709,6 +710,10 @@ export default function App() {
 
       {/* Connectivity status for online requests. */}
       <ServerStatusToast />
+
+      {/* Biblioteca's universal assistant: available from every reader page,
+          including the site-simulator-style admin surfaces. */}
+      <ChatWidget />
     </div>
   );
 }

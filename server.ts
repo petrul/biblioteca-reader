@@ -861,6 +861,29 @@ app.post('/api/vectorizing/:action(start|pause|resume)', unlessReadOnly((req: Re
   res.status(202).json({ accepted: true });
 }));
 
+// Public reader chat bridge. Keep the browser on the reader origin while
+// forwarding the conversation to biblioteca-nestjs's RAG endpoint selected
+// by the active profile (production for yoga2). The response shape is passed
+// through so the widget can preserve conversationId for follow-up questions.
+app.post('/api/rag/chat', asyncRoute(async (req: Request, res: Response) => {
+  try {
+    const upstreamRes = await fetch(`${NESTJS_URL}/api/rag/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        message: req.body?.message,
+        conversationId: req.body?.conversationId,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    res.status(upstreamRes.status);
+    res.setHeader('Content-Type', upstreamRes.headers.get('content-type') || 'application/json');
+    res.send(Buffer.from(await upstreamRes.arrayBuffer()));
+  } catch (error: any) {
+    res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });
+  }
+}));
+
 // The one deliberately broad route: the reading surface itself (author/
 // opus/chapter content, four content-negotiated formats - see
 // biblioteca-server's own README, this is the part explicitly meant to be
