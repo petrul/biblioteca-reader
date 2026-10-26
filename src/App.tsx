@@ -21,6 +21,7 @@ import { attachSavedSearchesAccount, detachSavedSearchesAccount, subscribeSavedS
 import { CollectionsView } from './components/CollectionsView';
 import { CollectionsModal } from './components/CollectionsModal';
 import { useCollectionsShortcut } from './hooks/useCollectionsShortcut';
+import { useHideHeaderOnScroll } from './hooks/useHideHeaderOnScroll';
 import { AdminView } from './components/AdminView';
 import { QuoteView } from './components/QuoteView';
 import { AuthModal } from './components/AuthModal';
@@ -36,6 +37,10 @@ export default function App() {
   // Initialize from the URL so StrictMode's repeated effects cannot erase a deep link.
   const initialRoute = useRef(parseAppPath(window.location.pathname, window.location.hash, window.location.search)).current;
   const [currentView, setCurrentView] = useState<AppView>(initialRoute.view);
+  // The mobile bottom bar follows the navbar/chapter-toolbar hide cycle on
+  // the reader page (same hook, same thresholds, so all bars move in
+  // lockstep); everywhere else it is the primary navigation and stays put.
+  const bottomNavVisible = useHideHeaderOnScroll(currentView === 'reader');
   // Set by WorkView/ReaderView when the work/chapter id in the current URL
   // doesn't exist - the not-found card below explains it.
   const [contentNotFound, setContentNotFound] = useState(false);
@@ -507,8 +512,11 @@ export default function App() {
         onSelectAuthor={handleSelectAuthor}
       />
 
-      {/* Main View Area */}
-      <div className="flex-1 pb-16 lg:pb-8">
+      {/* Main View Area - the bottom padding clears the fixed mobile nav on
+          every page EXCEPT the reader: the reader paints its own full-height
+          background with its own pb-24, and this App-gradient padding would
+          show as a green stripe below the page once the bar auto-hides. */}
+      <div className={`flex-1 ${currentView === 'reader' ? '' : 'pb-16 lg:pb-8'}`}>
         {currentView === 'browse' && (
           <BrowseView
             reallySignedIn={Boolean(reallySignedIn)}
@@ -646,6 +654,7 @@ export default function App() {
         currentUser={currentUser}
         isAdmin={isAdmin}
         onOpenAdminSidebar={() => setIsAdminSidebarOpen(true)}
+        visible={bottomNavVisible}
       />
 
       {/* Google One Tap - auto-prompts whenever we're not really signed in yet.

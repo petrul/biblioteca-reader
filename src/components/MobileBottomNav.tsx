@@ -10,6 +10,11 @@ interface MobileBottomNavProps {
   currentUser: User | null;
   isAdmin?: boolean;
   onOpenAdminSidebar?: () => void;
+  /** On the reader page, App drives this from useHideHeaderOnScroll so the
+      bottom bar hides on scroll down and returns on scroll up in lockstep
+      with the navbar and the chapter toolbar (same hook, same thresholds).
+      Elsewhere it stays visible: it is the primary mobile navigation. */
+  visible?: boolean;
 }
 
 // The selected tab's own highlight: amber tint + ring + glow (a ring, not
@@ -25,7 +30,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onSelectTab,
   currentUser,
   isAdmin = false,
-  onOpenAdminSidebar
+  onOpenAdminSidebar,
+  visible = true
 }) => {
   const activeView = (currentView || currentTab || 'browse') as AppView;
   const navigate = (view: AppView) => {
@@ -34,7 +40,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   };
 
   return (
-    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[linear-gradient(90deg,rgba(2,64,99,0.96)_0%,rgba(60,168,63,0.92)_22%,rgba(4,74,111,0.96)_100%)] backdrop-blur-lg border-t border-emerald-400/25 px-4 py-2 flex items-center justify-around shadow-2xl">
+    <div id="mobile-bottom-nav" className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[linear-gradient(90deg,rgba(2,64,99,0.96)_0%,rgba(60,168,63,0.92)_22%,rgba(4,74,111,0.96)_100%)] backdrop-blur-lg border-t border-emerald-400/25 px-4 py-2 flex items-center justify-around shadow-2xl transition-transform duration-300 ${visible ? 'translate-y-0' : 'translate-y-full'}`}>
       <button
         id="mobile-nav-browse"
         onClick={() => navigate('browse')}
