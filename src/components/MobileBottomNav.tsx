@@ -1,8 +1,8 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { Compass, Search, Bookmark, MessageCircle } from 'lucide-react';
 import { User, AppView } from '../types/textbase';
 import { useLongPressDrag } from '../hooks/useLongPressDrag';
+import { DragGhost } from './DragGhost';
 
 interface MobileBottomNavProps {
   currentView?: AppView | string;
@@ -123,24 +123,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       )}
 
       {/* While dragging the docked tab out, a ghost bubble follows the
-          pointer; the tab itself stays put (dimmed) until the drop lands.
-          Portaled to body: this bar's transform/backdrop-filter would
-          otherwise make the ghost's fixed coordinates relative to the bar
-          instead of the viewport. */}
-      {chatDrag.dragging && chatDrag.origin && chatDrag.offset && createPortal(
-        <div
-          data-testid="chat-drag-ghost"
-          className="fixed z-[80] w-14 h-14 rounded-full grid place-items-center text-white border border-white/30 shadow-xl pointer-events-none"
-          style={{
-            left: chatDrag.origin.x + chatDrag.offset.dx - 28,
-            top: chatDrag.origin.y + chatDrag.offset.dy - 28,
-            background: 'linear-gradient(135deg, #34d399, #075985)'
-          }}
-        >
-          <MessageCircle className="w-6 h-6" />
-        </div>,
-        document.body
-      )}
+          pointer; the tab itself stays put (dimmed) until the drop lands. */}
+      <DragGhost drag={chatDrag} testId="chat-drag-ghost">
+        <MessageCircle className="w-6 h-6" />
+      </DragGhost>
     </div>
   );
 };
