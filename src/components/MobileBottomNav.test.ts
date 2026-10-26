@@ -20,7 +20,7 @@ function installDom() {
   define('window', window);
   define('document', window.document);
   define('navigator', window.navigator);
-  for (const key of ['HTMLElement', 'Element', 'Node', 'Event']) {
+  for (const key of ['HTMLElement', 'Element', 'Node', 'Event', 'MouseEvent', 'PointerEvent']) {
     if (key in window) define(key, (window as any)[key]);
   }
   define('IS_REACT_ACT_ENVIRONMENT', true);
@@ -36,7 +36,7 @@ function installDom() {
   };
 }
 
-async function mountNav(props: { visible?: boolean }) {
+async function mountNav(props: Record<string, unknown>) {
   const dom = installDom();
   const { act, createElement } = await import('react');
   const { createRoot } = await import('react-dom/client');
@@ -45,12 +45,14 @@ async function mountNav(props: { visible?: boolean }) {
   const host = dom.window.document.createElement('div');
   dom.window.document.body.appendChild(host);
   const root = createRoot(host as unknown as HTMLElement);
-  const passed: { visible?: boolean; currentUser: null } = { ...props, currentUser: null };
+  const passed = { ...props, currentUser: null };
   await act(async () => {
     root.render(createElement(MobileBottomNav, passed as any));
   });
   return {
     nav: () => dom.window.document.getElementById('mobile-bottom-nav'),
+    chatTab: () => dom.window.document.getElementById('mobile-nav-chat'),
+    act,
     unmount: async () => { await act(async () => root.unmount()); await dom.restore(); }
   };
 }
@@ -79,5 +81,33 @@ test('the bottom nav stays visible by default and when shown', async () => {
     } finally {
       await nav.unmount();
     }
+  }
+});
+
+// The dockable assistant: docked, the chat bubble becomes the bar's fourth
+// tab; floating, the bar shows only navigation. The tab's tap opens the
+// chat panel (long-press-drag, covered by useLongPressDrag.test.ts, is how
+// it leaves the bar again). The old admin button was removed - admins use
+// the navbar's hamburger.
+test('the docked chat tab opens the assistant from the bar', async () => {
+  let opened = 0;
+  const nav = await mountNav({ chatDocked: true, onChatOpen: () => { opened += 1; } });
+  try {
+    const tab = nav.chatTab();
+    assert.ok(tab, 'the chat tab appears in the bar when docked');
+    await nav.act(async () => { tab!.dispatchEvent(new (globalThis as any).MouseEvent('click', { bubbles: true })); });
+    assert.equal(opened, 1, 'tapping the docked tab opens the chat');
+  } finally {
+    await nav.unmount();
+  }
+});
+
+test('no chat tab while the assistant floats, and no admin button anymore', async () => {
+  const nav = await mountNav({ chatDocked: false, isAdmin: true, onOpenAdminSidebar: () => {} });
+  try {
+    assert.equal(nav.chatTab(), null, 'no chat tab while the bubble floats');
+    assert.equal(nav.nav()!.querySelector('#mobile-nav-admin-drawer'), null, 'the admin button was removed from the bar');
+  } finally {
+    await nav.unmount();
   }
 });

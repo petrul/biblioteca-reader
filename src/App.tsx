@@ -41,6 +41,19 @@ export default function App() {
   // the reader page (same hook, same thresholds, so all bars move in
   // lockstep); everywhere else it is the primary navigation and stays put.
   const bottomNavVisible = useHideHeaderOnScroll(currentView === 'reader');
+  // Chat assistant placement: floating in its corner, or docked into a
+  // toolbar - the bottom bar's fourth tab below lg, the navbar's chat
+  // button on lg+. Persisted like the chat theme.
+  const [chatPlacement, setChatPlacement] = useState<'floating' | 'docked'>(() =>
+    window.localStorage.getItem('biblioteca-chat-placement') === 'docked' ? 'docked' : 'floating');
+  const [chatOpen, setChatOpen] = useState(false);
+  // While a chat drag is in flight both toolbars are forced visible - even
+  // where they auto-hid on scroll - so there is always a bar to receive a
+  // drop.
+  const [chatDrag, setChatDrag] = useState({ active: false, overNav: false });
+  useEffect(() => {
+    window.localStorage.setItem('biblioteca-chat-placement', chatPlacement);
+  }, [chatPlacement]);
   // Set by WorkView/ReaderView when the work/chapter id in the current URL
   // doesn't exist - the not-found card below explains it.
   const [contentNotFound, setContentNotFound] = useState(false);
@@ -510,6 +523,14 @@ export default function App() {
         onSelectWork={handleSelectWork}
         onSelectChapter={handleSelectChapter}
         onSelectAuthor={handleSelectAuthor}
+        forceVisible={chatDrag.active}
+        chatDragActive={chatDrag.active}
+        chatDragOver={chatDrag.overNav}
+        chatDocked={chatPlacement === 'docked'}
+        chatOpen={chatOpen}
+        onChatOpen={() => setChatOpen(true)}
+        onChatUndock={() => setChatPlacement('floating')}
+        onChatDragActiveChange={(active, overTarget) => setChatDrag({ active, overNav: overTarget })}
       />
 
       {/* Main View Area - the bottom padding clears the fixed mobile nav on
@@ -647,14 +668,21 @@ export default function App() {
         onRandomDiscovery={handleRandomDiscovery}
       />
 
-      {/* Mobile Floating Bottom Bar */}
+      {/* Mobile Floating Bottom Bar - chat lives here as a fourth tab when
+          docked, and the bar force-shows while a chat drag is in flight so
+          it can always receive the bubble. */}
       <MobileBottomNav
         currentView={currentView}
         onNavigate={(view) => setCurrentView(view)}
         currentUser={currentUser}
-        isAdmin={isAdmin}
-        onOpenAdminSidebar={() => setIsAdminSidebarOpen(true)}
-        visible={bottomNavVisible}
+        visible={bottomNavVisible || chatDrag.active}
+        chatDocked={chatPlacement === 'docked'}
+        chatOpen={chatOpen}
+        onChatOpen={() => setChatOpen(true)}
+        onChatUndock={() => setChatPlacement('floating')}
+        onChatDragActiveChange={(active, overTarget) => setChatDrag({ active, overNav: overTarget })}
+        chatDragActive={chatDrag.active}
+        chatDragOver={chatDrag.overNav}
       />
 
       {/* Google One Tap - auto-prompts whenever we're not really signed in yet.
@@ -722,7 +750,13 @@ export default function App() {
 
       {/* Biblioteca's universal assistant: available from every reader page,
           including the site-simulator-style admin surfaces. */}
-      <ChatWidget />
+      <ChatWidget
+        placement={chatPlacement}
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        onDock={() => setChatPlacement('docked')}
+        onDragActiveChange={(active, overTarget) => setChatDrag({ active, overNav: overTarget })}
+      />
     </div>
   );
 }

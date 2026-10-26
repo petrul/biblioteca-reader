@@ -1,6 +1,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Check, MessageCircle, Palette, RotateCcw, Send, X } from 'lucide-react';
 import { parseAppPath } from '../router';
+import { useLongPressDrag } from '../hooks/useLongPressDrag';
 
 type ChatTheme = 'emerald' | 'amber' | 'rose' | 'cyan' | 'azure' | 'mint' | 'slate';
 
@@ -131,8 +132,41 @@ const initialMessage = (): ChatMessage => ({
   text: 'Bun venit în Biblioteca. Întreabă-mă despre autori, opere sau cum să găsești un text.',
 });
 
-export function ChatWidget() {
-  const [open, setOpen] = useState(false);
+type ChatPlacement = 'floating' | 'docked';
+
+interface ChatWidgetProps {
+  /** 'docked' hands the bubble over to a toolbar: the bottom nav's chat tab
+      below lg, the navbar's chat button on lg+ - and the bubble hides. */
+  placement?: ChatPlacement;
+  /** Open state can be controlled from outside (the docked tab opens the
+      panel) and falls back to internal state otherwise. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onDock?: () => void;
+  /** Lifted so the app can force the toolbars visible mid-drag, even where
+      they auto-hid themselves on scroll. */
+  onDragActiveChange?: (active: boolean, overTarget: boolean) => void;
+}
+
+export function ChatWidget({ placement = 'floating', open: openProp, onOpenChange, onDock, onDragActiveChange }: ChatWidgetProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value);
+    onOpenChange?.(value);
+  };
+  // Long-press grabs the bubble and drags it onto a toolbar to dock it
+  // there - the bottom nav on mobile, the navbar on desktop; dropped
+  // anywhere else it snaps back to its corner. Disabled while docked or
+  // while the panel is open (the bubble is a close button then, not a drag
+  // handle).
+  const drag = useLongPressDrag({
+    targetId: ['mobile-bottom-nav', 'navbar'],
+    onDropTarget: () => onDock?.(),
+    onDropOutside: () => {},
+    onDragActiveChange,
+    enabled: placement === 'floating' && !open,
+  });
   const [theme, setTheme] = useState<ChatTheme>(() => {
     const saved = window.localStorage.getItem('biblioteca-chat-theme') as ChatTheme | null;
     return saved && saved in THEMES ? saved : 'emerald';
@@ -261,7 +295,18 @@ export function ChatWidget() {
         </section>
       )}
 
-      <button type="button" onClick={() => setOpen(value => !value)} className="w-14 h-14 rounded-full grid place-items-center text-white border border-white/30 shadow-xl transition-transform hover:scale-105 active:scale-95" style={{ background: `linear-gradient(135deg, ${currentTheme.accent}, #075985)` }} aria-label={open ? 'Închide chatul' : 'Deschide chatul'}>
+      <button
+        type="button"
+        onClick={() => { if (drag.justDragged()) return; setOpen(!open); }}
+        onPointerDown={drag.onPointerDown}
+        onContextMenu={event => event.preventDefault()}
+        className={`w-14 h-14 rounded-full grid place-items-center text-white border border-white/30 shadow-xl hover:scale-105 active:scale-95 touch-none select-none ${drag.dragging ? 'scale-110' : 'transition-transform'} ${placement === 'docked' ? 'hidden' : ''}`}
+        style={{
+          background: `linear-gradient(135deg, ${currentTheme.accent}, #075985)`,
+          ...(drag.dragging && drag.offset ? { transform: `translate(${drag.offset.dx}px, ${drag.offset.dy}px) scale(1.1)` } : {}),
+        }}
+        aria-label={open ? 'Închide chatul' : 'Deschide chatul'}
+      >
         {open ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
       </button>
     </div>

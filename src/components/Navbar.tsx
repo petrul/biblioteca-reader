@@ -10,10 +10,12 @@ import {
   ArrowRight,
   ArrowLeft,
   Settings,
-  BookMarked
+  BookMarked,
+  MessageCircle
 } from 'lucide-react';
 import { AppView, SearchResult } from '../types/textbase';
 import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
+import { useLongPressDrag } from '../hooks/useLongPressDrag';
 import { readerService } from '../services/readerService';
 import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
 
@@ -49,8 +51,7 @@ interface NavbarProps {
   // Opens the collections quick-jump modal (the `s` shortcut's touch/mouse twin).
   onOpenCollectionsQuickFind?: () => void;
   // Undefined (not just a no-op) for a non-admin - see App.tsx's isAdmin -
-  // hides the hamburger button entirely rather than showing it disabled,
-  // same convention MobileBottomNav already uses for its own admin button.
+  // hides the hamburger button entirely rather than showing it disabled.
   onOpenAdminSidebar?: () => void;
   onSearch?: (query: string) => void;
   // Direct navigation from a live dropdown result, bypassing the full
@@ -74,6 +75,19 @@ interface NavbarProps {
   // title opens that work's card instead of the main page.
   pageWorkId?: string;
   onOpenWork?: (workId: string) => void;
+  /** A chat drag (either direction) is in flight: the bar must stay on
+      screen (overriding the reader-page auto-hide) so it can receive the
+      drop, and shows its drop-ready highlight. */
+  forceVisible?: boolean;
+  chatDragActive?: boolean;
+  chatDragOver?: boolean;
+  /** Docked assistant on lg+: the chat bubble traded its corner for this
+      bar (below lg the docked chat lives in the bottom nav instead). */
+  chatDocked?: boolean;
+  chatOpen?: boolean;
+  onChatOpen?: () => void;
+  onChatUndock?: () => void;
+  onChatDragActiveChange?: (active: boolean, overTarget: boolean) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -100,7 +114,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   pageAuthorId,
   onOpenAuthor,
   pageWorkId,
-  onOpenWork
+  onOpenWork,
+  forceVisible = false,
+  chatDragActive = false,
+  chatDragOver = false,
+  chatDocked = false,
+  chatOpen = false,
+  onChatOpen,
+  onChatUndock,
+  onChatDragActiveChange
 }) => {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const brandSubtitle = pageTitle ? pageSubtitle : 'Your Scriptorium classical readings';
@@ -166,6 +188,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   // up - lets the reader keep just the text on screen. Everywhere else
   // (Browse, Search, etc.) the navbar stays always visible.
   const headerVisible = useHideHeaderOnScroll(activeView === 'reader');
+  // A chat drag force-shows the bar (even where it auto-hid on scroll) so
+  // it is there to receive the bubble - same contract as the bottom nav.
+  const barVisible = headerVisible || forceVisible;
+
+  // Long-press the docked chat button and drag it into the page to send the
+  // assistant back to its floating corner; dropped back onto the bar it
+  // stays docked. The button itself never moves - a ghost bubble follows
+  // the pointer instead (same gesture as the bottom nav's chat tab).
+  const chatDrag = useLongPressDrag({
+    targetId: 'navbar',
+    onDropOutside: () => onChatUndock?.(),
+    onDropTarget: () => {},
+    onDragActiveChange: onChatDragActiveChange,
+    enabled: chatDocked,
+  });
   const navigate = (view: AppView) => {
     if (onNavigate) onNavigate(view);
     if (onSelectTab) onSelectTab(view);
@@ -279,7 +316,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className={`sticky top-0 z-40 bg-[linear-gradient(90deg,rgba(2,64,99,0.96)_0%,rgba(60,168,63,0.92)_22%,rgba(4,74,111,0.96)_100%)] backdrop-blur-md border-b border-emerald-400/25 text-[#e4efe9] shadow-lg shadow-[#021f2d]/50 transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+    <header id="navbar" className={`sticky top-0 z-40 bg-[linear-gradient(90deg,rgba(2,64,99,0.96)_0%,rgba(60,168,63,0.92)_22%,rgba(4,74,111,0.96)_100%)] backdrop-blur-md border-b border-emerald-400/25 text-[#e4efe9] shadow-lg shadow-[#021f2d]/50 transition-transform duration-300 ${barVisible ? 'translate-y-0' : '-translate-y-full'} ${chatDragActive ? (chatDragOver ? 'ring-2 ring-inset ring-amber-300/90' : 'ring-2 ring-inset ring-amber-400/50') : ''}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="relative flex items-center justify-between h-16 gap-3">
 
@@ -558,7 +595,45 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Bookmark className="w-4 h-4 text-[#f59e0b]" />
                 <span>Collections</span>
               </button>
+
+              {/* Docked assistant on desktop: the bubble traded its corner
+                  for this bar. Tap opens the same chat panel; long-press
+                  and drag into the page floats it again. */}
+              {chatDocked && (
+                <button
+                  id="nav-chat-btn"
+                  onClick={() => { if (chatDrag.justDragged()) return; onChatOpen?.(); }}
+                  onPointerDown={chatDrag.onPointerDown}
+                  onContextMenu={event => event.preventDefault()}
+                  title="Biblioteca Assistant"
+                  aria-label="Deschide chatul"
+                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs uppercase tracking-wider font-semibold transition-all cursor-pointer touch-none select-none ${chatDrag.dragging ? 'opacity-40' : ''} ${
+                    chatOpen
+                      ? 'bg-[#0f3d30] text-white border border-emerald-500/30 shadow-sm'
+                      : 'text-emerald-100/70 hover:text-white hover:bg-emerald-500/10'
+                  }`}
+                >
+                  <MessageCircle className="w-4 h-4 text-[#f59e0b]" />
+                  <span>Chat</span>
+                </button>
+              )}
             </nav>
+
+            {/* While dragging the docked chat button out, a ghost bubble
+                follows the pointer; the button stays put (dimmed) until
+                the drop lands. */}
+            {chatDrag.dragging && chatDrag.origin && chatDrag.offset && (
+              <div
+                className="fixed z-[80] w-14 h-14 rounded-full grid place-items-center text-white border border-white/30 shadow-xl pointer-events-none"
+                style={{
+                  left: chatDrag.origin.x + chatDrag.offset.dx - 28,
+                  top: chatDrag.origin.y + chatDrag.offset.dy - 28,
+                  background: 'linear-gradient(135deg, #34d399, #075985)'
+                }}
+              >
+                <MessageCircle className="w-6 h-6" />
+              </div>
+            )}
 
             {/* Right Action Tools */}
             <div className="flex items-center space-x-1 sm:space-x-3">
