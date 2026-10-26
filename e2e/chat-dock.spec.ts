@@ -59,6 +59,14 @@ test('long-press drag from the bar floats the bubble again', async ({ page }) =>
   await dockChat(page);
 
   await longPressDrag(page, chatTab(page), { x: 300, y: 150 });
+  // The ghost bubble rides the pointer out of the bar - same visual
+  // feedback as dragging the floating bubble in.
+  const ghost = page.locator('[data-testid="chat-drag-ghost"]');
+  await expect(ghost).toBeVisible();
+  const ghostBox = await ghost.boundingBox();
+  if (!ghostBox) throw new Error('ghost has no box');
+  expect(Math.abs(ghostBox.x + ghostBox.width / 2 - 300)).toBeLessThan(5);
+  expect(Math.abs(ghostBox.y + ghostBox.height / 2 - 150)).toBeLessThan(5);
   await page.mouse.up();
 
   await expect(chatTab(page)).toHaveCount(0);
@@ -154,6 +162,12 @@ test.describe('desktop: the navbar is the dock target', () => {
     await dockChatToNavbar(page);
 
     await longPressDrag(page, navChatButton(page), { x: 640, y: 400 });
+    const ghost = page.locator('[data-testid="chat-drag-ghost"]');
+    await expect(ghost).toBeVisible();
+    const ghostBox = await ghost.boundingBox();
+    if (!ghostBox) throw new Error('ghost has no box');
+    expect(Math.abs(ghostBox.x + ghostBox.width / 2 - 640)).toBeLessThan(5);
+    expect(Math.abs(ghostBox.y + ghostBox.height / 2 - 400)).toBeLessThan(5);
     await page.mouse.up();
 
     await expect(navChatButton(page)).toHaveCount(0);

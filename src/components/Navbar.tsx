@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BookOpen,
   Search,
@@ -621,9 +622,13 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* While dragging the docked chat button out, a ghost bubble
                 follows the pointer; the button stays put (dimmed) until
-                the drop lands. */}
-            {chatDrag.dragging && chatDrag.origin && chatDrag.offset && (
+                the drop lands. Portaled to body: the header's
+                transform/backdrop-filter would otherwise make the ghost's
+                fixed coordinates relative to the bar instead of the
+                viewport. */}
+            {chatDrag.dragging && chatDrag.origin && chatDrag.offset && createPortal(
               <div
+                data-testid="chat-drag-ghost"
                 className="fixed z-[80] w-14 h-14 rounded-full grid place-items-center text-white border border-white/30 shadow-xl pointer-events-none"
                 style={{
                   left: chatDrag.origin.x + chatDrag.offset.dx - 28,
@@ -632,7 +637,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
               >
                 <MessageCircle className="w-6 h-6" />
-              </div>
+              </div>,
+              document.body
             )}
 
             {/* Right Action Tools */}
