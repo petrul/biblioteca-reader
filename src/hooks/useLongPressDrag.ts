@@ -26,8 +26,11 @@ interface LongPressDragOptions {
  * Long-press-and-drag: press and hold still for `longPressMs` to grab the
  * element, then it tracks the pointer 1:1 (`offset`, apply as a transform;
  * skip the CSS transition while dragging so there is no lag). Releasing
- * inside the target element's rect fires onDropTarget, elsewhere
- * onDropOutside (for a snap-back). A press released before the threshold,
+ * while the dragged element overlaps the target fires onDropTarget,
+ * elsewhere onDropOutside (for a snap-back). The element's own rect -
+ * tracked by the drag offset, not just the pointer point - decides both
+ * the highlight and the drop, so a bubble hanging below the cursor still
+ * activates the bar it overlaps. A press released before the threshold,
  * or a grab that never moved past `moveTolerancePx`, stays a plain tap -
  * `justDragged()` lets the host's onClick tell the two gestures apart.
  *
@@ -56,6 +59,10 @@ export function useLongPressDrag({
   callbacks.current = { onDropTarget, onDropOutside, onDragActiveChange };
 
   const start = useRef<{ x: number; y: number } | null>(null);
+  /** The host element's rect at grab time; the drag offset moves it 1:1,
+      and this moved rect - not the pointer point - is what must overlap
+      the target for the highlight and the drop. */
+  const hostRect = useRef<DOMRect | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draggingRef = useRef(false);
   const overRef = useRef(false);
@@ -65,13 +72,18 @@ export function useLongPressDrag({
 
   const report = (active: boolean, over: boolean) => callbacks.current.onDragActiveChange?.(active, over);
 
-  const isOverTarget = (x: number, y: number) =>
-    (Array.isArray(targetId) ? targetId : [targetId]).some(id => {
+  const isOverTarget = (dx: number, dy: number) => {
+    const host = hostRect.current;
+    if (!host) return false;
+    return (Array.isArray(targetId) ? targetId : [targetId]).some(id => {
       const rect = document.getElementById(id)?.getBoundingClientRect();
       // A display:none target (a bar for another breakpoint) has a zero
       // rect and can never be hit.
-      return !!rect && rect.width > 0 && rect.height > 0 && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+      return host.left + dx < rect.right && host.right + dx > rect.left &&
+             host.top + dy < rect.bottom && host.bottom + dy > rect.top;
     });
+  };
 
   const onMove = (event: PointerEvent) => {
     if (!start.current) return;
@@ -83,7 +95,7 @@ export function useLongPressDrag({
       return;
     }
     if (Math.hypot(dx, dy) > moveTolerancePx) movedFar.current = true;
-    const over = isOverTarget(event.clientX, event.clientY);
+    const over = isOverTarget(dx, dy);
     if (over !== overRef.current) {
       overRef.current = over;
       setOverTarget(over);
@@ -133,6 +145,7 @@ export function useLongPressDrag({
       timer.current = null;
     }
     start.current = null;
+    hostRect.current = null;
     detach();
   };
 
@@ -142,6 +155,7 @@ export function useLongPressDrag({
     lastGestureWasDrag.current = false;
     movedFar.current = false;
     start.current = { x: event.clientX, y: event.clientY };
+    hostRect.current = (event.currentTarget as HTMLElement).getBoundingClientRect();
     if (!listenersAttached.current) {
       listenersAttached.current = true;
       window.addEventListener('pointermove', onMove);
@@ -152,7 +166,7 @@ export function useLongPressDrag({
       timer.current = null;
       draggingRef.current = true;
       lastGestureWasDrag.current = true;
-      const over = start.current ? isOverTarget(start.current.x, start.current.y) : false;
+      const over = isOverTarget(0, 0);
       overRef.current = over;
       setDragging(true);
       setOffset({ dx: 0, dy: 0 });

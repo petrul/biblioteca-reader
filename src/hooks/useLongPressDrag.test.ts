@@ -3,12 +3,15 @@ import test from 'node:test';
 import { Window } from 'happy-dom';
 
 // The dockable-chat gesture: long-press grabs the element, the pointer
-// tracks 1:1, and the release point decides - inside the bottom nav's rect
-// the bubble docks, anywhere else it snaps back. A press released early,
+// tracks 1:1, and the dragged element's own rect decides - overlapping the
+// bottom nav's rect the bubble docks (even if the bare pointer is still
+// above the bar), anywhere else it snaps back. A press released early,
 // cancelled by an early move, or grabbed but never dragged past the
 // tolerance is a tap, and the host's click must still go through.
 
 const NAV_RECT = { left: 0, top: 300, right: 400, bottom: 400, width: 400, height: 100, x: 0, y: 300 };
+// The grabbed button: a 20px box centered on the (100,100) press point.
+const GRAB_RECT = { left: 90, top: 90, right: 110, bottom: 110, width: 20, height: 20, x: 90, y: 90 };
 
 function installDom() {
   const window = new Window({ url: 'http://localhost/' });
@@ -73,6 +76,7 @@ async function mountProbe(context: { mock: any }) {
   await act(async () => { root.render(createElement(Probe)); });
 
   const grab = dom.window.document.getElementById('grab')!;
+  (grab as any).getBoundingClientRect = () => ({ ...GRAB_RECT, toJSON: () => ({}) });
   const fire = async (target: any, type: string, x: number, y: number) => {
     await act(async () => {
       target.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, clientX: x, clientY: y }));
@@ -90,6 +94,24 @@ async function mountProbe(context: { mock: any }) {
     unmount: async () => { await act(async () => root.unmount()); await dom.restore(); }
   };
 }
+
+test('the highlight and drop follow the dragged element, not just the pointer', async context => {
+  const probe = await mountProbe(context);
+  try {
+    await probe.press(100, 100);
+    await probe.hold(500);
+    // Pointer at y=295 is still above the nav (top 300), but the dragged
+    // element (a 20px box, offset by dy=195, so it spans y=285..310)
+    // already overlaps the bar - the bar must light up and take the drop.
+    await probe.move(100, 295);
+    assert.deepEqual(probe.calls.active.at(-1), [true, true], 'the bar activates for the overlapping element');
+    await probe.release(100, 295);
+    assert.equal(probe.calls.target, 1, 'the overlapping element drops on the target');
+    assert.equal(probe.calls.outside, 0);
+  } finally {
+    await probe.unmount();
+  }
+});
 
 test('a long-press drag released on the bottom nav drops on the target', async context => {
   const probe = await mountProbe(context);
