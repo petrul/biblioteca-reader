@@ -91,7 +91,7 @@ test('the bottom nav stays visible by default and when shown', async () => {
 // the navbar's hamburger.
 test('the docked chat tab opens the assistant from the bar', async () => {
   let opened = 0;
-  const nav = await mountNav({ chatDocked: true, onChatOpen: () => { opened += 1; } });
+  const nav = await mountNav({ chatDocked: true, onChatToggle: () => { opened += 1; } });
   try {
     const tab = nav.chatTab();
     assert.ok(tab, 'the chat tab appears in the bar when docked');

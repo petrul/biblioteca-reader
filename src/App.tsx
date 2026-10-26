@@ -528,7 +528,7 @@ export default function App() {
         chatDragOver={chatDrag.overNav}
         chatDocked={chatPlacement === 'docked'}
         chatOpen={chatOpen}
-        onChatOpen={() => setChatOpen(true)}
+        onChatToggle={() => setChatOpen(open => !open)}
         onChatUndock={() => setChatPlacement('floating')}
         onChatDragActiveChange={(active, overTarget) => setChatDrag({ active, overNav: overTarget })}
       />
@@ -678,7 +678,7 @@ export default function App() {
         visible={bottomNavVisible || chatDrag.active}
         chatDocked={chatPlacement === 'docked'}
         chatOpen={chatOpen}
-        onChatOpen={() => setChatOpen(true)}
+        onChatToggle={() => setChatOpen(open => !open)}
         onChatUndock={() => setChatPlacement('floating')}
         onChatDragActiveChange={(active, overTarget) => setChatDrag({ active, overNav: overTarget })}
         chatDragActive={chatDrag.active}

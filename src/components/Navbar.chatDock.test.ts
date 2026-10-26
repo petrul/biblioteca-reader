@@ -57,7 +57,7 @@ async function mountNavbar(props: Record<string, unknown>) {
 
 test('the docked chat button opens the assistant from the navbar', async () => {
   let opened = 0;
-  const nav = await mountNavbar({ chatDocked: true, onChatOpen: () => { opened += 1; } });
+  const nav = await mountNavbar({ chatDocked: true, onChatToggle: () => { opened += 1; } });
   try {
     const button = nav.chatButton();
     assert.ok(button, 'the chat button appears in the navbar when docked');

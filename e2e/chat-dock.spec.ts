@@ -46,12 +46,17 @@ test('long-press drag docks the bubble into the bottom nav', async ({ page }) =>
   await expect(bubble(page)).toBeHidden();
 });
 
-test('the docked tab opens the same chat panel', async ({ page }) => {
+test('the docked tab toggles the chat panel, highlight included', async ({ page }) => {
   await page.goto('/app/');
   await dockChat(page);
 
   await chatTab(page).click();
   await expect(panel(page)).toBeVisible();
+  await expect(chatTab(page)).toHaveClass(/text-\[#f59e0b\]/);
+
+  await chatTab(page).click();
+  await expect(panel(page)).toBeHidden();
+  await expect(chatTab(page)).not.toHaveClass(/text-\[#f59e0b\]/);
 });
 
 test('long-press drag from the bar floats the bubble again', async ({ page }) => {
@@ -149,12 +154,17 @@ test.describe('desktop: the navbar is the dock target', () => {
     await expect(bubble(page)).toBeHidden();
   });
 
-  test('the docked navbar button opens the same chat panel', async ({ page }) => {
+  test('the docked navbar button toggles the chat panel, highlight included', async ({ page }) => {
     await page.goto('/app/');
     await dockChatToNavbar(page);
 
     await navChatButton(page).click();
     await expect(panel(page)).toBeVisible();
+    await expect(navChatButton(page)).toHaveClass(/bg-\[#0f3d30\]/);
+
+    await navChatButton(page).click();
+    await expect(panel(page)).toBeHidden();
+    await expect(navChatButton(page)).not.toHaveClass(/bg-\[#0f3d30\]/);
   });
 
   test('long-press drag from the navbar floats the bubble again', async ({ page }) => {

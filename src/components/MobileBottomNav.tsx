@@ -18,7 +18,9 @@ interface MobileBottomNavProps {
   /** Docked assistant: the chat bubble traded its corner for this bar. */
   chatDocked?: boolean;
   chatOpen?: boolean;
-  onChatOpen?: () => void;
+  /** Tapping the docked tab toggles the chat panel (open ↔ closed, and the
+      tab's highlight with it). */
+  onChatToggle?: () => void;
   onChatUndock?: () => void;
   /** Lifted while dragging the chat tab out of the bar, so the app can
       track the gesture alongside the reverse (bubble-to-bar) one. */
@@ -44,7 +46,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   visible = true,
   chatDocked = false,
   chatOpen = false,
-  onChatOpen,
+  onChatToggle,
   onChatUndock,
   onChatDragActiveChange,
   chatDragActive = false,
@@ -108,7 +110,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       {chatDocked && (
         <button
           id="mobile-nav-chat"
-          onClick={() => { if (chatDrag.justDragged()) return; onChatOpen?.(); }}
+          onClick={() => { if (chatDrag.justDragged()) return; onChatToggle?.(); }}
           onPointerDown={chatDrag.onPointerDown}
           onContextMenu={event => event.preventDefault()}
           className={`flex flex-col items-center justify-center py-1 px-3 rounded-lg transition-all cursor-pointer active:scale-95 active:brightness-90 touch-none select-none ${chatDrag.dragging ? 'opacity-40' : ''} ${

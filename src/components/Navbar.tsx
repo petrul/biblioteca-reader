@@ -86,7 +86,9 @@ interface NavbarProps {
       bar (below lg the docked chat lives in the bottom nav instead). */
   chatDocked?: boolean;
   chatOpen?: boolean;
-  onChatOpen?: () => void;
+  /** Tapping the docked chat button toggles the panel (open ↔ closed, and
+      the button's highlight with it). */
+  onChatToggle?: () => void;
   onChatUndock?: () => void;
   onChatDragActiveChange?: (active: boolean, overTarget: boolean) => void;
 }
@@ -121,7 +123,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   chatDragOver = false,
   chatDocked = false,
   chatOpen = false,
-  onChatOpen,
+  onChatToggle,
   onChatUndock,
   onChatDragActiveChange
 }) => {
@@ -603,7 +605,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {chatDocked && (
                 <button
                   id="nav-chat-btn"
-                  onClick={() => { if (chatDrag.justDragged()) return; onChatOpen?.(); }}
+                  onClick={() => { if (chatDrag.justDragged()) return; onChatToggle?.(); }}
                   onPointerDown={chatDrag.onPointerDown}
                   onContextMenu={event => event.preventDefault()}
                   title="Biblioteca Assistant"
