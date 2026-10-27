@@ -536,13 +536,23 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
  * Brings stored collections up to the current shape: a `kind` on each, and
  * UUID ids in place of the old `col-...` / `item-...` ones.
  */
-export function normalizeCollections(cols: PersonalCollection[]): PersonalCollection[] {
-  return cols.map(col => ({
-    ...col,
-    id: UUID_PATTERN.test(col.id) ? col.id : newId(),
-    kind: col.isDefaultFavorites ? 'favorites' : 'user',
-    items: col.items.map(item => (UUID_PATTERN.test(item.id) ? item : { ...item, id: newId() }))
-  }));
+export function normalizeCollections(cols: unknown): PersonalCollection[] {
+  if (!Array.isArray(cols)) return [];
+  return cols
+    .filter((col): col is PersonalCollection => Boolean(col && typeof col === 'object'))
+    .map(col => {
+      const items = Array.isArray(col.items)
+        ? col.items.filter(item => Boolean(item && typeof item === 'object'))
+        : [];
+      return {
+        ...col,
+        id: typeof col.id === 'string' && UUID_PATTERN.test(col.id) ? col.id : newId(),
+        kind: col.isDefaultFavorites ? 'favorites' : 'user',
+        items: items.map(item => (
+          typeof item.id === 'string' && UUID_PATTERN.test(item.id) ? item : { ...item, id: newId() }
+        ))
+      };
+    });
 }
 
 function defaultCollections(userId: string): PersonalCollection[] {

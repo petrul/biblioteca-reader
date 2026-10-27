@@ -351,21 +351,6 @@ export default function App() {
   }, [currentView, catalog, searchMode, searchQuery, searchWorkSeed, selectedWorkId, selectedChapterId, selectedQuoteId, selectedAuthorId]);
 
   // Navigation handlers
-  // The reader's back button walks the same browser history the push
-  // effect above builds, so it returns to the real previous position -
-  // the previous chapter after a chapter-to-chapter hop, the work card
-  // after opening a chapter from it, search after opening from a result.
-  // Only a deep link straight into the reader (no app-pushed entry behind
-  // the current one) falls back to the work card, the old behavior.
-  const handleReaderBack = () => {
-    const state = window.history.state as { appDepth?: number } | null;
-    if (state && typeof state.appDepth === 'number' && state.appDepth >= 1) {
-      window.history.back();
-    } else {
-      setCurrentView('work');
-    }
-  };
-
   const handleAppBack = () => {
     const state = window.history.state as { appDepth?: number } | null;
     if (state && typeof state.appDepth === 'number' && state.appDepth >= 1) {
@@ -583,7 +568,6 @@ export default function App() {
             workId={selectedWorkId}
             chapterId={selectedChapterId}
             reallySignedIn={Boolean(reallySignedIn)}
-            onBack={handleReaderBack}
             onBackToWork={() => setCurrentView('work')}
             onSelectWork={handleSelectWork}
             settingsOpen={readerSettingsOpen}

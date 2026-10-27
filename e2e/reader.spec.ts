@@ -106,6 +106,23 @@ test('TOC sections are collapsed except the ones leading to the chapter being re
   await expect(chapterRows).toHaveCount(before);
 });
 
+test('the first tap on a collapsed ToC section expands it, and the second opens its page', async ({ page }) => {
+  await page.goto('/app/reader/sagarra/paulina/primera_part/i');
+  await page.locator('#btn-reader-toc-menu').waitFor();
+  await page.click('#btn-reader-toc-menu');
+
+  const sidebar = page.locator('#reader-toc-sidebar');
+  const section = sidebar.locator('[data-toc-entry]').filter({ hasText: 'SEGONA PART' });
+  const startUrl = page.url();
+  await expect(section).toBeVisible();
+  await section.click();
+  await expect(page).toHaveURL(startUrl);
+  await expect(sidebar.locator('button[aria-label="Collapse SEGONA PART"]')).toBeVisible();
+  await section.click();
+  await expect(page).not.toHaveURL(startUrl);
+  await expect(page.locator('.reader-text-container.reader-section-page')).toBeVisible();
+});
+
 test('a section opens as its own title page, fetched without its sub-chapters', async ({ page }) => {
   const contentRequests: string[] = [];
   page.on('request', request => {
@@ -421,13 +438,23 @@ test('opening a book flips the page; next/previous within it slides, in the righ
   await expect(column).toHaveClass(/chapter-slide-prev/);
   await expect(column).not.toHaveClass(/chapter-(turn|slide)-/, { timeout: 3_000 });
 
-  // The toolbar's Back (a history back) slides back to the previous chapter too.
+  // The toolbar's Back is chapter navigation, not browser history.
   await page.locator('#btn-reader-next-chapter').click();
   await expect.poll(() => page.url()).not.toBe(startUrl);
   await expect(column).not.toHaveClass(/chapter-(turn|slide)-/, { timeout: 3_000 });
   await page.locator('#btn-reader-back-work').click();
   await expect.poll(() => page.url()).toBe(startUrl);
   await expect(column).toHaveClass(/chapter-slide-prev/);
+});
+
+test('the reader toolbar back returns to the work presentation from its first chapter', async ({ page }) => {
+  await page.goto('/app/');
+  await page.locator('[id^="btn-open-work-"]').first().click();
+  await page.locator('#btn-read-first-chapter').click();
+  await page.locator('#btn-reader-back-work').waitFor();
+  await page.locator('#btn-reader-back-work').click();
+  await expect(page.locator('#btn-read-first-chapter')).toBeVisible();
+  await expect(page.locator('#btn-reader-back-work')).toHaveCount(0);
 });
 
 test('the open ToC sidebar takes the focus, on the current chapter, and the arrows walk it', async ({ page }) => {

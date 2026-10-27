@@ -68,10 +68,11 @@ import { matchesSearch } from '../services/collectionSearch';
 interface ReaderViewProps {
   workId: string;
   chapterId: string;
+  /** Retained for callers compiled against older reader props; navigation is chapter-aware now. */
+  onBack?: () => void;
   reallySignedIn: boolean;
-  /** Header back button: real history back (previous chapter, work card,
-   *  search - wherever we came from; see handleReaderBack in App.tsx). */
-  onBack: () => void;
+  /** Header back button: previous chapter, or the work presentation at the
+   *  beginning of the work. */
   /** Error-state "Return to Work" button only - always the work card. */
   onBackToWork: () => void;
   /** The heading's title opens the book card (WorkView). */
@@ -152,7 +153,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   workId,
   chapterId,
   reallySignedIn,
-  onBack,
   onBackToWork,
   onSelectWork,
   settingsOpen,
@@ -446,8 +446,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // (index.css) is applied once the new chapter is shown - the page flip on
   // arriving on a work, the slide for turns within it; chapterTransitionClass
   // decides (and its unit test pins the rule). The toolbar's Back is a
-  // history back (App's handleReaderBack): it notes a 'prev' turn too, which
-  // plays only if it lands on another chapter shortly after.
+  // The toolbar back button is chapter navigation, not browser history. It
+  // notes a 'prev' turn when it lands on another chapter shortly after.
   const pendingChapterTurn = useRef<PendingChapterTurn | null>(null);
   const [chapterTurnClass, setChapterTurnClass] = useState('');
   const noteChapterTurn = (direction: 'next' | 'prev') => {
@@ -456,6 +456,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const turnToChapter = (direction: 'next' | 'prev', chapterId: string) => {
     noteChapterTurn(direction);
     onSelectChapter(workId, chapterId);
+  };
+  const goNext = () => {
+    if (nextChapter) {
+      turnToChapter('next', nextChapter.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      onBackToWork();
+    }
   };
   // The work last shown: arriving on a different one (or the first) is
   // opening a book, which flips the page instead of sliding it.
@@ -809,17 +817,23 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           useHideHeaderOnScroll). */}
       <div id="reader-chapter-toolbar" className={`sticky top-0 z-30 ${WIDTH_CLASSES[columnWidth]} w-full mx-auto ${currentTheme.bg} border-b ${currentTheme.border} shadow-xs backdrop-blur-md transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}>
         <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
-          {/* Left: Back - real history back (previous chapter after a
-              chapter hop, the work card when the chapter was opened from
-              it; see handleReaderBack in App.tsx), title/chapter shown in
+          {/* Left: Back - previous chapter, or the work presentation on the
+              first chapter. Title/chapter shown in
               the navbar's own wordmark instead (see Navbar's
               pageTitle/pageSubtitle), not duplicated here. */}
           <div className="flex items-center space-x-3">
             <button
               id="btn-reader-back-work"
-              onClick={() => { noteChapterTurn('prev'); onBack(); }}
+              onClick={() => {
+                if (prevChapter) {
+                  turnToChapter('prev', prevChapter.id);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                  onBackToWork();
+                }
+              }}
               className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors shrink-0"
-              title="Back"
+              title={prevChapter ? `Previous: ${prevChapter.title}` : 'Back to work'}
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -1136,19 +1150,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 instead of ArrowLeft. The bottom nav's own Next/Previous
                 buttons (below) remain the primary way to move between
                 chapters; this is a same-header shortcut symmetrical to Back. */}
-            {nextChapter && (
-              <button
+            <button
                 id="btn-reader-next-chapter-top"
-                onClick={() => {
-                  turnToChapter('next', nextChapter.id);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
+                onClick={goNext}
                 className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors shrink-0"
-                title={`Next: ${nextChapter.title}`}
+                title={nextChapter ? `Next: ${nextChapter.title}` : 'Back to work'}
               >
                 <ArrowRight className="w-4 h-4" />
               </button>
-            )}
           </div>
         </div>
       </div>
@@ -1185,6 +1194,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 const isCurrent = entryChapter.id === chapter.id;
                 const indent = (entryChapter.ancestors?.length ?? 0) * 12;
                 const open = () => {
+                  // A collapsed section needs one tap to reveal its children;
+                  // only a second tap opens that section's own title page.
+                  // The chevron remains a direct expand/collapse control.
+                  if (entry.type === 'section' && entry.collapsible && !entry.expanded) {
+                    toggleTocDivision(entryChapter.id);
+                    return;
+                  }
                   onSelectChapter(work.id, entryChapter.id);
                   setShowTocMenu(false);
                 };
@@ -1615,19 +1631,22 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {nextChapter ? (
               <button
                 id="btn-reader-next-chapter"
-                onClick={() => {
-                  turnToChapter('next', nextChapter.id);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
+                onClick={goNext}
                 className={`min-w-0 flex items-center space-x-1.5 sm:space-x-2 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-transparent border border-current/30 ${currentTheme.text} hover:border-current/70 font-bold transition-all text-right group cursor-pointer active:scale-95 active:brightness-90`}
               >
                 <div className="text-[11px] sm:text-xs md:text-sm font-bold truncate max-w-[26vw] sm:max-w-[170px] md:max-w-[200px]">{nextChapter.title}</div>
                 <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 group-hover:translate-x-1 transition-transform" />
               </button>
             ) : (
-              <div className="text-xs font-mono opacity-60 italic">
-                End of {work.title}
-              </div>
+              <button
+                id="btn-reader-next-chapter"
+                onClick={goNext}
+                title="Back to work"
+                className={`min-w-0 flex items-center space-x-1.5 sm:space-x-2 px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-transparent border border-current/30 ${currentTheme.text} hover:border-current/70 font-bold transition-all text-right group cursor-pointer active:scale-95 active:brightness-90`}
+              >
+                <div className="text-[11px] sm:text-xs md:text-sm font-bold truncate">Back to work</div>
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 group-hover:translate-x-1 transition-transform" />
+              </button>
             )}
           </div>
         </div>

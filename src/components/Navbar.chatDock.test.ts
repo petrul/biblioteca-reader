@@ -50,10 +50,45 @@ async function mountNavbar(props: Record<string, unknown>) {
   });
   return {
     chatButton: () => dom.window.document.getElementById('nav-chat-btn'),
+    collectionsButton: () => dom.window.document.getElementById('nav-collections-quick-btn'),
     act,
     unmount: async () => { await act(async () => root.unmount()); await dom.restore(); }
   };
 }
+
+test('the book button opens the Collections screen', async () => {
+  let navigated = '';
+  const nav = await mountNavbar({
+    currentView: 'reader',
+    onNavigate: (view: string) => { navigated = view; },
+    onOpenCollectionsQuickFind: () => { throw new Error('mobile must not open quick-find'); },
+  });
+  try {
+    (globalThis.window as any).matchMedia = () => ({ matches: true });
+    const button = nav.collectionsButton();
+    assert.ok(button, 'the book button appears in the reader navbar');
+    await nav.act(async () => { button!.dispatchEvent(new (globalThis as any).MouseEvent('click', { bubbles: true })); });
+    assert.equal(navigated, 'collections');
+  } finally {
+    await nav.unmount();
+  }
+});
+
+test('the book button does not depend on viewport detection', async () => {
+  let navigated = '';
+  const nav = await mountNavbar({
+    currentView: 'reader',
+    onNavigate: (view: string) => { navigated = view; },
+  });
+  try {
+    const button = nav.collectionsButton();
+    assert.ok(button);
+    await nav.act(async () => { button!.dispatchEvent(new (globalThis as any).MouseEvent('click', { bubbles: true })); });
+    assert.equal(navigated, 'collections');
+  } finally {
+    await nav.unmount();
+  }
+});
 
 test('the docked chat button opens the assistant from the navbar', async () => {
   let opened = 0;

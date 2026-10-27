@@ -119,3 +119,15 @@ test('legacy collection and item ids are migrated to UUIDs', async () => {
   assert.equal(account.document.collections![0].id, favorites.id, 'the migrated ids were written back');
   assert.match(readerService.createCollection(ANONYMOUS_USER_ID, 'New').id, uuid);
 });
+
+test('malformed persisted collection items do not crash the Collections screen', async () => {
+  const { readerService } = await import('./readerService');
+  const account = new FakeAccountStore({
+    collections: [
+      { id: 'broken', kind: 'favorites', userId: 'petru', name: 'Favorites', isDefaultFavorites: true, createdAt: '', updatedAt: '', items: null as any },
+      { id: 'also-broken', kind: 'user', userId: 'petru', name: 'Reading list', isDefaultFavorites: false, createdAt: '', updatedAt: '', items: { nope: true } as any },
+    ],
+  });
+  await readerService.attachCollectionsStore('petru', account);
+  assert.deepEqual(readerService.getCollections('petru').map(c => c.items), [[], []]);
+});

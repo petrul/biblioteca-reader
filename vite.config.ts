@@ -82,8 +82,14 @@ export default defineConfig(() => {
       // itself (see the Caddyfile's test.scriptorium.ro:24678 block) and
       // proxies it to 24679 - they can't share one host port. clientPort
       // tells the browser's HMR websocket to connect on 24678 (reaching
-      // Caddy) while the server actually listens on 24679.
-      hmr: process.env.DISABLE_HMR === 'true' ? false : { port: 24679, clientPort: 24678 },
+      // Caddy) while the server actually listens on 24679. Bare local
+      // development has no Caddy listener, so use 24679 there; deployments
+      // can set HMR_CLIENT_PORT=24678 for the proxied endpoint.
+      hmr: process.env.DISABLE_HMR === 'true' ? false : {
+        port: 24679,
+        clientPort: Number(process.env.HMR_CLIENT_PORT)
+          || (/localhost|127\.0\.0\.1|biblioteca\.local/.test(process.env.BIBLIOTECA_EXTERNAL_URL ?? '') ? 24679 : 24678),
+      },
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       // Vite's DNS-rebinding protection rejects requests whose Host header

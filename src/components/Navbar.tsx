@@ -211,6 +211,12 @@ export const Navbar: React.FC<NavbarProps> = ({
     if (onSelectTab) onSelectTab(view);
   };
 
+  const openCollectionsFromBookButton = () => {
+    // This book-shaped icon is the direct Collections entry point. The `s`
+    // shortcut remains the quick-find modal for readers who want it.
+    navigate('collections');
+  };
+
   const handleOpenSearch = () => {
     setIsSearchExpanded(true);
     setTimeout(() => {
@@ -645,14 +651,21 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
               )}
 
-              {/* Collections quick-jump: same panel the `s` shortcut opens.
-                  The Collections page has the same search box itself. */}
-              {onOpenCollectionsQuickFind && currentView !== 'collections' && (
+              {/* On compact reader layouts this book icon is the visible
+                  Collections entry point (the labelled desktop link is
+                  hidden below lg). The `s` shortcut remains the quick-find
+                  modal for readers who want it. */}
+              {currentView !== 'collections' && (
                 <button
                   id="nav-collections-quick-btn"
-                  onClick={onOpenCollectionsQuickFind}
-                  title="Find in favorites, collections and saved searches (s)"
-                  aria-label="Find in favorites, collections and saved searches (s)"
+                  type="button"
+                  onClick={event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    openCollectionsFromBookButton();
+                  }}
+                  title="Open collections"
+                  aria-label="Open collections"
                   className="p-1.5 sm:p-2 rounded-lg text-emerald-200 hover:text-white hover:bg-emerald-500/10 transition-all cursor-pointer active:scale-95 active:brightness-90"
                 >
                   <BookMarked className="w-4 h-4 text-[#f59e0b]" />

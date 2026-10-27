@@ -35,6 +35,13 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     selected.classList.add('block-active');
     callbacks.onChange(selected);
   };
+  const clearSelection = () => {
+    selected?.classList.remove('block-active');
+    selected = null;
+    container.querySelectorAll('.block-linked').forEach(element => element.classList.remove('block-linked'));
+    doc.getSelection()?.removeAllRanges();
+    callbacks.onChange(null);
+  };
   const findBlock = (target: EventTarget | null) => {
     const element = target instanceof Element ? target : null;
     if (!element || element.closest(INTERACTIVE)) return null;
@@ -52,7 +59,9 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
   const click = (event: MouseEvent) => {
     const block = findBlock(event.target);
     // A text drag still belongs to the native selection/quote toolbar.
-    if (!block || !doc.getSelection()?.isCollapsed) return;
+    if (!block) return;
+    if (block === selected) { clearSelection(); return; }
+    if (!doc.getSelection()?.isCollapsed) return;
     select(block);
     callbacks.onActivate(block);
   };
@@ -84,10 +93,7 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     const target = event.target instanceof Element ? event.target : null;
     if (!selected || !target || selected.contains(target) ||
         target.closest('#selection-quote-toolbar, #quote-created-modal, #reader-similarity-dialog')) return;
-    selected.classList.remove('block-active');
-    selected = null;
-    container.querySelectorAll('.block-linked').forEach(element => element.classList.remove('block-linked'));
-    callbacks.onChange(null);
+    clearSelection();
   };
   const key = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { cancel(); setHovered(null); return; }

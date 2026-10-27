@@ -40,7 +40,16 @@ export function resetSavedSearchesForTests(): void {
 function readLocal(): SavedSearch[] {
   try {
     const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) as SavedSearch[] : [];
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((search): search is SavedSearch => Boolean(search && typeof search === 'object'))
+      .map(search => ({
+        ...search,
+        items: Array.isArray(search.items)
+          ? search.items.filter(item => Boolean(item && typeof item === 'object'))
+          : [],
+      }));
   } catch {
     return [];
   }

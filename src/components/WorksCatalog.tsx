@@ -205,7 +205,7 @@ export const WorksCatalog: React.FC<WorksCatalogProps> = (props) => {
                       props.onContinueReading(work.id);
                     }
                   }}
-                  className="bg-[#0b2921]/80 rounded-xl border border-emerald-500/20 shadow-md hover:border-amber-500/50 hover:bg-[#0e332a] transition-all flex flex-col justify-between overflow-hidden group cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/80"
+                  className="bg-[#061d28]/95 rounded-xl border border-emerald-500/20 shadow-md hover:border-amber-500/50 hover:bg-[#082b3a] transition-all flex flex-col justify-between overflow-hidden group cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/80"
                 >
                   <div>
                     <div

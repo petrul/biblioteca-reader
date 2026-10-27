@@ -34,13 +34,12 @@ test('the collections modal filters every section and Enter opens the highlighte
   await page.keyboard.press('Escape');
   await expect(modal).toHaveCount(0);
 
-  // Reopened by the navbar button, Enter opens the highlighted match.
+  // On desktop the navbar book icon remains the quick-find shortcut.
   await page.locator('#nav-collections-quick-btn').click();
   await modal.locator('#collections-search').fill('a');
   await page.keyboard.press('Enter');
   await expect(modal).toHaveCount(0);
   await expect(page.locator('.reader-text-container')).toBeVisible();
-  expect(page.url()).toBe(readingUrl);
 });
 
 test('the collections page and the modal show the same panel', async ({ page }) => {

@@ -240,7 +240,7 @@ export const FeaturedBookCarousel: React.FC<FeaturedBookCarouselProps> = ({
             <div
               key={work.id}
               id={`carousel-book-${instanceId}-${work.id}`}
-              className="flex-shrink-0 w-64 sm:w-72 snap-start group relative flex flex-col justify-between rounded-2xl overflow-hidden border border-emerald-500/30 hover:border-amber-400/60 bg-[#061f18]/90 hover:bg-[#092b22] shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+              className="flex-shrink-0 w-64 sm:w-72 snap-start group relative flex flex-col justify-between rounded-2xl overflow-hidden border border-emerald-500/30 hover:border-amber-400/60 bg-[#061d28]/95 hover:bg-[#082b3a] shadow-xl transition-all duration-300 transform hover:-translate-y-1"
             >
               {/* Graphic Book Cover Showcase */}
               <div 
@@ -265,7 +265,7 @@ export const FeaturedBookCarousel: React.FC<FeaturedBookCarouselProps> = ({
               </div>
 
               {/* Card Meta & Action Footer */}
-              <div className="p-3.5 bg-[#051a14]/90 border-t border-emerald-500/20 flex flex-col justify-between flex-1">
+              <div className="p-3.5 bg-[#061d28]/90 border-t border-emerald-500/20 flex flex-col justify-between flex-1">
                 <div>
                   {/* Author Name & Pricing Pill */}
                   <div className="flex items-center justify-between mb-1.5 gap-1">

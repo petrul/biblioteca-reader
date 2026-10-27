@@ -144,6 +144,12 @@ test('the Similar button is offered when the reader taps a paragraph', async con
     const similar = reader.similarButton();
     assert.ok(similar, 'the Similar button is presented for a tapped paragraph');
     assert.equal(similar!.textContent, 'Similar');
+
+    await reader.act(async () => { reader.paragraph.dispatchEvent(new (globalThis as any).MouseEvent('click', { bubbles: true })); });
+    await reader.settle();
+    assert.equal(reader.document.getElementById('selection-quote-toolbar'), null, 'retapping clears the selection toolbar');
+    assert.equal(reader.document.getSelection()!.toString(), '', 'retapping clears the native selection');
+    assert.equal(reader.paragraph.classList.contains('block-active'), false, 'retapping clears the active paragraph');
   } finally {
     await reader.unmount();
   }
