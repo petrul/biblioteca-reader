@@ -336,7 +336,7 @@ const BIBLIOTECA_SERVER_URL = requiredEnv('BIBLIOTECA_EXTERNAL_URL');
 // above, no pass-store entry yet since nothing needed it before the
 // admin page's indexing-progress card (below).
 const NESTJS_URL = process.env.NESTJS_URL || 'http://localhost:3334';
-const NESTJS_INTERNAL_API_TOKEN = process.env.NESTJS_INTERNAL_API_TOKEN || '';
+const BIBLIOTECA_INTERNAL_API_TOKEN = process.env.BIBLIOTECA_INTERNAL_API_TOKEN || '';
 
 // biblioteca-covers is deliberately reached only from this server. The
 // browser never needs to know its host, and deployments can override the
@@ -883,7 +883,7 @@ const nestjsApi = createClient<NestjsPaths>({
   baseUrl: NESTJS_URL,
   fetch: request => {
     const headers = new Headers(request.headers);
-    if (NESTJS_INTERNAL_API_TOKEN) headers.set('Authorization', `Bearer ${NESTJS_INTERNAL_API_TOKEN}`);
+    if (BIBLIOTECA_INTERNAL_API_TOKEN) headers.set('Authorization', `Bearer ${BIBLIOTECA_INTERNAL_API_TOKEN}`);
     return globalThis.fetch(request, { headers, redirect: 'manual' });
   },
 });
@@ -977,7 +977,7 @@ app.post('/api/vectorizing/:action(start|pause|resume)', unlessReadOnly(asyncRou
   const upstreamUrl = `${NESTJS_URL}/api/vectorizing/${req.params.action}`;
   fetch(upstreamUrl, {
     method: 'POST',
-    headers: NESTJS_INTERNAL_API_TOKEN ? { Authorization: `Bearer ${NESTJS_INTERNAL_API_TOKEN}` } : {},
+    headers: BIBLIOTECA_INTERNAL_API_TOKEN ? { Authorization: `Bearer ${BIBLIOTECA_INTERNAL_API_TOKEN}` } : {},
   }).catch((error: any) => {
     console.error(`[vz-proxy] POST ${upstreamUrl} failed: ${error.message}`);
   });
