@@ -2,10 +2,11 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 // Reading limits: generous for people, tight for scrapers, which are meant to
-// pay for volume access. Only READS count - chapter text fetched through
-// /api/server-content/* and real page loads - never assets, Vite's dev
-// modules or the app's other API calls (one page view loads hundreds of
-// those, which is what tripped the old per-request limit).
+// pay for volume access. What counts is defined positively - a READ is one
+// chapter's content (see chapterRead below) - so nothing else can ever be
+// charged by accident: not assets, not Vite's dev modules, not the page
+// shell (it carries only metadata), not the app's other API calls. Each
+// chapter counts once per window, whatever formats or reloads fetch it.
 //
 // A browser gets a signed visitor cookie on its first page load and reads
 // against its own generous budget; many people behind one address (an
@@ -55,40 +56,55 @@ export function readLimitOptionsFromEnv(): ReadLimitOptions {
   };
 }
 
-const STATIC_FILE = /\.(?:avif|css|gif|ico|jpe?g|js|jsx|map|mjs|png|svg|ts|tsx|webmanifest|webp|woff2?)$/i;
-const DEV_OR_ASSET_PREFIX = /^\/(?:assets|src|node_modules|@vite|@fs|@id|@react-refresh)(?:\/|$)/;
+// Chapter content as the reader fetches it: /api/server-content/{author}/
+// {opus}[/{div}...].{html|txt|xml|json}. Not a chapter's embedded images
+// (/_binary/), not a table-of-contents skeleton (?depth=0).
+const CHAPTER_CONTENT = /^\/api\/server-content\/([^/]+\/[^/]+(?:\/[^/]+)*)\.(?:html|txt|xml|json)$/;
 
-/** A read worth counting: chapter text, or a page load. */
-export function isCountedRead(req: Request): boolean {
-  if (!['GET', 'HEAD'].includes(req.method)) return false;
-  if (req.path.startsWith('/api/server-content/')) return true;
-  if (req.path === '/api' || req.path.startsWith('/api/')) return false;
-  if (DEV_OR_ASSET_PREFIX.test(req.path) || STATIC_FILE.test(req.path)) return false;
-  return !/^\/(?:robots\.txt|sitemap\.xml|favicon\.ico)$/.test(req.path);
+/** The chapter a request reads, as "author/opus/.../div", or null if it reads none. */
+export function chapterRead(req: Request): string | null {
+  if (!['GET', 'HEAD'].includes(req.method) || req.path.includes('/_binary/') || req.query.depth === '0') return null;
+  const match = CHAPTER_CONTENT.exec(req.path);
+  return match ? match[1] : null;
 }
 
-class SlidingWindow {
-  private readonly hits = new Map<string, number[]>();
+/** A browser navigating to a page - where a visitor cookie is handed out. */
+function pageLoad(req: Request): boolean {
+  if (req.method !== 'GET' || req.path === '/api' || req.path.startsWith('/api/')) return false;
+  const dest = req.get('sec-fetch-dest');
+  return dest ? dest === 'document' : (req.get('accept') || '').includes('text/html');
+}
+
+/** Per-key sliding window of distinct items (chapters, or fresh cookies). */
+class DistinctWindow {
+  private readonly hits = new Map<string, Map<string, number>>();
   constructor(private readonly limit: number, private readonly windowMs: number) {}
 
-  /** Seconds until `key` may act again, or 0 if it may act now. */
-  retryAfter(key: string, timestamp: number): number {
-    const recent = (this.hits.get(key) || []).filter(at => timestamp - at < this.windowMs);
-    this.hits.set(key, recent);
-    if (recent.length < this.limit) return 0;
-    return Math.max(1, Math.ceil((recent[0] + this.windowMs - timestamp) / 1000));
+  private recent(key: string, timestamp: number): Map<string, number> {
+    const items = this.hits.get(key) || new Map<string, number>();
+    for (const [item, at] of items) if (timestamp - at >= this.windowMs) items.delete(item);
+    return items;
   }
 
-  record(key: string, timestamp: number): void {
-    const recent = this.hits.get(key) || [];
+  /** Seconds until `key` may take `item`, or 0 if it may now (an item already taken is free). */
+  retryAfter(key: string, item: string, timestamp: number): number {
+    const items = this.recent(key, timestamp);
+    if (items.has(item) || items.size < this.limit) return 0;
+    const oldest = Math.min(...items.values());
+    return Math.max(1, Math.ceil((oldest + this.windowMs - timestamp) / 1000));
+  }
+
+  record(key: string, item: string, timestamp: number): void {
+    const items = this.recent(key, timestamp);
+    if (items.has(item)) return;
     if (!this.hits.has(key) && this.hits.size >= MAX_TRACKED_KEYS) {
       const oldest = this.hits.keys().next().value;
       if (oldest !== undefined) this.hits.delete(oldest);
     }
-    recent.push(timestamp);
+    items.set(item, timestamp);
     // Re-insert so the Map's insertion order stays least-recently-used first.
     this.hits.delete(key);
-    this.hits.set(key, recent);
+    this.hits.set(key, items);
   }
 }
 
@@ -105,39 +121,8 @@ function limitMessage(scope: ReadLimitScope, limit: number, retryAfterSeconds: n
     : scope === 'address' ? 'from your network'
     : 'for clients that do not keep cookies';
   const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
-  return `Reading limit reached: ${limit} pages per hour ${who}. You can continue in about ${minutes} minute${minutes === 1 ? '' : 's'}. `
+  return `Reading limit reached: ${limit} chapters per hour ${who}. You can continue in about ${minutes} minute${minutes === 1 ? '' : 's'}. `
     + `Automated or high-volume access is available as a paid service - contact ${CONTACT}.`;
-}
-
-/** The page a blocked page load gets: the same card the app shows, server-rendered. */
-function limitPage(message: string): string {
-  const text = message.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex, nofollow">
-  <title>Reading limit reached — Biblioteca</title>
-  <style>
-    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-           background: #061a15; color: #e7e5e4; font-family: Georgia, serif; padding: 16px; box-sizing: border-box; }
-    .card { max-width: 28rem; background: #0b2921; border: 1px solid rgba(16,185,129,.3); border-radius: 16px;
-            padding: 32px; text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,.5); }
-    h1 { font-size: 1.4rem; color: #fff; margin: 0 0 12px; }
-    p { color: #a8a29e; line-height: 1.5; margin: 0 0 24px; font-family: system-ui, sans-serif; font-size: .95rem; }
-    a { display: inline-block; padding: 10px 20px; background: #f59e0b; color: #000; font-weight: 700; border-radius: 8px;
-        text-decoration: none; font-family: system-ui, sans-serif; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>Time for a short pause</h1>
-    <p>${text}</p>
-    <a href="mailto:${CONTACT}?subject=Biblioteca%20volume%20access">Ask about volume access</a>
-  </div>
-</body>
-</html>`;
 }
 
 export function crawlerPageRateLimit(options: ReadLimitOptions = {}): RequestHandler {
@@ -150,10 +135,10 @@ export function crawlerPageRateLimit(options: ReadLimitOptions = {}): RequestHan
   };
   const newVisitorsHourly = options.newVisitorsHourly ?? 40;
   const secret = options.secret || randomBytes(32).toString('hex');
-  const visitors = new SlidingWindow(limits.visitor, windowMs);
-  const addresses = new SlidingWindow(limits.address, windowMs);
-  const cookieless = new SlidingWindow(limits.cookieless, windowMs);
-  const newVisitors = new SlidingWindow(newVisitorsHourly, windowMs);
+  const visitors = new DistinctWindow(limits.visitor, windowMs);
+  const addresses = new DistinctWindow(limits.address, windowMs);
+  const cookieless = new DistinctWindow(limits.cookieless, windowMs);
+  const newVisitors = new DistinctWindow(newVisitorsHourly, windowMs);
 
   const sign = (id: string) => createHmac('sha256', secret).update(id).digest('base64url');
   const validVisitor = (value: string | undefined): string | undefined => {
@@ -165,7 +150,9 @@ export function crawlerPageRateLimit(options: ReadLimitOptions = {}): RequestHan
   };
 
   return (req: Request, res: Response, next: NextFunction) => {
-    if (!isCountedRead(req)) {
+    const chapter = chapterRead(req);
+    const loadingPage = !chapter && pageLoad(req);
+    if (!chapter && !loadingPage) {
       next();
       return;
     }
@@ -173,35 +160,39 @@ export function crawlerPageRateLimit(options: ReadLimitOptions = {}): RequestHan
     const address = req.ip || req.socket.remoteAddress || 'unknown';
     let visitor = validVisitor(cookieValue(req, VISITOR_COOKIE));
 
-    // A browser's first page load mints its cookie - unless this address
-    // has already minted its hourly share, which is how cookie farming ends.
-    if (!visitor && !req.path.startsWith('/api/') && newVisitors.retryAfter(address, timestamp) === 0) {
-      visitor = randomBytes(12).toString('base64url');
-      newVisitors.record(address, timestamp);
-      res.cookie(VISITOR_COOKIE, `${visitor}.${sign(visitor)}`, {
-        httpOnly: true, sameSite: 'lax', secure: req.secure, path: '/', maxAge: 365 * 24 * 3600 * 1000,
-      });
+    // A browser's page load mints its cookie - unless this address has
+    // already minted its hourly share, which is how cookie farming ends.
+    if (!visitor && loadingPage) {
+      const fresh = randomBytes(12).toString('base64url');
+      if (newVisitors.retryAfter(address, fresh, timestamp) === 0) {
+        newVisitors.record(address, fresh, timestamp);
+        res.cookie(VISITOR_COOKIE, `${fresh}.${sign(fresh)}`, {
+          httpOnly: true, sameSite: 'lax', secure: req.secure, path: '/', maxAge: 365 * 24 * 3600 * 1000,
+        });
+      }
+    }
+    if (!chapter) {
+      next();
+      return;
     }
 
-    const checks: Array<[ReadLimitScope, SlidingWindow, string]> = visitor
-      ? [['visitor', visitors, visitor], ['address', addresses, address]]
-      : [['cookieless', cookieless, address], ['address', addresses, address]];
-    for (const [scope, window, key] of checks) {
-      const retryAfterSeconds = window.retryAfter(key, timestamp);
+    // Distinct per budget: the per-address ceiling counts each visitor's
+    // chapter separately, so people sharing a network are not mistaken for
+    // one reader re-reading.
+    const checks: Array<[ReadLimitScope, DistinctWindow, string, string]> = visitor
+      ? [['visitor', visitors, visitor, chapter], ['address', addresses, address, `${visitor} ${chapter}`]]
+      : [['cookieless', cookieless, address, chapter], ['address', addresses, address, `- ${chapter}`]];
+    for (const [scope, window, key, item] of checks) {
+      const retryAfterSeconds = window.retryAfter(key, item, timestamp);
       if (retryAfterSeconds > 0) {
         const message = limitMessage(scope, limits[scope], retryAfterSeconds);
         res.setHeader('Retry-After', String(retryAfterSeconds));
         res.setHeader('Cache-Control', 'no-store');
-        res.status(429);
-        if (req.path.startsWith('/api/')) {
-          res.json({ error: READ_LIMIT_ERROR, scope, limit: limits[scope], retryAfterSeconds, contact: CONTACT, message });
-        } else {
-          res.type('html').send(limitPage(message));
-        }
+        res.status(429).json({ error: READ_LIMIT_ERROR, scope, limit: limits[scope], retryAfterSeconds, contact: CONTACT, message });
         return;
       }
     }
-    for (const [, window, key] of checks) window.record(key, timestamp);
+    for (const [, window, key, item] of checks) window.record(key, item, timestamp);
     next();
   };
 }
