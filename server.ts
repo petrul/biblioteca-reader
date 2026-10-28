@@ -337,6 +337,10 @@ const BIBLIOTECA_SERVER_URL = requiredEnv('BIBLIOTECA_EXTERNAL_URL');
 // admin page's indexing-progress card (below).
 const NESTJS_URL = process.env.NESTJS_URL || 'http://localhost:3334';
 const BIBLIOTECA_INTERNAL_API_TOKEN = process.env.BIBLIOTECA_INTERNAL_API_TOKEN || '';
+if (!BIBLIOTECA_INTERNAL_API_TOKEN) {
+  console.warn('BIBLIOTECA_INTERNAL_API_TOKEN is not set: biblioteca-nestjs will refuse the admin '
+    + 'actions this server forwards to it (enrichment, covers, vectorizing).');
+}
 
 // biblioteca-covers is deliberately reached only from this server. The
 // browser never needs to know its host, and deployments can override the
