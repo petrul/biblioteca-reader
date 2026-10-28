@@ -1,6 +1,6 @@
 // Saved searches: the results of a search kept as a collection of kind
 // 'search'. A signed-in reader's live in biblioteca-server's database (REST
-// to write, the same-origin /graphql to read); an anonymous reader's stay in
+// via the explicit same-origin gateway); an anonymous reader's stay in
 // this browser's localStorage. Served synchronously from a cache, like the
 // personal collections in readerService.
 import { SavedSearch, SavedSearchItem, SearchMode, SearchResult } from '../types/textbase';
@@ -8,9 +8,6 @@ import { newId } from './ids';
 import { trackedFetch } from './serversideApi';
 
 const STORAGE_KEY = 'biblioteca_reader_saved_searches';
-const MY_COLLECTIONS_QUERY = `{ myCollections { id name kind searchQuery searchParams createdAt
-  items { id divPath divHead snippet score addedAt } } }`;
-
 type ServerItem = { id: string; divPath: string; divHead?: string | null; snippet?: string | null; score?: number | null; addedAt: string };
 type ServerCollection = {
   id: string; name: string; kind: string; searchQuery?: string | null; searchParams?: string | null;
@@ -117,11 +114,10 @@ async function serverJson(path: string, init: RequestInit): Promise<unknown> {
 
 /** Signed in: serve the saved searches from the account's server-side collections. */
 export async function attachSavedSearchesAccount(): Promise<void> {
-  const body = await serverJson('/graphql', { method: 'POST', body: JSON.stringify({ query: MY_COLLECTIONS_QUERY }) }) as
-    { data?: { myCollections?: ServerCollection[] }; errors?: unknown[] };
-  if (!body.data?.myCollections) throw new Error('could not load collections: ' + JSON.stringify(body.errors ?? body));
+  const collections = await serverJson('/api/collections/mine', { method: 'GET' }) as ServerCollection[];
+  if (!Array.isArray(collections)) throw new Error('could not load collections');
   serverBacked = true;
-  cache = body.data.myCollections.filter(col => col.kind === 'SEARCH').map(fromServer);
+  cache = collections.filter(col => col.kind === 'SEARCH').map(fromServer);
   emit();
 }
 

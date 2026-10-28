@@ -45,24 +45,26 @@ test('a saved search can be renamed and deleted', async () => {
   assert.deepEqual(getSavedSearches(), []);
 });
 
-test('a signed-in reader\'s saved searches come from /graphql and are written through the REST API', async () => {
+test('a signed-in reader\'s saved searches use the scoped REST API', async () => {
   const calls: { url: string; method: string; body?: any }[] = [];
   globals.fetch = async (url: string, init: RequestInit = {}) => {
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ url: String(url), method: init.method ?? 'GET', body });
     const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (String(url).endsWith('/graphql')) {
-      return json({ data: { myCollections: [
+    if (String(url).endsWith('/api/collections/mine')) {
+      return json([
         { id: 'fav', name: 'favorites', kind: 'FAVORITES', items: [] },
         { id: 's1', name: 'old search', kind: 'SEARCH', searchQuery: 'old', searchParams: '{"mode":"grep"}', createdAt: 't',
           items: [{ id: 'i1', divPath: 'a/b/c', divHead: 'Chapter', snippet: 'x', addedAt: 't' }] },
-      ] } });
+      ]);
     }
     if (init.method === 'POST') return json({ id: 's2', name: body.name, kind: 'SEARCH', searchQuery: body.query, createdAt: 't', items: [] });
     return new Response(null, { status: 200 });
   };
   const { attachSavedSearchesAccount, saveSearch, getSavedSearches, deleteSavedSearch } = await import('./savedSearches');
   await attachSavedSearchesAccount();
+  assert.ok(calls.some(c => c.method === 'GET' && c.url.endsWith('/api/collections/mine')));
+  assert.ok(calls.every(c => !c.url.endsWith('/graphql')));
   assert.deepEqual(getSavedSearches().map(s => s.name), ['old search']);
   assert.equal(getSavedSearches()[0].items[0].chapterId, 'a/b/c');
 

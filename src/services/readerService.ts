@@ -418,6 +418,7 @@ const STORAGE_RECENT_WORKS_KEY = 'biblioteca_reader_recent_works';
 // not an identity: demo-scope features (collections, purchases, recent
 // works) key their storage off this instead of a fabricated persona.
 export const ANONYMOUS_USER_ID = 'anonymous';
+const PAYMENT_ENTITLEMENTS_ENABLED = false;
 
 // Persona ids the app's pre-populating steps used to auto-create and
 // persist (getCurrentUser's old auto-default, plus AuthModal's
@@ -1469,63 +1470,51 @@ export const readerService = {
     if (!work || work.accessType !== 'premium') {
       return true; // Free works are instantly accessible
     }
+    if (!PAYMENT_ENTITLEMENTS_ENABLED) return false;
     const receipts = this.getPurchasedReceipts(userId);
-    return receipts.some(r => r.workId === workId && (r.status === 'completed' || r.accessGranted));
+    return receipts.some(r => !r.paymentId.startsWith('pi_sandbox_')
+      && r.workId === workId && (r.status === 'completed' || r.accessGranted));
   },
 
   async getPaymentConfig(): Promise<PaymentServiceConfig> {
     try {
       return await fetchPaymentConfig();
     } catch (e) {
-      console.warn('Backend payment config fetch failed, using sandbox fallback', e);
+      console.warn('Backend payment config fetch failed; payments remain disabled', e);
     }
     return {
-      status: 'ok',
+      status: 'disabled',
+      enabled: false,
       provider: 'stripe',
       isLiveConfigured: false,
-      publishableKey: 'pk_test_scholar_archive_key',
-      supportedCurrencies: ['usd', 'eur', 'gbp', 'ron'],
-      acceptedMethods: ['card', 'apple_pay', 'google_pay', 'scholar_wallet'],
-      mode: 'sandbox'
+      publishableKey: '',
+      supportedCurrencies: [],
+      acceptedMethods: [],
+      mode: 'disabled'
     };
   },
 
-  async createPaymentIntent(work: Work, userEmail?: string, userId?: string) {
-    const currentUser = this.getCurrentUser();
-    const email = userEmail || currentUser?.email;
-    const uid = userId || currentUser?.id || ANONYMOUS_USER_ID;
+  async createPaymentIntent(work: Work) {
+    if (!(await this.getPaymentConfig()).enabled) throw new Error('Payments are temporarily disabled');
 
     try {
       return await postPaymentIntent({
         workId: work.id,
-        workTitle: work.title,
-        amountCents: work.priceCents || 499,
-        currency: work.currency || 'usd',
-        userEmail: email,
-        userId: uid
+        workTitle: work.title
       });
     } catch (e: any) {
-      console.warn('Payment intent creation via API failed, fallback client simulator', e);
-      return {
-        success: true,
-        clientSecret: `mock_secret_${work.id}_${Date.now()}`,
-        paymentId: `pi_sandbox_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        amountCents: work.priceCents || 499,
-        currency: work.currency || 'usd',
-        status: 'requires_confirmation',
-        mode: 'sandbox_ready'
-      };
+      console.warn('Payment intent creation via API failed', e);
+      throw e;
     }
   },
 
   async confirmBookPurchase(
     paymentId: string,
     work: Work,
-    userEmail?: string,
     userId?: string
   ): Promise<BookPurchaseReceipt> {
+    if (!(await this.getPaymentConfig()).enabled) throw new Error('Payments are temporarily disabled');
     const currentUser = this.getCurrentUser();
-    const email = userEmail || currentUser?.email;
     const uid = userId || currentUser?.id || ANONYMOUS_USER_ID;
 
     let receipt: BookPurchaseReceipt | null = null;
@@ -1534,30 +1523,13 @@ export const readerService = {
       receipt = await confirmPaymentPurchase({
         paymentId,
         workId: work.id,
-        workTitle: work.title,
-        amountCents: work.priceCents || 499,
-        currency: work.currency || 'usd',
-        userId: uid,
-        customerEmail: email
+        workTitle: work.title
       }) as BookPurchaseReceipt | null;
     } catch (e) {
-      console.warn('Payment confirmation API call failed, generating verified client receipt', e);
+      console.warn('Payment confirmation API call failed', e);
     }
 
-    if (!receipt) {
-      const amountStr = `$${(((work.priceCents || 499)) / 100).toFixed(2)}`;
-      receipt = {
-        orderId: `TB-ORD-${Date.now().toString(36).toUpperCase()}`,
-        paymentId,
-        workId: work.id,
-        workTitle: work.title,
-        amountPaid: amountStr,
-        status: 'completed',
-        accessGranted: true,
-        unlockedAt: new Date().toISOString(),
-        teiAccessTier: 'FULL_SCHOLARLY_APPARATUS'
-      };
-    }
+    if (!receipt) throw new Error('Payment could not be verified');
 
     this.savePurchaseReceipt(receipt, uid);
     return receipt;

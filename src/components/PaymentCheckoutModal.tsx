@@ -71,18 +71,18 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
 
     try {
       // 1. Create Payment Intent on backend Express server
-      const intentRes = await readerService.createPaymentIntent(work, userEmail);
+      const intentRes = await readerService.createPaymentIntent(work);
       
       // Artificial slight smooth delay for realistic checkout feedback
       await new Promise(r => setTimeout(r, 900));
 
-      const paymentId = intentRes.paymentId || `pi_sandbox_${Date.now()}`;
+      const paymentId = intentRes.paymentId;
+      if (!paymentId) throw new Error('Payment service did not return a payment ID');
 
       // 2. Confirm Purchase with backend Express API
       const purchaseReceipt = await readerService.confirmBookPurchase(
         paymentId,
-        work,
-        userEmail
+        work
       );
 
       setReceipt(purchaseReceipt);
@@ -172,6 +172,12 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                   <span>Start Reading Unlocked Work</span>
                 </button>
               </div>
+            </div>
+          ) : !paymentConfig?.enabled ? (
+            <div className="py-10 text-center space-y-3">
+              <Lock className="w-8 h-8 mx-auto text-white/50" />
+              <h3 className="text-lg font-bold">Payments are temporarily unavailable</h3>
+              <p className="text-sm text-white/60">Checkout is disabled while payment processing is being prepared.</p>
             </div>
           ) : (
             /* CHECKOUT FORM STATE */

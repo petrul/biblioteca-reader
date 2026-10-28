@@ -22,17 +22,21 @@ import readerConfig from './reader.config.json';
 // artifact reports the version it was built from, not whatever
 // package.json happens to sit next to it at runtime.
 import packageInfo from './package.json';
-import { BibliotecaServerProxy } from './src/services/BibliotecaServerProxy';
+import { BibliotecaServerProxy, isSafeServerContentPath } from './src/services/BibliotecaServerProxy';
 import { registerReaderThumbnails } from './src/services/coverThumbnailProxy';
 import createClient from 'openapi-fetch';
 import type { paths as NestjsPaths } from './src/generated/biblioteca-nestjs-api';
 import { registerTextTwins, canonicalReaderPath, textAlternates } from './src/services/textTwin';
+import { crawlerPageRateLimit } from './src/services/crawlerPageLimit';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
 import { renderServerErrorPage } from './src/httpErrorPage';
 
 
 const app = express();
+const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS);
+app.set('trust proxy', Number.isInteger(trustProxyHops) && trustProxyHops > 0 ? trustProxyHops : false);
 const PORT = Number(process.env.PORT) || 3333;
+
 
 function asyncRoute(handler: (req: Request, res: Response, next: NextFunction) => Promise<void>) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -42,6 +46,7 @@ function asyncRoute(handler: (req: Request, res: Response, next: NextFunction) =
 
 // Body parsing middleware
 app.use(express.json());
+app.use(crawlerPageRateLimit());
 
 // Client log relay: the reader is an SPA, so its logging (page
 // navigations, load failures) lands only in the browser's devtools console
@@ -49,15 +54,17 @@ app.use(express.json());
 // console.info/warn/error (see src/services/logRelay.ts) and posts batches
 // here, so `rake run` reads like a reading-session trace too.
 app.post('/api/log', (req: Request, res: Response) => {
-  const { level, lines } = (req.body ?? {}) as { level?: string; lines?: unknown[] };
+  const { level, identity, lines } = (req.body ?? {}) as { level?: string; identity?: unknown; lines?: unknown[] };
   const allowed = ['info', 'warn', 'error'];
   if (typeof level !== 'string' || !allowed.includes(level) || !Array.isArray(lines)) {
     res.status(400).json({ error: 'expected {level: info|warn|error, lines: string[]}' });
     return;
   }
+  const safeIdentity = typeof identity === 'string' ? identity.replace(/[^a-zA-Z0-9_=@. -]/g, '').slice(0, 100) : 'anonymous';
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
   for (const line of lines.slice(0, 50)) {
     const text = typeof line === 'string' ? line.slice(0, 500) : JSON.stringify(line)?.slice(0, 500);
-    if (text) console[level](text);
+    if (text) console[level](`[reader-ui ${safeIdentity} ip=${clientIp}] ${text}`);
   }
   res.status(204).end();
 });
@@ -95,33 +102,85 @@ const verifiedPurchases: Record<string, {
   customerEmail?: string;
 }> = {};
 
+const paymentPrices: Record<string, number> = (() => {
+  try {
+    const prices: unknown = JSON.parse(process.env.PAYMENT_PRICES_CENTS || '{}');
+    if (!prices || typeof prices !== 'object' || Array.isArray(prices)) return {};
+    return Object.fromEntries(Object.entries(prices as Record<string, unknown>).filter(([path, cents]) =>
+      /^[^/]+\/[^/]+$/.test(path) && typeof cents === 'number' && Number.isSafeInteger(cents) && cents > 0)) as Record<string, number>;
+  } catch {
+    return {};
+  }
+})();
+const PAYMENTS_ENABLED = process.env.PAYMENTS_ENABLED === 'true'
+  && Boolean(process.env.STRIPE_SECRET_KEY)
+  && Boolean(process.env.STRIPE_PUBLISHABLE_KEY)
+  && Object.keys(paymentPrices).length > 0;
+const PAYMENT_CURRENCY = (process.env.PAYMENT_CURRENCY || 'usd').toLowerCase();
+
+async function getAuthenticatedReaderUser(req: Request): Promise<string | undefined> {
+  try {
+    const response = await fetch(`${BIBLIOTECA_SERVER_URL}/api/users/me`, {
+      headers: {
+        Accept: 'application/json',
+        ...(req.headers.cookie ? { Cookie: req.headers.cookie } : {}),
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return undefined;
+    const who = await response.json() as { authenticated?: boolean; username?: string };
+    return who.authenticated && typeof who.username === 'string' ? who.username : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ==========================================
 // PAYMENT API ROUTES
 // ==========================================
 
 // 1. Get Payment Service Configuration & Capabilities
 app.get('/api/payment/config', (req: Request, res: Response) => {
+  if (!PAYMENTS_ENABLED) {
+    res.json({ status: 'disabled', enabled: false, provider: 'stripe', isLiveConfigured: false, publishableKey: '', supportedCurrencies: [], acceptedMethods: [], mode: 'disabled' });
+    return;
+  }
   const hasStripeSecret = Boolean(process.env.STRIPE_SECRET_KEY);
   const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
 
   res.json({
     status: 'ok',
+    enabled: true,
     provider: 'stripe',
     isLiveConfigured: hasStripeSecret,
     publishableKey: hasStripeSecret ? publishableKey : 'pk_test_sample_scholar_library_key',
-    supportedCurrencies: ['usd', 'eur', 'gbp', 'ron'],
+    supportedCurrencies: [PAYMENT_CURRENCY],
     acceptedMethods: ['card', 'apple_pay', 'google_pay', 'scholar_wallet'],
-    mode: hasStripeSecret ? 'live' : 'sandbox'
+    mode: 'live'
   });
 });
 
 // 2. Create Payment Intent / Checkout Session for a Work
 app.post('/api/payment/create-intent', asyncRoute(async (req: Request, res: Response) => {
+  if (!PAYMENTS_ENABLED) {
+    res.status(503).json({ error: 'Payments are temporarily disabled' });
+    return;
+  }
   try {
-    const { workId, workTitle, amountCents, currency = 'usd', userEmail, userId } = req.body;
+    const { workId, workTitle } = req.body;
 
-    if (!workId || !amountCents) {
-      res.status(400).json({ error: 'workId and amountCents are required' });
+    if (typeof workId !== 'string' || !/^[^/]+\/[^/]+$/.test(workId)) {
+      res.status(400).json({ error: 'workId must be a canonical authorId/opusId path' });
+      return;
+    }
+    const amountCents = paymentPrices[workId];
+    if (!amountCents) {
+      res.status(404).json({ error: 'No configured price for this work' });
+      return;
+    }
+    const authenticatedUser = await getAuthenticatedReaderUser(req);
+    if (!authenticatedUser) {
+      res.status(401).json({ error: 'Sign in is required to purchase an edition' });
       return;
     }
 
@@ -131,15 +190,15 @@ app.post('/api/payment/create-intent', asyncRoute(async (req: Request, res: Resp
       // Real Stripe Payment Intent creation when API key is configured
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(amountCents),
-        currency: currency.toLowerCase(),
+        currency: PAYMENT_CURRENCY,
         description: `Scholarly Edition: ${workTitle || workId}`,
         metadata: {
           workId,
           workTitle: workTitle || '',
-          userId: userId || 'anonymous_scholar',
+          userId: authenticatedUser,
           app: 'Textbase Reader'
         },
-        receipt_email: userEmail,
+        receipt_email: authenticatedUser,
         automatic_payment_methods: { enabled: true }
       });
 
@@ -148,24 +207,12 @@ app.post('/api/payment/create-intent', asyncRoute(async (req: Request, res: Resp
         clientSecret: paymentIntent.client_secret,
         paymentId: paymentIntent.id,
         amountCents,
-        currency,
+        currency: PAYMENT_CURRENCY,
         status: paymentIntent.status,
         mode: 'stripe_live'
       });
     } else {
-      // Secure sandbox transaction for preview development when API key is awaiting user configuration
-      const simulatedPaymentId = `pi_sandbox_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      
-      res.json({
-        success: true,
-        clientSecret: `mock_secret_${simulatedPaymentId}`,
-        paymentId: simulatedPaymentId,
-        amountCents,
-        currency,
-        status: 'requires_confirmation',
-        mode: 'sandbox_ready',
-        note: 'Stripe test environment active. Live payments will process via STRIPE_SECRET_KEY when configured.'
-      });
+      res.status(503).json({ error: 'Stripe is not configured' });
     }
   } catch (error: any) {
     console.error('Error creating payment intent:', error);
@@ -177,11 +224,25 @@ app.post('/api/payment/create-intent', asyncRoute(async (req: Request, res: Resp
 
 // 3. Confirm & Verify Book Purchase
 app.post('/api/payment/confirm', asyncRoute(async (req: Request, res: Response) => {
+  if (!PAYMENTS_ENABLED) {
+    res.status(503).json({ error: 'Payments are temporarily disabled' });
+    return;
+  }
   try {
-    const { paymentId, workId, workTitle, amountCents, currency = 'usd', userId = 'reader-guest', customerEmail } = req.body;
+    const { paymentId, workId, workTitle } = req.body;
 
-    if (!paymentId || !workId) {
+    if (typeof paymentId !== 'string' || typeof workId !== 'string' || !/^[^/]+\/[^/]+$/.test(workId)) {
       res.status(400).json({ error: 'paymentId and workId are required' });
+      return;
+    }
+    const amountCents = paymentPrices[workId];
+    if (!amountCents) {
+      res.status(404).json({ error: 'No configured price for this work' });
+      return;
+    }
+    const authenticatedUser = await getAuthenticatedReaderUser(req);
+    if (!authenticatedUser) {
+      res.status(401).json({ error: 'Sign in is required to confirm a purchase' });
       return;
     }
 
@@ -191,28 +252,29 @@ app.post('/api/payment/confirm', asyncRoute(async (req: Request, res: Response) 
     if (stripe && !paymentId.startsWith('pi_sandbox_')) {
       // Verify directly with Stripe API
       const intent = await stripe.paymentIntents.retrieve(paymentId);
-      if (intent.status === 'succeeded' || intent.status === 'requires_capture' || intent.status === 'processing') {
+      if (intent.status === 'succeeded'
+        && intent.amount_received === amountCents
+        && intent.currency === PAYMENT_CURRENCY
+        && intent.metadata.workId === workId
+        && intent.metadata.userId === authenticatedUser) {
         isPaymentVerified = true;
       }
-    } else {
-      // In sandbox/preview mode, verify the structured transaction
-      isPaymentVerified = true;
     }
 
     if (isPaymentVerified) {
       const purchaseRecord = {
-        userId,
+        userId: authenticatedUser,
         workId,
         workTitle: workTitle || workId,
         amountCents: amountCents || 499,
-        currency,
+        currency: PAYMENT_CURRENCY,
         paymentId,
         status: 'succeeded' as const,
         timestamp: new Date().toISOString(),
-        customerEmail
+        customerEmail: authenticatedUser
       };
 
-      const ledgerKey = `${userId}_${workId}`;
+      const ledgerKey = `${authenticatedUser}_${workId}`;
       verifiedPurchases[ledgerKey] = purchaseRecord;
 
       res.json({
@@ -222,7 +284,7 @@ app.post('/api/payment/confirm', asyncRoute(async (req: Request, res: Response) 
           paymentId,
           workId,
           workTitle,
-          amountPaid: `$${(amountCents / 100).toFixed(2)}`,
+          amountPaid: `${PAYMENT_CURRENCY.toUpperCase()} ${(amountCents / 100).toFixed(2)}`,
           status: 'completed',
           accessGranted: true,
           unlockedAt: purchaseRecord.timestamp,
@@ -274,6 +336,7 @@ const BIBLIOTECA_SERVER_URL = requiredEnv('BIBLIOTECA_EXTERNAL_URL');
 // above, no pass-store entry yet since nothing needed it before the
 // admin page's indexing-progress card (below).
 const NESTJS_URL = process.env.NESTJS_URL || 'http://localhost:3334';
+const NESTJS_INTERNAL_API_TOKEN = process.env.NESTJS_INTERNAL_API_TOKEN || '';
 
 // biblioteca-covers is deliberately reached only from this server. The
 // browser never needs to know its host, and deployments can override the
@@ -284,7 +347,7 @@ const COVERS_API_URL = (process.env.COVERS_API_URL || 'http://localhost:3335').r
 // biblioteca-server it must never mutate (reader.config.json's readOnly,
 // checked in with default false - flip it locally and restart to change).
 // Every state-changing proxy route is swapped for an explicit 403 instead
-// of being forwarded upstream; reads (the GET relays, /graphql queries,
+// of being forwarded upstream; reads (the GET relays,
 // the cover render, and the local-only /api/log + payment sandbox, which
 // never reach biblioteca-server) keep working, so the whole public
 // catalog stays browsable with zero write traffic reaching the upstream
@@ -407,6 +470,10 @@ function relaySetCookie(upstreamRes: globalThis.Response, res: Response) {
 // the upstream path.
 async function relayGetFromBiblioteca(req: Request, res: Response, upstreamPathOverride?: string) {
   const upstreamPath = upstreamPathOverride ?? req.originalUrl;
+  if (upstreamPathOverride !== undefined && !isSafeServerContentPath(upstreamPath)) {
+    res.status(404).json({ error: 'not a public endpoint' });
+    return;
+  }
   const upstreamUrl = `${BIBLIOTECA_SERVER_URL}${upstreamPath}`;
   // Extra detail specifically for the identity-check endpoint - this is
   // the request that decides whether the navbar shows a real avatar or
@@ -531,11 +598,6 @@ app.post('/api/collections/mine/searches', unlessReadOnly(relayBodyToBiblioteca(
 app.patch('/api/collections/mine/:id', unlessReadOnly(relayBodyToBiblioteca('PATCH')));
 app.delete('/api/collections/mine/:id', unlessReadOnly(relayBodyToBiblioteca('DELETE')));
 app.put('/api/collections/mine/:id/order', unlessReadOnly(relayPutToBiblioteca));
-// The server's own /graphql, same-origin: read access to the signed-in
-// reader's collections (myCollections) goes through here. Queries only, so
-// it stays reachable in read-only mode.
-app.post('/graphql', relayBodyToBiblioteca('POST'));
-
 // Same-origin proxy for biblioteca-nestjs's own unauthenticated status
 // endpoint - the admin page's indexing-progress card (IndexingProgressCard)
 // polls this. No cookie relay needed, unlike the biblioteca-server routes
@@ -591,6 +653,51 @@ app.get('/api/server-info', asyncRoute(async (req: Request, res: Response) => {
 // same-origin gateway rather than a generic proxy: callers provide stable
 // work metadata, while the theme is selected here and arbitrary upstream
 // paths cannot be reached through the reader.
+const COVER_HOURLY_LIMIT = 20;
+const COVER_DAILY_LIMIT = 100;
+const coverRequestTimes = new Map<string, { timestamps: number[]; lastSeen: number }>();
+let coverQuotaChecks = 0;
+
+async function consumeCoverQuota(req: Request, res: Response): Promise<boolean> {
+  if (req.headers.cookie?.split(';').some(cookie => cookie.trim().startsWith('JSESSIONID='))
+    && await isAdminSession(req)) return true;
+  const now = Date.now();
+  const client = req.ip || req.socket.remoteAddress || 'unknown';
+  const recent = coverRequestTimes.get(client) ?? { timestamps: [], lastSeen: now };
+  recent.timestamps = recent.timestamps.filter(timestamp => timestamp > now - RAG_DAY_MS);
+  recent.lastSeen = now;
+  const hourlyCount = recent.timestamps.filter(timestamp => timestamp > now - RAG_HOUR_MS).length;
+  const dailyCount = recent.timestamps.length;
+  const limit = dailyCount >= COVER_DAILY_LIMIT ? 'day' : hourlyCount >= COVER_HOURLY_LIMIT ? 'hour' : undefined;
+  if (limit) {
+    const retryAt = limit === 'day'
+      ? recent.timestamps[0] + RAG_DAY_MS
+      : recent.timestamps[recent.timestamps.length - hourlyCount] + RAG_HOUR_MS;
+    const retryAfterSeconds = Math.max(1, Math.ceil((retryAt - now) / 1000));
+    res.setHeader('Retry-After', String(retryAfterSeconds));
+    res.status(429).json({ error: 'cover rate limit exceeded', limit, retryAfterSeconds });
+    return false;
+  }
+  recent.timestamps.push(now);
+  coverRequestTimes.set(client, recent);
+  coverQuotaChecks++;
+  if (coverQuotaChecks % 100 === 0) {
+    for (const [key, entry] of coverRequestTimes) {
+      if (entry.lastSeen <= now - RAG_DAY_MS) coverRequestTimes.delete(key);
+    }
+  }
+  while (coverRequestTimes.size > RAG_QUOTA_MAX_CLIENTS) {
+    const oldestClient = coverRequestTimes.keys().next().value;
+    if (oldestClient === undefined) break;
+    coverRequestTimes.delete(oldestClient);
+  }
+  return true;
+}
+
+function coverRateLimit(req: Request, res: Response, next: NextFunction): void {
+  void consumeCoverQuota(req, res).then(allowed => { if (allowed) next(); }).catch(next);
+}
+
 app.post('/api/covers/work', asyncRoute(async (req: Request, res: Response) => {
   const { workId, title, author, subtitle, date, coverArtUrl } = req.body ?? {};
   if (typeof title !== 'string' || !title.trim() || typeof author !== 'string' || !author.trim()) {
@@ -616,6 +723,8 @@ app.post('/api/covers/work', asyncRoute(async (req: Request, res: Response) => {
       return;
     }
   }
+
+  if (!(await consumeCoverQuota(req, res))) return;
 
   const layout = COVER_LAYOUTS[Math.floor(Math.random() * COVER_LAYOUTS.length)];
   const paletteId = COVER_PALETTES[Math.floor(Math.random() * COVER_PALETTES.length)];
@@ -689,6 +798,8 @@ app.get('/api/covers/work/:authorId/:opusId', asyncRoute(async (req: Request, re
     return;
   }
 
+  if (!(await consumeCoverQuota(req, res))) return;
+
   let title: string | undefined;
   let author: string | undefined;
   try {
@@ -739,6 +850,7 @@ app.get('/api/covers/work/:authorId/:opusId', asyncRoute(async (req: Request, re
         console.warn(`Cover cache write failed for ${workId}: ${error?.message || error}`);
       }
     }
+
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', coverCache ? 'public, max-age=31536000, immutable' : 'no-store');
     if (coverCache) res.setHeader('X-Biblioteca-Cover-Cache', 'MISS');
@@ -769,7 +881,11 @@ const WORK_PATH = /^[^/]+\/[^/]+$/;
 // Typed against biblioteca-nestjs's own OpenAPI (rake gen-vectorizer-client).
 const nestjsApi = createClient<NestjsPaths>({
   baseUrl: NESTJS_URL,
-  fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+  fetch: request => {
+    const headers = new Headers(request.headers);
+    if (NESTJS_INTERNAL_API_TOKEN) headers.set('Authorization', `Bearer ${NESTJS_INTERNAL_API_TOKEN}`);
+    return globalThis.fetch(request, { headers, redirect: 'manual' });
+  },
 });
 
 // Synchronous: waits for nestjs to render, store and assign the new cover
@@ -778,7 +894,7 @@ const nestjsApi = createClient<NestjsPaths>({
 // from; without it nestjs picks a random request as before.
 // Renders, stores and assigns a cover upstream - write traffic, 403 in
 // read-only deployments.
-app.post('/api/admin/covers/work', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
+app.post('/api/admin/covers/work', coverRateLimit, unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
   const path = req.body?.path;
   if (typeof path !== 'string' || !WORK_PATH.test(path)) {
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
@@ -853,13 +969,20 @@ app.get('/api/admin/covers/work/request', asyncRoute(async (req: Request, res: R
 // state within a few seconds regardless of when (or whether) this
 // resolves. :action is constrained to the three real controls - anything
 // else 404s before ever reaching nestjs.
-app.post('/api/vectorizing/:action(start|pause|resume)', unlessReadOnly((req: Request, res: Response) => {
+app.post('/api/vectorizing/:action(start|pause|resume)', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
+  if (!(await isAdminSession(req))) {
+    res.status(403).json({ error: 'administrators only' });
+    return;
+  }
   const upstreamUrl = `${NESTJS_URL}/api/vectorizing/${req.params.action}`;
-  fetch(upstreamUrl, { method: 'POST' }).catch((error: any) => {
+  fetch(upstreamUrl, {
+    method: 'POST',
+    headers: NESTJS_INTERNAL_API_TOKEN ? { Authorization: `Bearer ${NESTJS_INTERNAL_API_TOKEN}` } : {},
+  }).catch((error: any) => {
     console.error(`[vz-proxy] POST ${upstreamUrl} failed: ${error.message}`);
   });
   res.status(202).json({ accepted: true });
-}));
+})));
 
 // Public reader RAG bridge. Keep the browser on the reader origin while
 // forwarding the explicit RAG contract to biblioteca-nestjs selected by the
@@ -876,13 +999,72 @@ async function relayRagPost(path: '/api/rag/search' | '/api/rag/ask' | '/api/rag
     res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });
   }
 }
-app.post('/api/rag/search', asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/search', req, res)));
-app.post('/api/rag/ask', asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/ask', req, res)));
-app.post('/api/rag/chat', asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/chat', req, res)));
+
+const RAG_HOURLY_LIMIT = 20;
+const RAG_DAILY_LIMIT = 100;
+const RAG_HOUR_MS = 60 * 60 * 1000;
+const RAG_DAY_MS = 24 * RAG_HOUR_MS;
+const RAG_QUOTA_MAX_CLIENTS = 10_000;
+const ragRequestTimes = new Map<string, { timestamps: number[]; lastSeen: number }>();
+let ragQuotaChecks = 0;
+
+function ragRateLimit(req: Request, res: Response, next: NextFunction): void {
+  void (async () => {
+    if (req.headers.cookie?.split(';').some(cookie => cookie.trim().startsWith('JSESSIONID='))
+      && await isAdminSession(req)) {
+      next();
+      return;
+    }
+
+    const now = Date.now();
+    const client = req.ip || req.socket.remoteAddress || 'unknown';
+    const recent = ragRequestTimes.get(client) ?? { timestamps: [], lastSeen: now };
+    recent.timestamps = recent.timestamps.filter(timestamp => timestamp > now - RAG_DAY_MS);
+    recent.lastSeen = now;
+
+    const hourlyCount = recent.timestamps.filter(timestamp => timestamp > now - RAG_HOUR_MS).length;
+    const dailyCount = recent.timestamps.length;
+    let retryAfterMs = 0;
+    let limit: 'hour' | 'day' | undefined;
+    if (dailyCount >= RAG_DAILY_LIMIT) {
+      retryAfterMs = recent.timestamps[0] + RAG_DAY_MS - now;
+      limit = 'day';
+    } else if (hourlyCount >= RAG_HOURLY_LIMIT) {
+      retryAfterMs = recent.timestamps[recent.timestamps.length - hourlyCount] + RAG_HOUR_MS - now;
+      limit = 'hour';
+    }
+
+    if (limit) {
+      const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      res.status(429).json({ error: 'rate limit exceeded', limit, retryAfterSeconds });
+      return;
+    }
+
+    recent.timestamps.push(now);
+    ragRequestTimes.set(client, recent);
+    ragQuotaChecks++;
+    if (ragQuotaChecks % 100 === 0) {
+      for (const [key, entry] of ragRequestTimes) {
+        if (entry.lastSeen <= now - RAG_DAY_MS) ragRequestTimes.delete(key);
+      }
+    }
+    while (ragRequestTimes.size > RAG_QUOTA_MAX_CLIENTS) {
+      const oldestClient = ragRequestTimes.keys().next().value;
+      if (oldestClient === undefined) break;
+      ragRequestTimes.delete(oldestClient);
+    }
+    next();
+  })().catch(next);
+}
+
+app.post('/api/rag/search', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/search', req, res)));
+app.post('/api/rag/ask', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/ask', req, res)));
+app.post('/api/rag/chat', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/chat', req, res)));
 
 // Streaming answers stay a raw NDJSON response; openapi-fetch is intentionally
 // not used because it would eagerly parse the stream as one JSON document.
-app.post('/api/rag/ask/stream', asyncRoute(async (req: Request, res: Response) => {
+app.post('/api/rag/ask/stream', ragRateLimit, asyncRoute(async (req: Request, res: Response) => {
   try {
     const upstreamRes = await fetch(`${NESTJS_URL}/api/rag/ask/stream`, {
       method: 'POST',
@@ -1072,13 +1254,23 @@ app.post('/api/auth/logout', unlessReadOnly(asyncRoute(async (req: Request, res:
 
 // 4. Check user book unlock & purchase status
 app.get('/api/payment/purchases/:userId', (req: Request, res: Response) => {
+  if (!PAYMENTS_ENABLED) {
+    res.status(503).json({ error: 'Payments are temporarily disabled' });
+    return;
+  }
   const { userId } = req.params;
-  const userPurchases = Object.values(verifiedPurchases).filter(p => p.userId === userId);
-  res.json({
-    userId,
-    purchases: userPurchases,
-    purchasedWorkIds: userPurchases.map(p => p.workId)
-  });
+  void getAuthenticatedReaderUser(req).then(authenticatedUser => {
+    if (!authenticatedUser) {
+      res.status(401).json({ error: 'Sign in is required to view purchases' });
+      return;
+    }
+    if (authenticatedUser !== userId) {
+      res.status(403).json({ error: 'Purchases may only be viewed by their owner' });
+      return;
+    }
+    const userPurchases = Object.values(verifiedPurchases).filter(p => p.userId === userId);
+    res.json({ userId, purchases: userPurchases, purchasedWorkIds: userPurchases.map(p => p.workId) });
+  }).catch(() => res.status(502).json({ error: 'Unable to verify reader session' }));
 });
 
 // Health check endpoint

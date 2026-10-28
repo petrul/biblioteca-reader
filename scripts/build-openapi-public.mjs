@@ -31,6 +31,7 @@ const BIBLIOTECA_PATHS = {
     '/api/authors/page': ['get'],
     '/api/authors/{strId}': ['get'],
     '/api/works': ['get'],
+    '/api/collections/mine': ['get'],
     '/api/collections/system/repos': ['get'],
     '/api/collections/system/featured': ['get'],
     '/api/drest/teiDivs/search/findOpera': ['get'],
@@ -121,21 +122,22 @@ const ownPaths = {
     },
     '/api/payment/config': {
         get: {
-            summary: 'Payment provider config/capabilities (Stripe, unconfigured by default)',
+            summary: 'Payment provider config/capabilities (disabled unless explicitly configured)',
             responses: {
                 '200': {
                     description: 'OK',
                     content: { 'application/json': { schema: {
                         type: 'object',
-                        required: ['status', 'provider', 'isLiveConfigured', 'publishableKey', 'supportedCurrencies', 'acceptedMethods', 'mode'],
+                        required: ['status', 'enabled', 'provider', 'isLiveConfigured', 'publishableKey', 'supportedCurrencies', 'acceptedMethods', 'mode'],
                         properties: {
                             status: { type: 'string' },
+                            enabled: { type: 'boolean' },
                             provider: { type: 'string', enum: ['stripe'] },
                             isLiveConfigured: { type: 'boolean' },
                             publishableKey: { type: 'string' },
                             supportedCurrencies: { type: 'array', items: { type: 'string' } },
                             acceptedMethods: { type: 'array', items: { type: 'string' } },
-                            mode: { type: 'string', enum: ['live', 'sandbox'] },
+                            mode: { type: 'string', enum: ['live', 'disabled'] },
                         },
                     } } },
                 },
@@ -144,22 +146,18 @@ const ownPaths = {
     },
     '/api/payment/create-intent': {
         post: {
-            summary: 'Create a Stripe payment intent (or sandbox equivalent) for a work',
+            summary: 'Create a Stripe payment intent for a work at its server-configured price',
             requestBody: { content: { 'application/json': { schema: {
                 type: 'object',
-                required: ['workId', 'amountCents'],
+                required: ['workId'],
                 properties: {
                     workId: { type: 'string' },
                     workTitle: { type: 'string' },
-                    amountCents: { type: 'integer' },
-                    currency: { type: 'string' },
-                    userEmail: { type: 'string' },
-                    userId: { type: 'string' },
                 },
             } } } },
             responses: {
                 '200': {
-                    description: 'OK (Stripe live or sandbox simulator)',
+                    description: 'OK (Stripe live)',
                     content: { 'application/json': { schema: {
                         type: 'object',
                         required: ['success', 'clientSecret', 'paymentId', 'amountCents', 'currency', 'status', 'mode'],
@@ -171,12 +169,11 @@ const ownPaths = {
                             currency: { type: 'string' },
                             status: { type: 'string' },
                             mode: { type: 'string' },
-                            // Sandbox responses only - not emitted when Stripe is live.
-                            note: { type: 'string' },
                         },
                     } } },
                 },
-                '400': { description: 'Missing workId/amountCents', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
+                '400': { description: 'Missing or malformed workId', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
+                '503': { description: 'Payments disabled, Stripe unavailable, or no price configured for the work', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
                 '500': { description: 'Payment intent creation failed', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
             },
         },
@@ -191,10 +188,6 @@ const ownPaths = {
                     paymentId: { type: 'string' },
                     workId: { type: 'string' },
                     workTitle: { type: 'string' },
-                    amountCents: { type: 'integer' },
-                    currency: { type: 'string' },
-                    userId: { type: 'string' },
-                    customerEmail: { type: 'string' },
                 },
             } } } },
             responses: {
@@ -225,6 +218,7 @@ const ownPaths = {
                 },
                 '400': { description: 'Missing paymentId/workId', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
                 '402': { description: 'Payment not verified / still processing', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, error: { type: 'string' } } } } } },
+                '503': { description: 'Payments temporarily disabled', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
                 '500': { description: 'Payment confirmation failed', content: { 'application/json': { schema: { type: 'object', properties: { error: { type: 'string' } } } } } },
             },
         },

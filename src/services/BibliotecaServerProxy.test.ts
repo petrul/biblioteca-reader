@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BibliotecaServerProxy } from './BibliotecaServerProxy';
+import { BibliotecaServerProxy, isSafeServerContentPath } from './BibliotecaServerProxy';
+
+test('content proxy paths cannot escape the public content surface', () => {
+  for (const path of ['/api/users/me', '/actuator/health', '/../api/users/me', '/%2e%2e/actuator/health', '/%252e%252e%252fapi/users/me', '//attacker.test/path', '/a%5cb']) {
+    assert.equal(isSafeServerContentPath(path), false, path);
+  }
+  for (const path of ['/author/work/chapter.html', '/img/generic-author.webp', '/css/teidiv.css', '/author/work/chapter.html?p=2']) {
+    assert.equal(isSafeServerContentPath(path), true, path);
+  }
+});
 
 test('every registered same-origin Biblioteca proxy propagates upstream 404, including empty content responses', async () => {
   const routes: { method: string; path: string; handler: Function }[] = [];

@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'reac
 import { Bot, Check, MessageCircle, Palette, RotateCcw, Send, X } from 'lucide-react';
 import { parseAppPath } from '../router';
 import { useLongPressDrag } from '../hooks/useLongPressDrag';
+import { sameOriginFetch } from '../services/sameOriginFetch';
 
 type ChatTheme = 'emerald' | 'amber' | 'rose' | 'cyan' | 'azure' | 'mint' | 'slate';
 
@@ -216,7 +217,7 @@ export function ChatWidget({ placement = 'floating', open: openProp, onOpenChang
       const scopeKey = opusPath ?? '__library__';
       const scope = opusPath ? { opusPaths: [opusPath] } : undefined;
       const continuedConversationId = conversationIdsRef.current[scopeKey];
-      const response = await fetch('/api/rag/chat', {
+      const response = await sameOriginFetch('/api/rag/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, ...(continuedConversationId ? { conversationId: continuedConversationId } : {}), ...(scope ? { scope } : {}) }),

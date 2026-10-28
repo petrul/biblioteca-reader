@@ -59,6 +59,16 @@ test('upstream literary HTML is reused without scripts and notes remain readable
   assert.equal(twin.body.text(), original('.body-of-text').text());
 });
 
+test('text twin removes off-origin subresources while preserving explicit external links', () => {
+  const source = '<html><head><meta http-equiv="refresh" content="0;url=https://outside.test/"><link rel="stylesheet" href="https://outside.test/site.css"></head><body><div class="body-of-text"><p>Text</p><img src="https://outside.test/pixel.png"><a href="https://outside.test/page">External page</a><div style="background-image:url(https://outside.test/bg.png)">Text</div></div></body></html>';
+  const twin = prepareTwin(source, 'https://upstream.test/author/work/chapter.html', null);
+  assert.equal(twin.$('meta[http-equiv="refresh"]').length, 0);
+  assert.equal(twin.$('link[rel="stylesheet"][href^="https://"]').length, 0);
+  assert.equal(twin.$('img[src^="https://"]').length, 0);
+  assert.equal(twin.$('[style*="url("]').length, 0);
+  assert.equal(twin.$('a[href="https://outside.test/page"]').length, 1);
+});
+
 test('HTTP same URL serves HTML, SPA, plain text, Markdown and JSON, with safe preview gating', async () => {
   const upstream = express(); let premium = false; let htmlCalls = 0;
   upstream.get('/api/divs', (req, res) => {

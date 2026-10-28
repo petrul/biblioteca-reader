@@ -131,12 +131,13 @@ export interface BookPurchaseReceipt {
 
 export interface PaymentServiceConfig {
   status: string;
+  enabled: boolean;
   provider: 'stripe';
   isLiveConfigured: boolean;
   publishableKey: string;
   supportedCurrencies: string[];
   acceptedMethods: string[];
-  mode: 'live' | 'sandbox';
+  mode: 'live' | 'disabled';
 }
 
 export interface SourceRepository {

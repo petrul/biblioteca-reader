@@ -2,6 +2,7 @@ import createClient from 'openapi-fetch';
 import type { components, paths } from '../generated/same-origin-api';
 import type { paths as bibliotecaServerPaths } from '../generated/biblioteca-server-api';
 import type { Author, Chapter, LanguageCode, SearchMode, SearchResult, Work } from '../types/textbase';
+import { sameOriginFetch } from './sameOriginFetch';
 
 // Content passthrough only (rawText/proxiedAsset below). Structured API calls
 // use the generated same-origin client; raw canonical content has its own
@@ -48,7 +49,7 @@ export type CatalogPage<T> = { items: T[]; page: number; size: number; totalItem
 export const SERVER_ERROR_EVENT = 'reader:server-error';
 
 export async function trackedFetch(...args: Parameters<typeof globalThis.fetch>): Promise<Response> {
-  const response = await globalThis.fetch(...args);
+  const response = await sameOriginFetch(...args);
   if (response.status >= 500 && typeof window !== 'undefined'
     && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
     window.dispatchEvent(new CustomEvent<number>(SERVER_ERROR_EVENT, { detail: response.status }));
@@ -566,7 +567,7 @@ export async function fetchCurrentUser(): Promise<Record<string, unknown>> {
   return requireData(result, '/api/users/me');
 }
 
-export type GoogleSignInResponse = { success?: boolean; error?: string };
+export type GoogleSignInResponse = { success?: boolean; error?: string; avatarUrl?: string };
 
 // server.ts answers both success (200) and failure (502, upstream
 // unreachable) with the same {success, error} JSON shape - openapi-fetch
@@ -650,10 +651,6 @@ export async function fetchPaymentConfig(): Promise<PaymentConfig> {
 export async function postPaymentIntent(request: {
   workId: string;
   workTitle?: string;
-  amountCents: number;
-  currency?: string;
-  userEmail?: string;
-  userId?: string;
 }): Promise<PaymentIntent> {
   const result = await api.POST('/api/payment/create-intent', { body: request });
   if (!result.data) {
@@ -663,20 +660,19 @@ export async function postPaymentIntent(request: {
   return result.data;
 }
 
-// null for any non-200 (402 not verified, 400/500) rather than an
-// exception - the caller's sandbox-receipt fallback, not a crash, same
-// as the raw fetch's silent !res.ok -> no receipt.
+// Non-200 answers are surfaced as errors; client-generated receipts are
+// never treated as payment verification.
 export async function confirmPaymentPurchase(request: {
   paymentId: string;
   workId: string;
   workTitle?: string;
-  amountCents?: number;
-  currency?: string;
-  userId?: string;
-  customerEmail?: string;
 }): Promise<PaymentReceipt | null> {
   const result = await api.POST('/api/payment/confirm', { body: request });
-  return result.data?.receipt ?? null;
+  if (!result.data) {
+    const error = result.error && typeof result.error === 'object' ? (result.error as { error?: string }).error : undefined;
+    throw new Error(error || `Payment service returned status ${result.response.status}`);
+  }
+  return result.data.receipt;
 }
 
 // --- indexing progress (admin card polls) ---

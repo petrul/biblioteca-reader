@@ -1,5 +1,24 @@
 import type { Express, NextFunction, Request, Response } from 'express';
 
+export function isSafeServerContentPath(value: string): boolean {
+  const rawPath = value.split('?', 1)[0];
+  if (!rawPath.startsWith('/') || rawPath.startsWith('//') || rawPath.includes('\\') || /[\u0000-\u001f]/.test(rawPath)) return false;
+  let decoded = rawPath;
+  try {
+    for (let i = 0; i < 8; i++) {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+      if (i === 7) return false;
+    }
+  } catch { return false; }
+  const lower = decoded.toLowerCase();
+  return !decoded.startsWith('//') && !decoded.includes('\\')
+    && !/[\u0000-\u001f]/.test(decoded)
+    && !decoded.split('/').some(segment => segment === '.' || segment === '..')
+    && !/^\/(?:api|actuator)(?:\/|$)/.test(lower);
+}
+
 /** Explicit same-origin gateway for biblioteca-server's public surface. */
 export class BibliotecaServerProxy {
   // Read-only deployments pass a rejection handler for the state-changing
@@ -8,7 +27,7 @@ export class BibliotecaServerProxy {
   private static readonly PUBLIC_GET_ROUTES = [
     '/api/users/me', '/api/lucene/status', '/api/reading-progress', '/api/reading-progress/one',
     '/api/divs', '/api/divs/:id/toc', '/api/authors', '/api/authors/page', '/api/authors/:strId',
-    '/api/works', '/api/collections/system/repos', '/api/collections/system/featured',
+    '/api/works', '/api/collections/mine', '/api/collections/system/repos', '/api/collections/system/featured',
     '/api/drest/teiDivs/search/findOpera', '/api/search/authors', '/api/search/divHeads',
     '/api/search/grep', '/api/search/lucene', '/api/search/vector', '/api/util/random'
   ];
@@ -63,9 +82,25 @@ export class BibliotecaServerProxy {
         res.status(200).json({ location });
         return;
       }
+      const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+      let body = Buffer.from(await upstream.arrayBuffer());
+      if (req.path === '/api/users/me' && upstream.ok && contentType.includes('application/json')) {
+        try {
+          const profile = JSON.parse(body.toString('utf8')) as { avatarUrl?: unknown };
+          if (typeof profile.avatarUrl === 'string') {
+            let avatar: URL | undefined;
+            try { avatar = new URL(profile.avatarUrl); } catch { /* drop malformed avatar URLs */ }
+            profile.avatarUrl = avatar?.protocol === 'https:' && /^lh\d+\.googleusercontent\.com$/.test(avatar.hostname)
+              && !avatar.username && !avatar.password && !avatar.hash
+              ? `/api/cover-thumbnails?${new URLSearchParams({ url: avatar.href, width: '160' })}`
+              : undefined;
+            body = Buffer.from(JSON.stringify(profile));
+          }
+        } catch { /* Preserve an upstream response we cannot safely interpret. */ }
+      }
       res.status(upstream.status);
-      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
-      res.send(Buffer.from(await upstream.arrayBuffer()));
+      res.setHeader('Content-Type', contentType);
+      res.send(body);
     } catch (error: any) {
       res.status(502).json({ error: `biblioteca-server unreachable at ${this.baseUrl}: ${error?.message || error}` });
     }
@@ -88,7 +123,7 @@ export class BibliotecaServerProxy {
 
   private async relayContent(req: Request, res: Response): Promise<void> {
     const upstreamPath = req.originalUrl.replace(/^\/api\/server-content/, '');
-    if (upstreamPath.startsWith('/api/') || upstreamPath.startsWith('/actuator')) {
+    if (!isSafeServerContentPath(upstreamPath)) {
       res.status(404).json({ error: 'not a public endpoint' });
       return;
     }

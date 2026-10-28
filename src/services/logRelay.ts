@@ -1,3 +1,5 @@
+import { sameOriginFetch } from './sameOriginFetch';
+
 // Client log relay to the dev server's terminal (POST /api/log, see
 // server.ts's own endpoint comment): the reader is an SPA, so its
 // logging otherwise lands only in the browser's devtools
@@ -18,6 +20,11 @@ type Level = 'info' | 'warn' | 'error';
 
 const queue: Record<Level, string[]> = { info: [], warn: [], error: [] };
 let timer: ReturnType<typeof setTimeout> | null = null;
+let readerIdentity = 'anonymous';
+
+export function setLogReaderIdentity(username?: string): void {
+  readerIdentity = username ? `user=${username}` : 'anonymous';
+}
 
 function flush(): void {
   timer = null;
@@ -27,10 +34,10 @@ function flush(): void {
     if (lines.length === 0) continue;
     batch[level] = [];
     try {
-      void fetch('/api/log', {
+      void sameOriginFetch('/api/log', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ level, lines }),
+        body: JSON.stringify({ level, identity: readerIdentity, lines }),
         keepalive: true
       }).catch(() => { /* relay is best-effort only */ });
     } catch { /* no fetch yet (SSR/tests) - drop */ }

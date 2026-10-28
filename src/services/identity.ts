@@ -84,19 +84,13 @@ export async function refreshGoogleProfile(): Promise<GoogleSignInResult> {
   if (!clientId) return { success: false, error: 'Google client id is not configured' };
   try {
     const accessToken = await requestGoogleProfileAccessToken(clientId);
-    const profileResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!profileResponse.ok) throw new Error(`Google profile request failed (${profileResponse.status})`);
-    const profile = await profileResponse.json() as { picture?: string };
-    if (!profile.picture) throw new Error('Google profile contains no picture');
+    const profile = await postGoogleProfileAccessToken(accessToken);
+    if (!profile.success || !profile.avatarUrl) throw new Error(profile.error || 'Google profile contains no picture');
     // The same profile URL is persisted server-side when possible, but the
     // local cache makes the avatar immediately available to this reader and
     // survives a server response that omitted the optional picture field.
-    window.localStorage.setItem(STORED_GOOGLE_AVATAR, profile.picture);
-    await postGoogleProfileAccessToken(accessToken).catch(error =>
-      console.debug('[identity] server profile persistence unavailable', error));
-    return { success: true, avatarUrl: profile.picture };
+    window.localStorage.setItem(STORED_GOOGLE_AVATAR, profile.avatarUrl);
+    return { success: true, avatarUrl: profile.avatarUrl };
   } catch (error) {
     console.debug('[identity] Google profile refresh unavailable', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };

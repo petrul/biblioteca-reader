@@ -3,7 +3,7 @@
 # Reader now owns the public pages, assets and allowlisted same-origin APIs.
 # Legacy text/XML/JSON/binary root URLs are proxied internally by reader.
 handle {
-    reverse_proxy 192.168.0.45:9032 {
+    reverse_proxy 127.0.0.1:9032 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}

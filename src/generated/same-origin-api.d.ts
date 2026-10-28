@@ -546,7 +546,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Payment provider config/capabilities (Stripe, unconfigured by default) */
+        /** Payment provider config/capabilities (disabled unless explicitly configured) */
         get: {
             parameters: {
                 query?: never;
@@ -564,6 +564,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             status: string;
+                            enabled: boolean;
                             /** @enum {string} */
                             provider: "stripe";
                             isLiveConfigured: boolean;
@@ -571,7 +572,7 @@ export interface paths {
                             supportedCurrencies: string[];
                             acceptedMethods: string[];
                             /** @enum {string} */
-                            mode: "live" | "sandbox";
+                            mode: "live" | "disabled";
                         };
                     };
                 };
@@ -594,7 +595,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a Stripe payment intent (or sandbox equivalent) for a work */
+        /** Create a Stripe payment intent for a work at its server-configured price */
         post: {
             parameters: {
                 query?: never;
@@ -607,15 +608,11 @@ export interface paths {
                     "application/json": {
                         workId: string;
                         workTitle?: string;
-                        amountCents: number;
-                        currency?: string;
-                        userEmail?: string;
-                        userId?: string;
                     };
                 };
             };
             responses: {
-                /** @description OK (Stripe live or sandbox simulator) */
+                /** @description OK (Stripe live) */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -629,11 +626,10 @@ export interface paths {
                             currency: string;
                             status: string;
                             mode: string;
-                            note?: string;
                         };
                     };
                 };
-                /** @description Missing workId/amountCents */
+                /** @description Missing or malformed workId */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -646,6 +642,17 @@ export interface paths {
                 };
                 /** @description Payment intent creation failed */
                 500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error?: string;
+                        };
+                    };
+                };
+                /** @description Payments disabled, Stripe unavailable, or no price configured for the work */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -686,10 +693,6 @@ export interface paths {
                         paymentId: string;
                         workId: string;
                         workTitle?: string;
-                        amountCents?: number;
-                        currency?: string;
-                        userId?: string;
-                        customerEmail?: string;
                     };
                 };
             };
@@ -741,6 +744,17 @@ export interface paths {
                 };
                 /** @description Payment confirmation failed */
                 500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error?: string;
+                        };
+                    };
+                };
+                /** @description Payments temporarily disabled */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };

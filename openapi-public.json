@@ -3046,7 +3046,7 @@
     },
     "/api/payment/config": {
       "get": {
-        "summary": "Payment provider config/capabilities (Stripe, unconfigured by default)",
+        "summary": "Payment provider config/capabilities (disabled unless explicitly configured)",
         "responses": {
           "200": {
             "description": "OK",
@@ -3056,6 +3056,7 @@
                   "type": "object",
                   "required": [
                     "status",
+                    "enabled",
                     "provider",
                     "isLiveConfigured",
                     "publishableKey",
@@ -3066,6 +3067,9 @@
                   "properties": {
                     "status": {
                       "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
                     },
                     "provider": {
                       "type": "string",
@@ -3095,7 +3099,7 @@
                       "type": "string",
                       "enum": [
                         "live",
-                        "sandbox"
+                        "disabled"
                       ]
                     }
                   }
@@ -3108,33 +3112,20 @@
     },
     "/api/payment/create-intent": {
       "post": {
-        "summary": "Create a Stripe payment intent (or sandbox equivalent) for a work",
+        "summary": "Create a Stripe payment intent for a work at its server-configured price",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "required": [
-                  "workId",
-                  "amountCents"
+                  "workId"
                 ],
                 "properties": {
                   "workId": {
                     "type": "string"
                   },
                   "workTitle": {
-                    "type": "string"
-                  },
-                  "amountCents": {
-                    "type": "integer"
-                  },
-                  "currency": {
-                    "type": "string"
-                  },
-                  "userEmail": {
-                    "type": "string"
-                  },
-                  "userId": {
                     "type": "string"
                   }
                 }
@@ -3144,7 +3135,7 @@
         },
         "responses": {
           "200": {
-            "description": "OK (Stripe live or sandbox simulator)",
+              "description": "OK (Stripe live)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3179,9 +3170,6 @@
                     },
                     "mode": {
                       "type": "string"
-                    },
-                    "note": {
-                      "type": "string"
                     }
                   }
                 }
@@ -3189,7 +3177,7 @@
             }
           },
           "400": {
-            "description": "Missing workId/amountCents",
+            "description": "Missing or malformed workId",
             "content": {
               "application/json": {
                 "schema": {
@@ -3213,6 +3201,19 @@
                     "error": {
                       "type": "string"
                     }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Payments disabled, Stripe unavailable, or no price configured for the work",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string" }
                   }
                 }
               }
@@ -3241,18 +3242,6 @@
                     "type": "string"
                   },
                   "workTitle": {
-                    "type": "string"
-                  },
-                  "amountCents": {
-                    "type": "integer"
-                  },
-                  "currency": {
-                    "type": "string"
-                  },
-                  "userId": {
-                    "type": "string"
-                  },
-                  "customerEmail": {
                     "type": "string"
                   }
                 }
@@ -3366,6 +3355,19 @@
                     "error": {
                       "type": "string"
                     }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Payments temporarily disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string" }
                   }
                 }
               }

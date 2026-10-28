@@ -2,7 +2,8 @@ import { mapServerLanguage } from './serversideApi';
 import createClient from 'openapi-fetch';
 import type { paths } from '../generated/same-origin-api';
 import type { Quotation } from '../types/textbase';
-const api = createClient<paths>({ baseUrl: globalThis.location?.origin || 'http://localhost' });
+import { sameOriginFetch } from './sameOriginFetch';
+const api = createClient<paths>({ baseUrl: globalThis.location?.origin || 'http://localhost', fetch: sameOriginFetch });
 export async function fetchServerQuote(id: string): Promise<Quotation | null> {
   const [path, query] = id.slice('server:'.length).split('?');
   const params = new URLSearchParams(query);

@@ -54,16 +54,28 @@ export function rewriteTwinLink(href: string, upstreamPage: string, upstreamOrig
 export function prepareTwin(html: string, upstreamPage: string, range: ParagraphRange | null) {
   const $ = load(html);
   // Analytics, authentication widgets and event handlers are absent from the no-JS edition.
-  $('script, iframe, object, embed, form, #g_id_onload, base').remove();
+  $('script, iframe, object, embed, form, #g_id_onload, base, meta[http-equiv="refresh"]').remove();
+  $('[srcset]').removeAttr('srcset');
+  $('[style]').each((_, element) => {
+    if (/url\s*\(/i.test($(element).attr('style') || '')) $(element).removeAttr('style');
+  });
   $('*').each((_, element) => {
     if (!('attribs' in element)) return;
     for (const name of Object.keys(element.attribs)) if (/^on/i.test(name) || name === 'srcdoc') $(element).removeAttr(name);
   });
   const origin = new URL(upstreamPage).origin;
-  $('[href], [src], [action]').each((_, element) => {
-    for (const name of ['href', 'src', 'action']) {
+  $('[href], [src], [action], [poster]').each((_, element) => {
+    for (const name of ['href', 'src', 'action', 'poster']) {
       const value = $(element).attr(name);
-      if (value !== undefined) $(element).attr(name, rewriteTwinLink(value, upstreamPage, origin));
+      if (value === undefined) continue;
+      let resolved: URL;
+      try { resolved = new URL(value, upstreamPage); } catch { $(element).removeAttr(name); continue; }
+      const isNavigationLink = name === 'href' && ['a', 'area'].includes(element.tagName.toLowerCase());
+      const isResourceLink = name === 'src' || name === 'poster' || name === 'href' && !isNavigationLink;
+      if (isResourceLink && resolved.origin !== origin) { $(element).removeAttr(name); continue; }
+      const rewritten = rewriteTwinLink(value, upstreamPage, origin);
+      if (rewritten) $(element).attr(name, rewritten);
+      else $(element).removeAttr(name);
     }
   });
   const body = $('.body-of-text').first();

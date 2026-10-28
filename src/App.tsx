@@ -31,6 +31,7 @@ import { GoogleOneTapAuto, googleIdentityPresentation } from './components/Googl
 import { fetchWhoAmI, submitGoogleCredential, refreshGoogleProfile, cachedGoogleAvatar, restoreStoredGoogleCredential, signOut, bookmarkStoreFor, preferencesStoreFor, WhoAmI } from './services/identity';
 import { AddToCollectionModal, AddToCollectionPayload } from './components/AddToCollectionModal';
 import { ChatWidget } from './components/ChatWidget';
+import { setLogReaderIdentity } from './services/logRelay';
 
 export default function App() {
   const [dataRevision, setDataRevision] = useState(0);
@@ -104,6 +105,9 @@ export default function App() {
   // asking textbase-server), so the prompt doesn't flash on briefly for a
   // reader who's actually already signed in.
   const [whoAmI, setWhoAmI] = useState<WhoAmI | null>(null);
+  useEffect(() => {
+    setLogReaderIdentity(whoAmI?.authenticated ? whoAmI.username : undefined);
+  }, [whoAmI?.authenticated, whoAmI?.username]);
   const reallySignedIn = whoAmI ? whoAmI.authenticated : null;
   const googleIdentity = googleIdentityPresentation(reallySignedIn);
   // Server-reported ADMIN_USERS membership (see identity.ts's WhoAmI) -
