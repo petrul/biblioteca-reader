@@ -291,14 +291,28 @@ export async function fetchRealWorkByPath(workPath: string): Promise<Work | null
   return workFromServerDiv(div as unknown as TeiDiv);
 }
 
+// The most TOC entries biblioteca-server serves per page
+// (ResourceLimits.DIV_PAGE_SIZE_MAX). A long work - Orlando Furioso's 4878
+// stanzas - spans several pages; reading only the first left most of it
+// out of the chapter list (serversideApi.test.ts pins this).
+export const TOC_PAGE_SIZE = 2000;
+
+/** Every TOC entry of the division `id`, page by page until a short page. */
+async function fetchWholeToc(id: number) {
+  const toc = [];
+  for (let page = 0; ; page++) {
+    const result = await api.GET('/api/divs/{id}/toc', { params: { path: { id }, query: { page, size: TOC_PAGE_SIZE } } });
+    const batch = requireData(result, `/api/divs/${id}/toc?page=${page}`);
+    toc.push(...batch);
+    if (batch.length < TOC_PAGE_SIZE) return toc;
+  }
+}
+
 export async function fetchRealChaptersForWork(workPath: string): Promise<Chapter[]> {
   const rootResult = await api.GET('/api/divs', { params: { query: { path: workPath } } });
   const root = requireData(rootResult, `/api/divs?path=${workPath}`);
   if (!root.id) return [];
-  const tocResult = await api.GET('/api/divs/{id}/toc', {
-    params: { path: { id: root.id }, query: { page: 0, size: 2000 } }
-  });
-  const toc = requireData(tocResult, `/api/divs/${root.id}/toc`);
+  const toc = await fetchWholeToc(root.id);
   const leaves = toc.filter(div => div.leaf && div.path);
   // Every division is a page, in document order: leaves are chapters, the
   // rest are section title pages (which may carry text of their own). A work

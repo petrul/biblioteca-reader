@@ -177,3 +177,45 @@ test('a work card summarises the work with its own description, never a generic 
   assert.equal(workFromServerDiv(div()).summary, '');
   assert.ok(!workFromServerDiv(div()).summary.includes('Textbase edition'));
 });
+
+// Regression (2026-10-29): the reader asked for the TOC as one page of 2000
+// entries, and the server serves at most 2000 a page. Orlando Furioso has 4878
+// (46 cantos of ~100 stanzas), so canto 21 stanza 58 was missing from the
+// chapter list - the reader showed it as "Ch. 2", its previous page as stanza
+// 107 of canto 20 and no next page. The whole TOC must be read, page by page.
+test('a work with more TOC entries than one page holds is read whole, page by page', async () => {
+  const work = 'ariosto_ludovico/orlando_furioso';
+  const toc = [{ path: work, head: 'Orlando furioso', depth: 0, leaf: false }];
+  for (let canto = 1; canto <= 46; canto++) {
+    toc.push({ path: `${work}/canto_${canto}`, head: `Canto ${canto}`, depth: 1, leaf: false });
+    for (let stanza = 1; stanza <= 105; stanza++) {
+      toc.push({ path: `${work}/canto_${canto}/${stanza}`, head: String(stanza), depth: 2, leaf: true });
+    }
+  }
+  const SERVER_PAGE_MAX = 2000; // biblioteca-server's ResourceLimits.DIV_PAGE_SIZE_MAX
+  const pagesAsked: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async input => {
+    const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
+    if (url.pathname === '/api/divs') return Response.json({ id: 7 });
+    if (url.pathname === '/api/divs/7/toc') {
+      const page = Number(url.searchParams.get('page'));
+      const size = Math.min(SERVER_PAGE_MAX, Number(url.searchParams.get('size')));
+      pagesAsked.push(`${page}x${size}`);
+      return Response.json(toc.slice(page * size, page * size + size));
+    }
+    return new Response(null, { status: 404 });
+  };
+  try {
+    const chapters = await fetchRealChaptersForWork(work);
+    assert.equal(chapters.length, toc.length, 'every TOC entry, not just the first page');
+    const index = chapters.findIndex(chapter => chapter.id === `${work}/canto_21/58`);
+    assert.ok(index > 0, 'canto 21 stanza 58 is in the chapter list');
+    assert.equal(chapters[index - 1].id, `${work}/canto_21/57`);
+    assert.equal(chapters[index + 1].id, `${work}/canto_21/59`);
+    assert.equal(chapters.at(-1)!.id, `${work}/canto_46/105`);
+    assert.deepEqual(pagesAsked, ['0x2000', '1x2000', '2x2000'], 'pages within the server limit, until a short one');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
