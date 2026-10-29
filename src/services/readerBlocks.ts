@@ -45,7 +45,9 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
   const findBlock = (target: EventTarget | null) => {
     const element = target instanceof Element ? target : null;
     if (!element || element.closest(INTERACTIVE)) return null;
-    const block = element.closest<HTMLElement>(READER_BLOCKS);
+    // Lines (and inline markup within them) belong to their nearest stanza.
+    // Standalone lines still work as blocks; native text selection is unchanged.
+    const block = element.closest<HTMLElement>('.lg') ?? element.closest<HTMLElement>(READER_BLOCKS);
     return block && container.contains(block) && block.textContent?.trim() ? block : null;
   };
   const over = (event: PointerEvent) => {
@@ -76,6 +78,7 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     timer = setTimeout(() => {
       if (!container.contains(block)) return;
       pressed = block;
+      select(block);
       callbacks.onActivate(block);
     }, 500);
   };
@@ -102,7 +105,7 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     const caret = doc.getSelection()?.anchorNode;
     const block = hovered || selected || findBlock(caret instanceof Element ? caret : caret?.parentElement || null);
     if (!block) return;
-    event.preventDefault(); callbacks.onActivate(block);
+    event.preventDefault(); select(block); callbacks.onActivate(block);
   };
   const applyLink = () => {
     const range = parseParagraphRange(new URLSearchParams(location.search).get('p') || location.hash);

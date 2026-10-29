@@ -680,7 +680,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         if (contentRef.current.contains(range.commonAncestorContainer)) {
           setSelectedText(text);
           const start = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
-          const block = start?.closest('p,h1,h2,h3,h4,h5,h6,blockquote,li');
+          const block = start?.closest('p,h1,h2,h3,h4,h5,h6,blockquote,li,.l,.lg');
           if (block && contentRef.current.contains(block)) {
             const prefix = document.createRange(); prefix.selectNodeContents(block);
             prefix.setEnd(range.startContainer, range.startOffset);
@@ -1693,26 +1693,29 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             top: `${Math.max(60, selectionCoords.y - 45)}px`,
             transform: 'translateX(-50%)'
           }}
-          className="z-50 bg-[#08231c] text-emerald-100 px-3 py-1.5 rounded-xl shadow-2xl border border-emerald-500/30 flex flex-wrap justify-center items-center gap-1.5 max-w-[calc(100vw-16px)] animate-in fade-in zoom-in-95 duration-150"
+          className="z-50 bg-[#061d28]/95 text-white px-3 py-1.5 rounded-xl shadow-2xl border border-white/20 flex flex-wrap justify-center items-center gap-1.5 w-max max-w-[calc(100vw-16px)] animate-in fade-in zoom-in-95 duration-150"
         >
-          <button id="btn-sel-similar" type="button" onClick={() => setSimilarityQuery(selectedText)}
-            className="flex items-center gap-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-emerald-500/20 cursor-pointer"
+          <button id="btn-sel-similar" type="button" onClick={() => {
+            contentRef.current?.classList.remove('reader-block-selection');
+            setSimilarityQuery(selectedText);
+          }}
+            className="flex items-center gap-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-white/10 cursor-pointer"
             title="Find semantically similar passages">
             <Sparkles className="w-3.5 h-3.5 text-[#f59e0b]" /><span>Similar</span>
           </button>
-          {quoteError && <p role="alert" className="absolute top-full mt-2 w-72 p-2 rounded bg-[#08231c] text-white">{quoteError}</p>}
+          {quoteError && <p role="alert" className="absolute top-full mt-2 w-72 p-2 rounded bg-[#061d28]/95 text-white">{quoteError}</p>}
           <button
             id="btn-sel-create-quote"
             onClick={() => void handleGenerateQuoteLink()}
             disabled={quoteCreating}
-            className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
             title="Generate Shareable Quote Link"
           >
             <Quote className="w-3.5 h-3.5 text-[#f59e0b]" />
             <span>{quoteCreating ? 'Resolving…' : 'Quote Link'}</span>
           </button>
 
-          <span className="w-px h-4 bg-emerald-500/30" />
+          <span className="w-px h-4 bg-white/15" />
 
           <button
             id="btn-sel-copy"
@@ -1722,14 +1725,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 if (ok) setTimeout(() => setCopiedSelection(false), 2000);
               });
             }}
-            className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
             title="Copy selected text"
           >
-            {copiedSelection ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-[#f59e0b]" />}
+            {copiedSelection ? <Check className="w-3.5 h-3.5 text-amber-300" /> : <Copy className="w-3.5 h-3.5 text-[#f59e0b]" />}
             <span>{copiedSelection ? 'Copied' : 'Copy'}</span>
           </button>
 
-          <span className="w-px h-4 bg-emerald-500/30" />
+          <span className="w-px h-4 bg-white/15" />
 
           <button
             id="btn-sel-save-collection"
@@ -1743,31 +1746,31 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               chapterTitle: chapter.title,
               quoteText: selectedText
             })}
-            className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
             title="Save selected quote to personal collection"
           >
             <Bookmark className="w-3.5 h-3.5 text-[#f59e0b]" />
             <span>Save</span>
           </button>
 
-          <span className="w-px h-4 bg-emerald-500/30" />
+          <span className="w-px h-4 bg-white/15" />
 
           <button
             id="btn-sel-copy-citation"
             onClick={handleCopyCitation}
-            className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer"
+            className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
             title="Copy academic citation"
           >
-            {copiedCitation ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-[#f59e0b]" />}
+            {copiedCitation ? <Check className="w-3.5 h-3.5 text-amber-300" /> : <Copy className="w-3.5 h-3.5 text-[#f59e0b]" />}
             <span>{copiedCitation ? 'Copied' : 'Cite'}</span>
           </button>
 
-          <span className="w-px h-4 bg-emerald-500/30" />
+          <span className="w-px h-4 bg-white/15" />
 
           <button
             id="btn-sel-native-share"
             onClick={() => handleNativeShare()}
-            className="p-1 rounded hover:bg-emerald-500/20 text-emerald-200 hover:text-[#f59e0b] transition-colors cursor-pointer"
+            className="p-1 rounded hover:bg-white/10 text-white/60 hover:text-[#f59e0b] transition-colors cursor-pointer"
             title="Share quotation"
           >
             <Share2 className="w-3.5 h-3.5" />

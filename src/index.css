@@ -385,17 +385,22 @@
 }
 
 /* Mark the right edge without changing paragraph/verse layout. */
-.reader-text-container .block-active {
-  position: relative;
-}
-
 .reader-text-container .block-active,
 .reader-text-container .block-hover,
 .reader-text-container .block-linked {
-  background-color: rgba(229, 231, 235, 0.35);
+  position: relative;
 }
 
-.reader-text-container .block-active::before {
+/* Keep the native range for Quote/Similar/copy, without painting a whole
+   paragraph. A manual text selection uses the browser's normal highlight. */
+.reader-text-container.reader-block-selection ::selection {
+  background-color: transparent;
+  color: inherit;
+}
+
+.reader-text-container .block-active::before,
+.reader-text-container .block-hover::before,
+.reader-text-container .block-linked::before {
   content: '';
   position: absolute;
   top: 0;

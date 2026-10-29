@@ -64,15 +64,16 @@ function installDom() {
   };
 }
 
-async function mountReader(context: { mock: any }) {
+async function mountReader(context: { mock: any }, htmlContent = chapter.htmlContent) {
   const dom = installDom();
   const { act, createElement } = await import('react').then(react => ({ act: react.act, createElement: react.createElement }));
   const { createRoot } = await import('react-dom/client');
   const { readerService } = await import('../services/readerService');
   const { ReaderView } = await import('./ReaderView');
   context.mock.method(readerService, 'getWorkById', () => work);
-  context.mock.method(readerService, 'getChaptersForWork', () => [chapter]);
-  context.mock.method(readerService, 'getChapter', () => chapter);
+  const renderedChapter = { ...chapter, htmlContent };
+  context.mock.method(readerService, 'getChaptersForWork', () => [renderedChapter]);
+  context.mock.method(readerService, 'getChapter', () => renderedChapter);
   context.mock.method(readerService, 'isWorkUnlocked', () => true);
 
   const host = dom.window.document.createElement('div');
@@ -126,9 +127,60 @@ test('the Similar button is offered once the reader selects arbitrary text', asy
     assert.ok(similar, 'the Similar button is presented for a text selection');
     assert.equal(similar!.textContent, 'Similar');
     assert.equal(selection.toString(), PARAGRAPH.slice(5, 30), 'the toolbar is for exactly the selected fragment');
+    assert.equal(reader.paragraph.closest('.reader-text-container')!.classList.contains('reader-block-selection'), false,
+      'manual text selection keeps its normal highlight');
   } finally {
     await reader.unmount();
   }
+});
+
+test('hovering or tapping a verse targets its stanza while a manual verse selection stays exact', async context => {
+  const reader = await mountReader(context,
+    '<div class="lg" id="stanza"><div class="l" id="para"><em>First verse.</em></div><div class="l">Second verse.</div></div>');
+  try {
+    const verse = reader.paragraph;
+    const stanza = reader.document.getElementById('stanza')!;
+    const inline = verse.querySelector('em')!;
+    await reader.act(async () => {
+      inline.dispatchEvent(new (globalThis as any).PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }));
+    });
+    assert.ok(stanza.classList.contains('block-hover'));
+    assert.equal(verse.classList.contains('block-hover'), false);
+    await reader.act(async () => { inline.dispatchEvent(new (globalThis as any).MouseEvent('click', { bubbles: true })); });
+    await reader.settle();
+    assert.ok(stanza.classList.contains('block-active'));
+    assert.equal(verse.classList.contains('block-active'), false);
+    assert.equal(reader.document.getSelection()!.toString(), stanza.textContent);
+    assert.ok(reader.similarButton());
+
+    const range = reader.document.createRange();
+    range.selectNodeContents(verse as any);
+    const selection = reader.document.getSelection()!;
+    selection.removeAllRanges(); selection.addRange(range);
+    await reader.act(async () => {
+      reader.document.dispatchEvent(new (globalThis as any).Event('selectionchange'));
+      reader.document.dispatchEvent(new (globalThis as any).Event('pointerup'));
+    });
+    await reader.settle();
+    assert.equal(selection.toString(), 'First verse.');
+    assert.equal(stanza.closest('.reader-text-container')!.classList.contains('reader-block-selection'), false);
+    assert.ok(reader.similarButton());
+  } finally { await reader.unmount(); }
+});
+
+test('Similar reveals the whole-paragraph selection used for its search', async context => {
+  const reader = await mountReader(context);
+  try {
+    await reader.act(async () => { reader.paragraph.dispatchEvent(new (globalThis as any).MouseEvent('click', { bubbles: true })); });
+    await reader.settle();
+    const container = reader.paragraph.closest('.reader-text-container')!;
+    assert.ok(container.classList.contains('reader-block-selection'));
+    await reader.act(async () => {
+      reader.similarButton()!.dispatchEvent(new (globalThis as any).MouseEvent('click', { bubbles: true }));
+    });
+    assert.equal(container.classList.contains('reader-block-selection'), false, 'the native selection highlight is visible');
+    assert.equal(reader.document.getSelection()!.toString().trim(), PARAGRAPH);
+  } finally { await reader.unmount(); }
 });
 
 test('the Similar button is offered when the reader taps a paragraph', async context => {
@@ -141,6 +193,8 @@ test('the Similar button is offered when the reader taps a paragraph', async con
 
     assert.ok(reader.paragraph.classList.contains('block-active'), 'the tapped paragraph is the active block');
     assert.equal(reader.document.getSelection()!.toString().trim(), PARAGRAPH, 'the whole paragraph is selected');
+    assert.ok(reader.paragraph.closest('.reader-text-container')!.classList.contains('reader-block-selection'),
+      'only the automatically selected range has its text highlight hidden');
     const similar = reader.similarButton();
     assert.ok(similar, 'the Similar button is presented for a tapped paragraph');
     assert.equal(similar!.textContent, 'Similar');
@@ -150,6 +204,7 @@ test('the Similar button is offered when the reader taps a paragraph', async con
     assert.equal(reader.document.getElementById('selection-quote-toolbar'), null, 'retapping clears the selection toolbar');
     assert.equal(reader.document.getSelection()!.toString(), '', 'retapping clears the native selection');
     assert.equal(reader.paragraph.classList.contains('block-active'), false, 'retapping clears the active paragraph');
+    assert.equal(reader.paragraph.closest('.reader-text-container')!.classList.contains('reader-block-selection'), false);
   } finally {
     await reader.unmount();
   }
