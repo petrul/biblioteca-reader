@@ -734,7 +734,7 @@ export default function App() {
       />
 
       {/* Connectivity status for online requests. */}
-      <ServerStatusToast />
+      <ServerStatusToast userId={currentUser?.id || ANONYMOUS_USER_ID} />
 
       {/* Biblioteca's universal assistant: available from every reader page,
           including the site-simulator-style admin surfaces. */}

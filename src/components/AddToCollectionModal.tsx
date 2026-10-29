@@ -36,6 +36,8 @@ export const AddToCollectionModal: React.FC<AddToCollectionModalProps> = ({
   const [showNewColInput, setShowNewColInput] = useState(false);
   const [newColName, setNewColName] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -47,37 +49,50 @@ export const AddToCollectionModal: React.FC<AddToCollectionModalProps> = ({
       setNote('');
       setShowNewColInput(false);
       setSavedSuccess(false);
+      setSaving(false);
+      setSaveError(null);
     }
   }, [isOpen, userId]);
 
   if (!isOpen || !payload) return null;
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    let targetColId = selectedColId;
-
-    if (showNewColInput && newColName.trim()) {
-      const created = readerService.createCollection(userId, newColName.trim());
-      targetColId = created.id;
+    if (saving) return;
+    setSaving(true);
+    try {
+      if (saveError) {
+        await readerService.retryCollectionsSave(userId);
+      } else {
+        let targetColId = selectedColId;
+        if (showNewColInput && newColName.trim()) {
+          targetColId = readerService.createCollection(userId, newColName.trim()).id;
+        }
+        const saved = readerService.addItemToCollection(userId, targetColId, {
+          type: payload.type,
+          referenceId: payload.referenceId,
+          workId: payload.workId,
+          workTitle: payload.workTitle,
+          authorName: payload.authorName,
+          chapterId: payload.chapterId,
+          chapterTitle: payload.chapterTitle,
+          quoteText: payload.quoteText,
+          note: note.trim() || undefined
+        });
+        if (!saved) throw new Error('The selected collection is no longer available');
+        await readerService.flushCollections(userId);
+      }
+      setSaveError(null);
+      setSavedSuccess(true);
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 1000);
+    } catch {
+      setSaveError('Could not save your collection. Keep this page open and retry.');
+    } finally {
+      setSaving(false);
     }
-
-    readerService.addItemToCollection(userId, targetColId, {
-      type: payload.type,
-      referenceId: payload.referenceId,
-      workId: payload.workId,
-      workTitle: payload.workTitle,
-      authorName: payload.authorName,
-      chapterId: payload.chapterId,
-      chapterTitle: payload.chapterTitle,
-      quoteText: payload.quoteText,
-      note: note.trim() || undefined
-    });
-
-    setSavedSuccess(true);
-    setTimeout(() => {
-      onSuccess();
-      onClose();
-    }, 1000);
   };
 
   return (
@@ -194,6 +209,7 @@ export const AddToCollectionModal: React.FC<AddToCollectionModalProps> = ({
             </div>
 
             {/* Action Buttons */}
+            {saveError && <p role="alert" className="text-amber-300">{saveError}</p>}
             <div className="flex items-center justify-end space-x-2 pt-2 border-t border-emerald-500/20">
               <button
                 type="button"
@@ -204,9 +220,10 @@ export const AddToCollectionModal: React.FC<AddToCollectionModalProps> = ({
               </button>
               <button
                 type="submit"
+                disabled={saving}
                 className="px-5 py-2 rounded-lg bg-[#f59e0b] hover:bg-amber-400 text-black font-bold uppercase tracking-wider shadow-sm cursor-pointer"
               >
-                Save
+                {saving ? 'Saving…' : saveError ? 'Retry Save' : 'Save'}
               </button>
             </div>
           </form>

@@ -131,3 +131,48 @@ test('malformed persisted collection items do not crash the Collections screen',
   await readerService.attachCollectionsStore('petru', account);
   assert.deepEqual(readerService.getCollections('petru').map(c => c.items), [[], []]);
 });
+
+test('an explicitly empty account never resurrects old browser collections', async () => {
+  const { readerService } = await import('./readerService');
+  storage.setItem('biblioteca_reader_collections_petru', JSON.stringify([
+    { id: 'old', name: 'Deleted collection', items: [{ ...chapter(1), id: 'old-item' }] },
+  ]));
+  await readerService.attachCollectionsStore('petru', new FakeAccountStore({ collections: [] }));
+  const collections = readerService.getCollections('petru');
+  assert.deepEqual(collections.map(c => c.name), ['Favorites']);
+  assert.deepEqual(collections[0].items, []);
+});
+
+test('a late account load cannot reattach an account after sign-out', async () => {
+  const { readerService } = await import('./readerService');
+  let finish!: (value: UserPreferences) => void;
+  const account = new FakeAccountStore();
+  account.get = () => new Promise(resolve => { finish = resolve; });
+  const loading = readerService.attachCollectionsStore('petru', account);
+  readerService.detachCollectionsStore('petru');
+  finish({ collections: [] });
+  await loading;
+  assert.equal(account.writes, 0);
+});
+
+test('a failed collection save remains visible and retry persists the cached changes', async () => {
+  const { readerService } = await import('./readerService');
+  const account = new FakeAccountStore();
+  await readerService.attachCollectionsStore('petru', account);
+  const originalSet = account.set.bind(account);
+  account.set = async () => { throw new Error('connection lost'); };
+  readerService.createCollection('petru', 'Keep my notes');
+  await assert.rejects(readerService.flushCollections('petru'), /connection lost/);
+  assert.match(readerService.getCollectionsSaveError('petru')!, /could not be saved/);
+  let finish!: () => void;
+  account.set = async patch => {
+    await new Promise<void>(resolve => { finish = resolve; });
+    await originalSet(patch);
+  };
+  const retry = readerService.retryCollectionsSave('petru');
+  assert.match(readerService.getCollectionsSaveError('petru')!, /could not be saved/, 'retry is not acknowledged yet');
+  finish();
+  await retry;
+  assert.equal(readerService.getCollectionsSaveError('petru'), undefined);
+  assert.ok(account.document.collections!.some(c => c.name === 'Keep my notes'));
+});

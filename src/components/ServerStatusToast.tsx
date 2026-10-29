@@ -7,14 +7,20 @@ import { SERVER_ERROR_EVENT } from '../services/serversideApi';
 // this is the only visible signal that the server is down, with a retry
 // that checks server status without downloading author/work pages. Sits above the
 // mobile bottom nav on small screens.
-export function ServerStatusToast() {
+export function ServerStatusToast({ userId }: { userId?: string }) {
   const [down, setDown] = useState(readerService.isServerDown());
   const [serverError, setServerError] = useState<number | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [collectionError, setCollectionError] = useState<string | undefined>();
 
   useEffect(() => readerService.subscribe(() => {
     setDown(readerService.isServerDown());
-  }), []);
+    setCollectionError(userId ? readerService.getCollectionsSaveError(userId) : undefined);
+  }), [userId]);
+
+  useEffect(() => {
+    setCollectionError(userId ? readerService.getCollectionsSaveError(userId) : undefined);
+  }, [userId]);
 
   useEffect(() => {
     const handleServerError = (event: Event) => {
@@ -25,14 +31,20 @@ export function ServerStatusToast() {
     return () => window.removeEventListener(SERVER_ERROR_EVENT, handleServerError);
   }, []);
 
-  if (!down && serverError === null) return null;
+  if (!down && serverError === null && !collectionError) return null;
 
   const retry = async () => {
     if (retrying) return;
     setRetrying(true);
     try {
+      if (collectionError && userId) {
+        await readerService.retryCollectionsSave(userId);
+        return;
+      }
       await readerService.retryServerConnection();
       if (!readerService.isServerDown()) setServerError(null);
+    } catch {
+      // The collection error remains visible until its write succeeds.
     } finally {
       setRetrying(false);
     }
@@ -46,8 +58,9 @@ export function ServerStatusToast() {
     >
       <div className="min-w-0">
         <span className="block font-mono font-bold uppercase tracking-wider text-white/90">
-          {serverError === null ? 'Server down' : `Server error (${serverError})`}
+          {collectionError ? 'Collections not saved' : serverError === null ? 'Server down' : `Server error (${serverError})`}
         </span>
+        {collectionError && <p className="mt-1 text-white/85">{collectionError}</p>}
         <button
           type="button"
           onClick={retry}

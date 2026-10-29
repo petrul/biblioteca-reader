@@ -13,7 +13,6 @@ async function saveFirstChapter(page: Page) {
 
 test('the collections modal filters every section and Enter opens the highlighted item', async ({ page }) => {
   await saveFirstChapter(page);
-  const readingUrl = page.url();
   // A bare letter pressed right after another reads as typing, not a shortcut.
   await page.waitForTimeout(900);
   await page.keyboard.press('s');
@@ -34,12 +33,17 @@ test('the collections modal filters every section and Enter opens the highlighte
   await page.keyboard.press('Escape');
   await expect(modal).toHaveCount(0);
 
-  // On desktop the navbar book icon remains the quick-find shortcut.
-  await page.locator('#nav-collections-quick-btn').click();
+  // The keyboard shortcut reopens quick-find; the navbar book icon now
+  // navigates directly to the Collections page.
+  await page.waitForTimeout(900);
+  await page.keyboard.press('s');
   await modal.locator('#collections-search').fill('a');
   await page.keyboard.press('Enter');
   await expect(modal).toHaveCount(0);
   await expect(page.locator('.reader-text-container')).toBeVisible();
+  await page.locator('#nav-collections-quick-btn').click();
+  await expect(page.getByRole('heading', { name: 'Personal Collections', exact: true })).toBeVisible();
+  await expect(modal).toHaveCount(0);
 });
 
 test('the collections page and the modal show the same panel', async ({ page }) => {

@@ -645,7 +645,8 @@ export async function fetchUserPreferences(): Promise<Record<string, unknown>> {
 // Stores the whole document as-is server-side; the merge-not-overwrite
 // contract lives in RemotePreferencesStore (see preferencesStore.ts).
 export async function saveUserPreferences(preferences: Record<string, unknown>): Promise<void> {
-  await api.PUT('/api/users/me/preferences', { body: preferences });
+  const result = await api.PUT('/api/users/me/preferences', { body: preferences });
+  requireData(result, '/api/users/me/preferences');
 }
 
 // --- payments (server.ts's own Stripe/sandbox handlers) ---

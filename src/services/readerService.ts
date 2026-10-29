@@ -519,6 +519,8 @@ let adminState: {
 // once attachCollectionsStore() is called for a signed-in reader.
 const collectionsCache = new Map<string, PersonalCollection[]>();
 const collectionsStores = new Map<string, PreferencesStore>();
+const collectionWrites = new Map<string, Promise<void>>();
+const collectionSaveErrors = new Map<string, string>();
 let localPreferences: LocalPreferencesStore | undefined;
 function localPreferencesStore(): LocalPreferencesStore {
   return localPreferences ??= new LocalPreferencesStore(localStorage);
@@ -528,6 +530,8 @@ function localPreferencesStore(): LocalPreferencesStore {
 export function resetCollectionsForTests(): void {
   collectionsCache.clear();
   collectionsStores.clear();
+  collectionWrites.clear();
+  collectionSaveErrors.clear();
   localPreferences = undefined;
 }
 
@@ -623,7 +627,18 @@ function loadStoredCollections(userId: string): PersonalCollection[] {
 function saveStoredCollections(userId: string, cols: PersonalCollection[]) {
   collectionsCache.set(userId, copyCollections(cols));
   const store = collectionsStores.get(userId) ?? localPreferencesStore();
-  void store.set({ collections: cols }).catch(e => console.error('Failed to store collections', e));
+  const pending = store.set({ collections: copyCollections(cols) });
+  collectionWrites.set(userId, pending);
+  void pending.then(() => {
+    if (collectionWrites.get(userId) === pending) collectionSaveErrors.delete(userId);
+    notify();
+  }, error => {
+    if (collectionWrites.get(userId) === pending) {
+      collectionSaveErrors.set(userId, 'Your collections could not be saved. Keep this page open and retry.');
+    }
+    console.error('Failed to store collections', error);
+    notify();
+  });
   notify();
 }
 
@@ -1161,6 +1176,19 @@ export const readerService = {
     return loadStoredCollections(userId);
   },
 
+  getCollectionsSaveError(userId: string): string | undefined {
+    return collectionSaveErrors.get(userId);
+  },
+
+  async flushCollections(userId: string): Promise<void> {
+    await collectionWrites.get(userId);
+  },
+
+  async retryCollectionsSave(userId: string): Promise<void> {
+    saveStoredCollections(userId, loadStoredCollections(userId));
+    await this.flushCollections(userId);
+  },
+
   /** The (UUID) id of the user's non-deletable Favorites collection. */
   getFavoritesId(userId: string): string {
     return loadStoredCollections(userId).find(c => c.isDefaultFavorites)!.id;
@@ -1263,8 +1291,9 @@ export const readerService = {
   async attachCollectionsStore(userId: string, store: PreferencesStore): Promise<void> {
     collectionsStores.set(userId, store);
     const remote = (await store.get()).collections;
-    if (remote && remote.length) {
-      const migrated = normalizeCollections(remote);
+    if (collectionsStores.get(userId) !== store) return;
+    if (remote !== undefined) {
+      const migrated = normalizeCollections(remote.length ? remote : defaultCollections(userId));
       collectionsCache.set(userId, copyCollections(migrated));
       if (JSON.stringify(migrated) !== JSON.stringify(remote)) await store.set({ collections: migrated });
     } else {
@@ -1279,6 +1308,8 @@ export const readerService = {
   detachCollectionsStore(userId: string): void {
     collectionsStores.delete(userId);
     collectionsCache.delete(userId);
+    collectionWrites.delete(userId);
+    collectionSaveErrors.delete(userId);
   },
 
   // --- AUTH ---
