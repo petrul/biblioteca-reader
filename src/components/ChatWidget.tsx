@@ -231,6 +231,11 @@ export function ChatWidget({ placement = 'floating', open: openProp, onOpenChang
         body: JSON.stringify({ message: text, ...(continuedConversationId ? { conversationId: continuedConversationId } : {}), ...(scope ? { scope } : {}) }),
       });
       const payload = await response.json().catch(() => ({}));
+      // A chat limit (services/chatLimit.ts) explains itself; show its message.
+      if ((payload.error === 'chat_limit' || payload.error === 'chat_requires_browser') && typeof payload.message === 'string') {
+        setMessages(previous => [...previous, { id: Date.now() + 1, role: 'assistant', text: payload.message }]);
+        return;
+      }
       if (!response.ok || typeof payload.answer !== 'string') throw new Error('chat unavailable');
       if (typeof payload.conversationId === 'string') {
         conversationIdsRef.current[scopeKey] = payload.conversationId;

@@ -4,6 +4,8 @@ import test from 'node:test';
 import express from 'express';
 import { crawlerPageRateLimit, type CrawlerLimitOptions } from './crawlerPageLimit';
 import { RESOURCE_LIMITS } from './resourceLimits';
+import { chatRateLimit } from './chatLimit';
+import { createVisitorCookies } from './visitorCookie';
 
 // What the reader limits, precisely, and when - the specification for
 // resourceLimits.ts, checked against the real middleware with its defaults:
@@ -14,6 +16,10 @@ import { RESOURCE_LIMITS } from './resourceLimits';
 //                                (out of any person's reach)                           oldest read leaves the hour
 //   distinct chapters read       clients without a valid cookie        150/h/address   same
 //   fresh visitor cookies        one address                           40/h            no cookie: counted as cookieless
+//   chat/ask/RAG search          clients without a valid cookie        refused         403 chat_requires_browser
+//   chat/ask/RAG search          a browser                             60/h, 300/day   429 chat_limit until the window
+//   chat/ask/RAG search          one address, all browsers together    240/h           429 chat_limit, scope address
+//   chat/ask/RAG search          an administrator                      never limited   -
 //
 // The per-request size caps (search results, TOC pages...) are the
 // server's - see biblioteca-server's ResourceLimitsTest.
@@ -38,6 +44,9 @@ test('the limits are these and no others', () => {
     browserChaptersPerHour: 3000,
     cookielessChaptersPerHour: 150,
     newVisitorCookiesPerHour: 40,
+    chatMessagesPerHourPerBrowser: 60,
+    chatMessagesPerDayPerBrowser: 300,
+    chatMessagesPerHourPerAddress: 240,
     windowMs: 3_600_000,
     contact: 'petru@scriptorium.ro',
   });
@@ -92,5 +101,90 @@ test('one address gets 40 fresh visitor cookies an hour, then none', async () =>
       assert.ok((await fetch(`${origin}/page/${i}`, { headers: PAGE })).headers.get('set-cookie'), `cookie ${i}`);
     }
     assert.equal((await fetch(`${origin}/page/40`, { headers: PAGE })).headers.get('set-cookie'), null);
+  });
+});
+
+// --- chat: the shared GPU is for people ----------------------------------
+
+async function withChat(options: { now?: () => number; isAdmin?: boolean }, run: (origin: string) => Promise<void>) {
+  const visitors = createVisitorCookies('test-secret');
+  const app = express();
+  app.use(crawlerPageRateLimit({ visitors }));
+  app.post('/api/rag/chat', chatRateLimit({ visitors, now: options.now, isExempt: async () => Boolean(options.isAdmin) }),
+    (_req, res) => res.json({ answer: 'ok' }));
+  app.get('*', (_req, res) => res.type('html').send('<html>page</html>'));
+  const server = createServer(app);
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Server did not bind a TCP port');
+  try { await run(`http://127.0.0.1:${address.port}`); }
+  finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+}
+
+/** A browser: loads a page, keeps its visitor cookie, then chats. */
+async function chatter(origin: string) {
+  const cookie = (await fetch(`${origin}/hugo`, { headers: PAGE })).headers.get('set-cookie')!.split(';')[0];
+  return () => fetch(`${origin}/api/rag/chat`, { method: 'POST', headers: { Cookie: cookie } });
+}
+
+test('a client that is not a browser - no valid visitor cookie - gets no chat at all', async () => {
+  await withChat({}, async origin => {
+    for (const headers of [{}, { Cookie: 'bib_v=forged.signature' }]) {
+      const refused = await fetch(`${origin}/api/rag/chat`, { method: 'POST', headers });
+      assert.equal(refused.status, 403);
+      assert.equal((await refused.json()).error, 'chat_requires_browser');
+    }
+  });
+});
+
+test('a browser sends 60 chat messages an hour, then waits for the hour', async () => {
+  let timestamp = 1_000_000;
+  await withChat({ now: () => timestamp }, async origin => {
+    const ask = await chatter(origin);
+    for (let i = 0; i < 60; i++) {
+      assert.equal((await ask()).status, 200, `message ${i}`);
+      timestamp += 1000;
+    }
+    const limited = await ask();
+    assert.equal(limited.status, 429);
+    const notice = await limited.json();
+    assert.deepEqual([notice.error, notice.scope, notice.limit], ['chat_limit', 'hour', 60]);
+    assert.ok(Number(limited.headers.get('retry-after')) > 0);
+    timestamp += 3_600_000;
+    assert.equal((await ask()).status, 200, 'an hour later');
+  });
+});
+
+test('a browser sends 300 chat messages a day', async () => {
+  let timestamp = 1_000_000;
+  await withChat({ now: () => timestamp }, async origin => {
+    const ask = await chatter(origin);
+    for (let hour = 0; hour < 5; hour++) {
+      for (let i = 0; i < 60; i++) assert.equal((await ask()).status, 200, `hour ${hour} message ${i}`);
+      timestamp += 3_600_000;
+    }
+    const limited = await ask();
+    assert.equal(limited.status, 429, 'a fresh hour, but 300 already today');
+    assert.equal((await limited.json()).scope, 'day');
+  });
+});
+
+test('one address, all its browsers together, sends 240 chat messages an hour', async () => {
+  await withChat({}, async origin => {
+    const people = [await chatter(origin), await chatter(origin), await chatter(origin), await chatter(origin)];
+    for (const ask of people) for (let i = 0; i < 60; i++) assert.equal((await ask()).status, 200);
+    const fifth = await chatter(origin);
+    const limited = await fifth();
+    assert.equal(limited.status, 429, 'a fresh browser on an address that has used its 240');
+    assert.equal((await limited.json()).scope, 'address');
+  });
+});
+
+test('an administrator is never limited', async () => {
+  await withChat({ isAdmin: true }, async origin => {
+    for (let i = 0; i < 400; i++) {
+      const status = (await fetch(`${origin}/api/rag/chat`, { method: 'POST' })).status;
+      if (status !== 200) assert.fail(`message ${i} answered ${status}`);
+    }
   });
 });

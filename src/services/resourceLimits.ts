@@ -14,6 +14,19 @@
 //   distinct chapters read                  clients without a valid      150 per hour,
 //                                           visitor cookie               per address
 //   fresh visitor cookies handed out        one address                  40 per hour
+//   chat / ask / RAG search requests        clients without a valid      refused (403)
+//                                           visitor cookie
+//   chat / ask / RAG search requests        a browser                    60 per hour,
+//                                                                        300 per day
+//   chat / ask / RAG search requests        one address, all browsers    240 per hour
+//                                           together
+//
+// The chat runs on the shared GPU: one message is three or four calls to a
+// 9B model, ~9 s of GPU time. So it is for people only - an automated client
+// gets nothing - and a browser's budget is a message a minute, nonstop for an
+// hour: a person typing and reading the answers stays below it, a bot looping
+// does not. The address ceiling keeps one address from multiplying that with
+// many cookies. Administrators are exempt.
 //
 // Why 3000 is out of human reach: reading straight through costs one read per
 // new chapter (the reader prefetches the next one), jumping around at most
@@ -34,7 +47,13 @@ export const RESOURCE_LIMITS = {
   cookielessChaptersPerHour: 150,
   /** Fresh visitor cookies one address may obtain an hour. */
   newVisitorCookiesPerHour: 40,
-  /** The window every limit is counted over. */
+  /** Chat/ask/RAG search requests an hour for one browser. */
+  chatMessagesPerHourPerBrowser: 60,
+  /** Chat/ask/RAG search requests a day for one browser. */
+  chatMessagesPerDayPerBrowser: 300,
+  /** Chat/ask/RAG search requests an hour from one address, all its browsers together. */
+  chatMessagesPerHourPerAddress: 240,
+  /** The window the reading limits are counted over (chat: hour and day as named). */
   windowMs: 60 * 60 * 1000,
   /** Where volume access is offered. */
   contact: 'petru@scriptorium.ro',

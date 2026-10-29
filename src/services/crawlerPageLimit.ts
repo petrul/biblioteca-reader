@@ -1,6 +1,7 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { RESOURCE_LIMITS, type ResourceLimitOverrides } from './resourceLimits';
+import { createVisitorCookies, type VisitorCookies } from './visitorCookie';
 
 // The automated-access limit: clients that do not keep the reader's visitor
 // cookie - curl, most scrapers - may read a small number of chapters an
@@ -14,13 +15,15 @@ import { RESOURCE_LIMITS, type ResourceLimitOverrides } from './resourceLimits';
 // as a browser. Counters live in memory: a restart forgives everyone.
 
 export const READ_LIMIT_ERROR = 'read_limit';
-export const VISITOR_COOKIE = 'bib_v';
+export { VISITOR_COOKIE } from './visitorCookie';
 const MAX_TRACKED_KEYS = 50_000;
 
 export interface CrawlerLimitOptions extends ResourceLimitOverrides {
   windowMs?: number;
   now?: () => number;
-  /** HMAC key for visitor cookies; a random per-process key by default. */
+  /** The process's visitor cookies, shared with the chat limit; a fresh set by default. */
+  visitors?: VisitorCookies;
+  /** HMAC key for a fresh set of visitor cookies (tests); ignored with `visitors`. */
   secret?: string;
 }
 
@@ -76,13 +79,6 @@ class DistinctWindow {
   }
 }
 
-function cookieValue(req: Request, name: string): string | undefined {
-  for (const part of (req.headers.cookie || '').split(';')) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === name) return rest.join('=');
-  }
-  return undefined;
-}
 
 export type ReadLimitScope = 'browser' | 'cookieless';
 
@@ -102,21 +98,13 @@ export function crawlerPageRateLimit(options: CrawlerLimitOptions = {}): Request
     browser: options.browserChaptersPerHour ?? RESOURCE_LIMITS.browserChaptersPerHour,
     cookieless: options.cookielessChaptersPerHour ?? RESOURCE_LIMITS.cookielessChaptersPerHour,
   };
-  const secret = options.secret || randomBytes(32).toString('hex');
+  const visitorCookies = options.visitors ?? createVisitorCookies(options.secret);
   const windows: Record<ReadLimitScope, DistinctWindow> = {
     browser: new DistinctWindow(limits.browser, windowMs),
     cookieless: new DistinctWindow(limits.cookieless, windowMs),
   };
   const newVisitors = new DistinctWindow(options.newVisitorCookiesPerHour ?? RESOURCE_LIMITS.newVisitorCookiesPerHour, windowMs);
 
-  const sign = (id: string) => createHmac('sha256', secret).update(id).digest('base64url');
-  const validVisitor = (value: string | undefined): string | undefined => {
-    const [id, mac] = (value || '').split('.');
-    if (!id || !mac) return undefined;
-    const expected = Buffer.from(sign(id));
-    const supplied = Buffer.from(mac);
-    return expected.length === supplied.length && timingSafeEqual(expected, supplied) ? id : undefined;
-  };
 
   return (req: Request, res: Response, next: NextFunction) => {
     const chapter = chapterRead(req);
@@ -125,7 +113,7 @@ export function crawlerPageRateLimit(options: CrawlerLimitOptions = {}): Request
       next();
       return;
     }
-    const visitor = validVisitor(cookieValue(req, VISITOR_COOKIE));
+    const visitor = visitorCookies.identify(req);
     const timestamp = now();
     const address = req.ip || req.socket.remoteAddress || 'unknown';
 
@@ -136,12 +124,10 @@ export function crawlerPageRateLimit(options: CrawlerLimitOptions = {}): Request
       }
       // A browser's page load gets its cookie - unless this address has
       // already had its hourly share, which is how cookie farming ends.
-      const fresh = randomBytes(12).toString('base64url');
-      if (newVisitors.retryAfter(address, fresh, timestamp) === 0) {
-        newVisitors.record(address, fresh, timestamp);
-        res.cookie(VISITOR_COOKIE, `${fresh}.${sign(fresh)}`, {
-          httpOnly: true, sameSite: 'lax', secure: req.secure, path: '/', maxAge: 365 * 24 * 3600 * 1000,
-        });
+      const slot = randomBytes(12).toString('base64url');
+      if (newVisitors.retryAfter(address, slot, timestamp) === 0) {
+        newVisitors.record(address, slot, timestamp);
+        visitorCookies.issue(req, res);
       }
       next();
       return;

@@ -30,6 +30,8 @@ import { registerTextTwins, canonicalReaderPath, textAlternates } from './src/se
 import { crawlerPageRateLimit } from './src/services/crawlerPageLimit';
 import { responseCompression } from './src/services/httpCompression';
 import { resourceLimitOverridesFromEnv } from './src/services/resourceLimits';
+import { createVisitorCookies } from './src/services/visitorCookie';
+import { chatRateLimit } from './src/services/chatLimit';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
 import { renderServerErrorPage } from './src/httpErrorPage';
 
@@ -51,7 +53,9 @@ app.use(responseCompression());
 // Body parsing middleware
 app.use(express.json());
 // Automated-access limit - limits in src/services/resourceLimits.ts.
-app.use(crawlerPageRateLimit(resourceLimitOverridesFromEnv()));
+// One set of visitor cookies for every limit that tells browsers from bots.
+const visitors = createVisitorCookies();
+app.use(crawlerPageRateLimit({ ...resourceLimitOverridesFromEnv(), visitors }));
 
 // Client log relay: the reader is an SPA, so its logging (page
 // navigations, load failures) lands only in the browser's devtools console
@@ -1009,63 +1013,19 @@ async function relayRagPost(path: '/api/rag/search' | '/api/rag/ask' | '/api/rag
   }
 }
 
-const RAG_HOURLY_LIMIT = 20;
-const RAG_DAILY_LIMIT = 100;
+// Time windows for the cover-generation quota above.
 const RAG_HOUR_MS = 60 * 60 * 1000;
 const RAG_DAY_MS = 24 * RAG_HOUR_MS;
 const RAG_QUOTA_MAX_CLIENTS = 10_000;
-const ragRequestTimes = new Map<string, { timestamps: number[]; lastSeen: number }>();
-let ragQuotaChecks = 0;
 
-function ragRateLimit(req: Request, res: Response, next: NextFunction): void {
-  void (async () => {
-    if (req.headers.cookie?.split(';').some(cookie => cookie.trim().startsWith('JSESSIONID='))
-      && await isAdminSession(req)) {
-      next();
-      return;
-    }
-
-    const now = Date.now();
-    const client = req.ip || req.socket.remoteAddress || 'unknown';
-    const recent = ragRequestTimes.get(client) ?? { timestamps: [], lastSeen: now };
-    recent.timestamps = recent.timestamps.filter(timestamp => timestamp > now - RAG_DAY_MS);
-    recent.lastSeen = now;
-
-    const hourlyCount = recent.timestamps.filter(timestamp => timestamp > now - RAG_HOUR_MS).length;
-    const dailyCount = recent.timestamps.length;
-    let retryAfterMs = 0;
-    let limit: 'hour' | 'day' | undefined;
-    if (dailyCount >= RAG_DAILY_LIMIT) {
-      retryAfterMs = recent.timestamps[0] + RAG_DAY_MS - now;
-      limit = 'day';
-    } else if (hourlyCount >= RAG_HOURLY_LIMIT) {
-      retryAfterMs = recent.timestamps[recent.timestamps.length - hourlyCount] + RAG_HOUR_MS - now;
-      limit = 'hour';
-    }
-
-    if (limit) {
-      const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
-      res.setHeader('Retry-After', String(retryAfterSeconds));
-      res.status(429).json({ error: 'rate limit exceeded', limit, retryAfterSeconds });
-      return;
-    }
-
-    recent.timestamps.push(now);
-    ragRequestTimes.set(client, recent);
-    ragQuotaChecks++;
-    if (ragQuotaChecks % 100 === 0) {
-      for (const [key, entry] of ragRequestTimes) {
-        if (entry.lastSeen <= now - RAG_DAY_MS) ragRequestTimes.delete(key);
-      }
-    }
-    while (ragRequestTimes.size > RAG_QUOTA_MAX_CLIENTS) {
-      const oldestClient = ragRequestTimes.keys().next().value;
-      if (oldestClient === undefined) break;
-      ragRequestTimes.delete(oldestClient);
-    }
-    next();
-  })().catch(next);
-}
+// The chat limit (services/chatLimit.ts; limits in resourceLimits.ts): browsers
+// only - a client without the visitor cookie is refused - with a per-browser
+// and per-address budget; administrators are exempt.
+const ragRateLimit = chatRateLimit({
+  visitors,
+  isExempt: async req => Boolean(req.headers.cookie?.split(';').some(cookie => cookie.trim().startsWith('JSESSIONID=')))
+    && await isAdminSession(req),
+});
 
 app.post('/api/rag/search', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/search', req, res)));
 app.post('/api/rag/ask', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/ask', req, res)));
