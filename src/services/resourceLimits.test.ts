@@ -10,9 +10,9 @@ import { RESOURCE_LIMITS } from './resourceLimits';
 //
 //   what is limited              who                                  limit           when exceeded
 //   ---------------------------  -----------------------------------  --------------  -----------------------------
-//   distinct chapters read       a browser keeping its visitor cookie  never limited   -
-//   distinct chapters read       clients without a valid cookie        150/h/address   429 + JSON notice until the
-//                                                                                      oldest read leaves the hour
+//   distinct chapters read       a browser keeping its visitor cookie  3000/h/browser  429 + JSON notice until the
+//                                (out of any person's reach)                           oldest read leaves the hour
+//   distinct chapters read       clients without a valid cookie        150/h/address   same
 //   fresh visitor cookies        one address                           40/h            no cookie: counted as cookieless
 //
 // The per-request size caps (search results, TOC pages...) are the
@@ -35,6 +35,7 @@ const PAGE = { Accept: 'text/html', 'Sec-Fetch-Dest': 'document' };
 
 test('the limits are these and no others', () => {
   assert.deepEqual(RESOURCE_LIMITS, {
+    browserChaptersPerHour: 3000,
     cookielessChaptersPerHour: 150,
     newVisitorCookiesPerHour: 40,
     windowMs: 3_600_000,
@@ -42,13 +43,27 @@ test('the limits are these and no others', () => {
   });
 });
 
-test('a browser keeping its visitor cookie is never limited', async () => {
-  await withReader({}, async origin => {
+test('a browser keeping its visitor cookie reads 3000 distinct chapters an hour - beyond any person', async () => {
+  let timestamp = 1_000_000;
+  await withReader({ now: () => timestamp }, async origin => {
     const cookie = (await fetch(`${origin}/hugo`, { headers: PAGE })).headers.get('set-cookie')!.split(';')[0];
-    for (let i = 0; i < 2_000; i++) {
-      const status = (await fetch(`${origin}${chapter(i)}`, { headers: { Cookie: cookie } })).status;
+    const read = (n: number) => fetch(`${origin}${chapter(n)}`, { headers: { Cookie: cookie } });
+    for (let i = 0; i < 3000; i++) {
+      const status = (await read(i)).status;
       if (status !== 200) assert.fail(`chapter ${i} answered ${status}`);
     }
+    assert.equal((await read(42)).status, 200, 'a chapter already read this hour is free');
+
+    const limited = await read(3000);
+    assert.equal(limited.status, 429);
+    const notice = await limited.json();
+    assert.deepEqual([notice.error, notice.scope, notice.limit], ['read_limit', 'browser', 3000]);
+    assert.match(notice.message, /3000 different chapters within an hour/);
+
+    assert.equal((await fetch(`${origin}${chapter(3000)}`)).status, 200,
+      'browsers are counted each on their own: a cookieless client at the same address is unaffected');
+    timestamp += 3_600_000;
+    assert.equal((await read(3000)).status, 200, 'an hour later the oldest reads have left the window');
   });
 });
 
@@ -63,7 +78,7 @@ test('a client without a valid cookie reads 150 distinct chapters an hour per ad
     assert.equal(limited.headers.get('retry-after'), '3600');
     const notice = await limited.json();
     assert.deepEqual([notice.error, notice.scope, notice.limit], ['read_limit', 'cookieless', 150]);
-    assert.match(notice.message, /Reading in a browser with cookies enabled is not limited/);
+    assert.match(notice.message, /reading in a browser with cookies enabled is not limited this way/);
     assert.match(notice.message, /contact petru@scriptorium\.ro/);
 
     timestamp += 3_600_000;

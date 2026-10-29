@@ -1,5 +1,5 @@
-// Automated-access notices: the reader server answers a cookieless client's
-// chapter read over the hourly limit with a 429 whose JSON body carries error "read_limit" (see
+// Automated-access notices: the reader server answers a chapter read over
+// the hourly limit with a 429 whose JSON body carries error "read_limit" (see
 // crawlerPageLimit.ts). Every fetch in the app goes through window.fetch,
 // so one wrapper catches the notice wherever it happens and raises an event
 // ReadLimitModal turns into a blocking card - no call site needs to know.
@@ -7,7 +7,7 @@
 export const READ_LIMIT_EVENT = 'reader:read-limit';
 
 export interface ReadLimitNotice {
-  scope: 'cookieless';
+  scope: 'browser' | 'cookieless';
   limit: number;
   retryAfterSeconds: number;
   contact: string;
@@ -19,7 +19,7 @@ export function readLimitNotice(body: unknown): ReadLimitNotice | null {
   const candidate = body as Partial<ReadLimitNotice> & { error?: unknown };
   if (candidate.error !== 'read_limit' || typeof candidate.message !== 'string') return null;
   return {
-    scope: 'cookieless',
+    scope: candidate.scope === 'browser' ? 'browser' : 'cookieless',
     limit: Number(candidate.limit) || 0,
     retryAfterSeconds: Math.max(1, Number(candidate.retryAfterSeconds) || 60),
     contact: candidate.contact || 'petru@scriptorium.ro',

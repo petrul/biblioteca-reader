@@ -2,15 +2,16 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { RESOURCE_LIMITS, type ResourceLimitOverrides } from './resourceLimits';
 
-// The automated-access limit: people reading in a browser are never
-// limited; clients that do not keep the reader's visitor cookie - curl, most
-// scrapers - may read a limited number of chapters an hour and are offered
-// paid volume access. The limits themselves are in resourceLimits.ts.
+// The automated-access limit: clients that do not keep the reader's visitor
+// cookie - curl, most scrapers - may read a small number of chapters an
+// hour; a browser gets a budget out of any person's reach, which only stops
+// a scraper that keeps its cookie. Both are offered paid volume access. The
+// limits themselves are in resourceLimits.ts.
 //
 // A browser gets a signed visitor cookie on its first page load and is from
-// then on recognised and never counted. An address may only obtain so many
-// fresh cookies an hour, so a scraper cannot take a new one per request to
-// pass as a browser. Counters live in memory: a restart forgives everyone.
+// then on counted on its own. An address may only obtain so many fresh
+// cookies an hour, so a scraper cannot take a new one per request to pass
+// as a browser. Counters live in memory: a restart forgives everyone.
 
 export const READ_LIMIT_ERROR = 'read_limit';
 export const VISITOR_COOKIE = 'bib_v';
@@ -83,41 +84,56 @@ function cookieValue(req: Request, name: string): string | undefined {
   return undefined;
 }
 
-function limitMessage(limit: number, retryAfterSeconds: number): string {
+export type ReadLimitScope = 'browser' | 'cookieless';
+
+function limitMessage(scope: ReadLimitScope, limit: number, retryAfterSeconds: number): string {
   const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
-  return `Automated access limit reached: ${limit} chapters per hour for clients that do not keep cookies. `
-    + `Reading in a browser with cookies enabled is not limited; otherwise you can continue in about ${minutes} minute${minutes === 1 ? '' : 's'}. `
+  const why = scope === 'browser'
+    ? `This browser has read ${limit} different chapters within an hour, which only automated access does.`
+    : `Clients that do not keep cookies may read ${limit} chapters an hour; reading in a browser with cookies enabled is not limited this way.`;
+  return `Automated access limit reached. ${why} You can continue in about ${minutes} minute${minutes === 1 ? '' : 's'}. `
     + `High-volume access is available as a paid service - contact ${RESOURCE_LIMITS.contact}.`;
 }
 
 export function crawlerPageRateLimit(options: CrawlerLimitOptions = {}): RequestHandler {
   const windowMs = options.windowMs ?? RESOURCE_LIMITS.windowMs;
   const now = options.now ?? Date.now;
-  const cookielessLimit = options.cookielessChaptersPerHour ?? RESOURCE_LIMITS.cookielessChaptersPerHour;
+  const limits: Record<ReadLimitScope, number> = {
+    browser: options.browserChaptersPerHour ?? RESOURCE_LIMITS.browserChaptersPerHour,
+    cookieless: options.cookielessChaptersPerHour ?? RESOURCE_LIMITS.cookielessChaptersPerHour,
+  };
   const secret = options.secret || randomBytes(32).toString('hex');
-  const cookieless = new DistinctWindow(cookielessLimit, windowMs);
+  const windows: Record<ReadLimitScope, DistinctWindow> = {
+    browser: new DistinctWindow(limits.browser, windowMs),
+    cookieless: new DistinctWindow(limits.cookieless, windowMs),
+  };
   const newVisitors = new DistinctWindow(options.newVisitorCookiesPerHour ?? RESOURCE_LIMITS.newVisitorCookiesPerHour, windowMs);
 
   const sign = (id: string) => createHmac('sha256', secret).update(id).digest('base64url');
-  const validVisitor = (value: string | undefined): boolean => {
+  const validVisitor = (value: string | undefined): string | undefined => {
     const [id, mac] = (value || '').split('.');
-    if (!id || !mac) return false;
+    if (!id || !mac) return undefined;
     const expected = Buffer.from(sign(id));
     const supplied = Buffer.from(mac);
-    return expected.length === supplied.length && timingSafeEqual(expected, supplied);
+    return expected.length === supplied.length && timingSafeEqual(expected, supplied) ? id : undefined;
   };
 
   return (req: Request, res: Response, next: NextFunction) => {
     const chapter = chapterRead(req);
     const loadingPage = !chapter && pageLoad(req);
-    if ((!chapter && !loadingPage) || validVisitor(cookieValue(req, VISITOR_COOKIE))) {
+    if (!chapter && !loadingPage) {
       next();
       return;
     }
+    const visitor = validVisitor(cookieValue(req, VISITOR_COOKIE));
     const timestamp = now();
     const address = req.ip || req.socket.remoteAddress || 'unknown';
 
     if (loadingPage) {
+      if (visitor) {
+        next();
+        return;
+      }
       // A browser's page load gets its cookie - unless this address has
       // already had its hourly share, which is how cookie farming ends.
       const fresh = randomBytes(12).toString('base64url');
@@ -131,17 +147,20 @@ export function crawlerPageRateLimit(options: CrawlerLimitOptions = {}): Request
       return;
     }
 
-    const retryAfterSeconds = cookieless.retryAfter(address, chapter!, timestamp);
+    // A browser is counted on its own; a cookieless client by its address.
+    const scope: ReadLimitScope = visitor ? 'browser' : 'cookieless';
+    const key = visitor ?? address;
+    const retryAfterSeconds = windows[scope].retryAfter(key, chapter!, timestamp);
     if (retryAfterSeconds > 0) {
       res.setHeader('Retry-After', String(retryAfterSeconds));
       res.setHeader('Cache-Control', 'no-store');
       res.status(429).json({
-        error: READ_LIMIT_ERROR, scope: 'cookieless', limit: cookielessLimit, retryAfterSeconds,
-        contact: RESOURCE_LIMITS.contact, message: limitMessage(cookielessLimit, retryAfterSeconds),
+        error: READ_LIMIT_ERROR, scope, limit: limits[scope], retryAfterSeconds,
+        contact: RESOURCE_LIMITS.contact, message: limitMessage(scope, limits[scope], retryAfterSeconds),
       });
       return;
     }
-    cookieless.record(address, chapter!, timestamp);
+    windows[scope].record(key, chapter!, timestamp);
     next();
   };
 }

@@ -3,8 +3,8 @@ import { Hourglass } from 'lucide-react';
 import { READ_LIMIT_EVENT, type ReadLimitNotice } from '../services/readLimit';
 
 // Blocking card for the automated-access limit (see services/readLimit.ts).
-// A browser that keeps cookies never sees it; one that blocks them can hit
-// the limit for clients without cookies. It cannot be dismissed while the
+// No person reading normally sees it: the browser limit is set above any
+// human pace, and the small cookieless one only hits browsers blocking cookies. It cannot be dismissed while the
 // limit holds - every read would fail anyway - and offers a reload after.
 export function ReadLimitModal() {
   const [notice, setNotice] = useState<ReadLimitNotice | null>(null);
