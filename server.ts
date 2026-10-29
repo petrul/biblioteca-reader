@@ -27,7 +27,8 @@ import { registerReaderThumbnails } from './src/services/coverThumbnailProxy';
 import createClient from 'openapi-fetch';
 import type { paths as NestjsPaths } from './src/generated/biblioteca-nestjs-api';
 import { registerTextTwins, canonicalReaderPath, textAlternates } from './src/services/textTwin';
-import { crawlerPageRateLimit, readLimitOptionsFromEnv } from './src/services/crawlerPageLimit';
+import { crawlerPageRateLimit } from './src/services/crawlerPageLimit';
+import { resourceLimitOverridesFromEnv } from './src/services/resourceLimits';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
 import { renderServerErrorPage } from './src/httpErrorPage';
 
@@ -46,8 +47,8 @@ function asyncRoute(handler: (req: Request, res: Response, next: NextFunction) =
 
 // Body parsing middleware
 app.use(express.json());
-// Reading limits - see crawlerPageLimit.ts; READ_LIMIT_* env vars tune them.
-app.use(crawlerPageRateLimit(readLimitOptionsFromEnv()));
+// Automated-access limit - limits in src/services/resourceLimits.ts.
+app.use(crawlerPageRateLimit(resourceLimitOverridesFromEnv()));
 
 // Client log relay: the reader is an SPA, so its logging (page
 // navigations, load failures) lands only in the browser's devtools console

@@ -1,59 +1,26 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import { RESOURCE_LIMITS, type ResourceLimitOverrides } from './resourceLimits';
 
-// Reading limits: generous for people, tight for scrapers, which are meant to
-// pay for volume access. What counts is defined positively - a READ is one
-// chapter's content (see chapterRead below) - so nothing else can ever be
-// charged by accident: not assets, not Vite's dev modules, not the page
-// shell (it carries only metadata), not the app's other API calls. Each
-// chapter counts once per window, whatever formats or reloads fetch it.
+// The automated-access limit: people reading in a browser are never
+// limited; clients that do not keep the reader's visitor cookie - curl, most
+// scrapers - may read a limited number of chapters an hour and are offered
+// paid volume access. The limits themselves are in resourceLimits.ts.
 //
-// A browser gets a signed visitor cookie on its first page load and reads
-// against its own generous budget; many people behind one address (an
-// office, a library) share only a high per-address ceiling. Clients that do
-// not keep the cookie - curl, most scrapers - read against a small
-// per-address budget, and an address minting many fresh cookies an hour
-// (cookie farming) gets no more of them.
-//
-// Counters live in memory: a restart forgives everyone, which is fine for a
-// deterrent whose real backstop is the paid-access offer.
+// A browser gets a signed visitor cookie on its first page load and is from
+// then on recognised and never counted. An address may only obtain so many
+// fresh cookies an hour, so a scraper cannot take a new one per request to
+// pass as a browser. Counters live in memory: a restart forgives everyone.
 
 export const READ_LIMIT_ERROR = 'read_limit';
 export const VISITOR_COOKIE = 'bib_v';
-const CONTACT = 'petru@scriptorium.ro';
-const WINDOW_MS = 60 * 60 * 1000;
 const MAX_TRACKED_KEYS = 50_000;
 
-export type ReadLimitScope = 'visitor' | 'address' | 'cookieless';
-
-export interface ReadLimitOptions {
-  /** Reads per hour for one browser holding a valid visitor cookie. */
-  visitorHourly?: number;
-  /** Reads per hour from one address, all its visitors together (shared NAT). */
-  addressHourly?: number;
-  /** Reads per hour from one address for clients without a valid cookie. */
-  cookielessHourly?: number;
-  /** Fresh visitor cookies one address may obtain per hour. */
-  newVisitorsHourly?: number;
+export interface CrawlerLimitOptions extends ResourceLimitOverrides {
   windowMs?: number;
   now?: () => number;
   /** HMAC key for visitor cookies; a random per-process key by default. */
   secret?: string;
-}
-
-function envInt(name: string): number | undefined {
-  const value = Number(process.env[name]);
-  return Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-/** Limits from READ_LIMIT_* environment variables, falling back to the defaults. */
-export function readLimitOptionsFromEnv(): ReadLimitOptions {
-  return {
-    visitorHourly: envInt('READ_LIMIT_VISITOR_HOURLY'),
-    addressHourly: envInt('READ_LIMIT_ADDRESS_HOURLY'),
-    cookielessHourly: envInt('READ_LIMIT_COOKIELESS_HOURLY'),
-    newVisitorsHourly: envInt('READ_LIMIT_NEW_VISITORS_HOURLY'),
-  };
 }
 
 // Chapter content as the reader fetches it: /api/server-content/{author}/
@@ -116,53 +83,43 @@ function cookieValue(req: Request, name: string): string | undefined {
   return undefined;
 }
 
-function limitMessage(scope: ReadLimitScope, limit: number, retryAfterSeconds: number): string {
-  const who = scope === 'visitor' ? 'for this browser'
-    : scope === 'address' ? 'from your network'
-    : 'for clients that do not keep cookies';
+function limitMessage(limit: number, retryAfterSeconds: number): string {
   const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
-  return `Reading limit reached: ${limit} chapters per hour ${who}. You can continue in about ${minutes} minute${minutes === 1 ? '' : 's'}. `
-    + `Automated or high-volume access is available as a paid service - contact ${CONTACT}.`;
+  return `Automated access limit reached: ${limit} chapters per hour for clients that do not keep cookies. `
+    + `Reading in a browser with cookies enabled is not limited; otherwise you can continue in about ${minutes} minute${minutes === 1 ? '' : 's'}. `
+    + `High-volume access is available as a paid service - contact ${RESOURCE_LIMITS.contact}.`;
 }
 
-export function crawlerPageRateLimit(options: ReadLimitOptions = {}): RequestHandler {
-  const windowMs = options.windowMs ?? WINDOW_MS;
+export function crawlerPageRateLimit(options: CrawlerLimitOptions = {}): RequestHandler {
+  const windowMs = options.windowMs ?? RESOURCE_LIMITS.windowMs;
   const now = options.now ?? Date.now;
-  const limits: Record<ReadLimitScope, number> = {
-    visitor: options.visitorHourly ?? 1500,
-    address: options.addressHourly ?? 6000,
-    cookieless: options.cookielessHourly ?? 150,
-  };
-  const newVisitorsHourly = options.newVisitorsHourly ?? 40;
+  const cookielessLimit = options.cookielessChaptersPerHour ?? RESOURCE_LIMITS.cookielessChaptersPerHour;
   const secret = options.secret || randomBytes(32).toString('hex');
-  const visitors = new DistinctWindow(limits.visitor, windowMs);
-  const addresses = new DistinctWindow(limits.address, windowMs);
-  const cookieless = new DistinctWindow(limits.cookieless, windowMs);
-  const newVisitors = new DistinctWindow(newVisitorsHourly, windowMs);
+  const cookieless = new DistinctWindow(cookielessLimit, windowMs);
+  const newVisitors = new DistinctWindow(options.newVisitorCookiesPerHour ?? RESOURCE_LIMITS.newVisitorCookiesPerHour, windowMs);
 
   const sign = (id: string) => createHmac('sha256', secret).update(id).digest('base64url');
-  const validVisitor = (value: string | undefined): string | undefined => {
+  const validVisitor = (value: string | undefined): boolean => {
     const [id, mac] = (value || '').split('.');
-    if (!id || !mac) return undefined;
+    if (!id || !mac) return false;
     const expected = Buffer.from(sign(id));
     const supplied = Buffer.from(mac);
-    return expected.length === supplied.length && timingSafeEqual(expected, supplied) ? id : undefined;
+    return expected.length === supplied.length && timingSafeEqual(expected, supplied);
   };
 
   return (req: Request, res: Response, next: NextFunction) => {
     const chapter = chapterRead(req);
     const loadingPage = !chapter && pageLoad(req);
-    if (!chapter && !loadingPage) {
+    if ((!chapter && !loadingPage) || validVisitor(cookieValue(req, VISITOR_COOKIE))) {
       next();
       return;
     }
     const timestamp = now();
     const address = req.ip || req.socket.remoteAddress || 'unknown';
-    let visitor = validVisitor(cookieValue(req, VISITOR_COOKIE));
 
-    // A browser's page load mints its cookie - unless this address has
-    // already minted its hourly share, which is how cookie farming ends.
-    if (!visitor && loadingPage) {
+    if (loadingPage) {
+      // A browser's page load gets its cookie - unless this address has
+      // already had its hourly share, which is how cookie farming ends.
       const fresh = randomBytes(12).toString('base64url');
       if (newVisitors.retryAfter(address, fresh, timestamp) === 0) {
         newVisitors.record(address, fresh, timestamp);
@@ -170,29 +127,21 @@ export function crawlerPageRateLimit(options: ReadLimitOptions = {}): RequestHan
           httpOnly: true, sameSite: 'lax', secure: req.secure, path: '/', maxAge: 365 * 24 * 3600 * 1000,
         });
       }
-    }
-    if (!chapter) {
       next();
       return;
     }
 
-    // Distinct per budget: the per-address ceiling counts each visitor's
-    // chapter separately, so people sharing a network are not mistaken for
-    // one reader re-reading.
-    const checks: Array<[ReadLimitScope, DistinctWindow, string, string]> = visitor
-      ? [['visitor', visitors, visitor, chapter], ['address', addresses, address, `${visitor} ${chapter}`]]
-      : [['cookieless', cookieless, address, chapter], ['address', addresses, address, `- ${chapter}`]];
-    for (const [scope, window, key, item] of checks) {
-      const retryAfterSeconds = window.retryAfter(key, item, timestamp);
-      if (retryAfterSeconds > 0) {
-        const message = limitMessage(scope, limits[scope], retryAfterSeconds);
-        res.setHeader('Retry-After', String(retryAfterSeconds));
-        res.setHeader('Cache-Control', 'no-store');
-        res.status(429).json({ error: READ_LIMIT_ERROR, scope, limit: limits[scope], retryAfterSeconds, contact: CONTACT, message });
-        return;
-      }
+    const retryAfterSeconds = cookieless.retryAfter(address, chapter!, timestamp);
+    if (retryAfterSeconds > 0) {
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(429).json({
+        error: READ_LIMIT_ERROR, scope: 'cookieless', limit: cookielessLimit, retryAfterSeconds,
+        contact: RESOURCE_LIMITS.contact, message: limitMessage(cookielessLimit, retryAfterSeconds),
+      });
+      return;
     }
-    for (const [, window, key, item] of checks) window.record(key, item, timestamp);
+    cookieless.record(address, chapter!, timestamp);
     next();
   };
 }

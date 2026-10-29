@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Hourglass } from 'lucide-react';
 import { READ_LIMIT_EVENT, type ReadLimitNotice } from '../services/readLimit';
 
-// Blocking card for the hourly reading limit (see services/readLimit.ts).
-// It deliberately cannot be dismissed while the limit holds - every read
-// would fail anyway - and offers a reload once the window has passed.
+// Blocking card for the automated-access limit (see services/readLimit.ts).
+// A browser that keeps cookies never sees it; one that blocks them can hit
+// the limit for clients without cookies. It cannot be dismissed while the
+// limit holds - every read would fail anyway - and offers a reload after.
 export function ReadLimitModal() {
   const [notice, setNotice] = useState<ReadLimitNotice | null>(null);
   const [until, setUntil] = useState(0);
@@ -36,7 +37,7 @@ export function ReadLimitModal() {
          role="alertdialog" aria-modal="true" aria-labelledby="read-limit-title" aria-describedby="read-limit-text">
       <div className="bg-[#0b2921] rounded-2xl border border-emerald-500/30 max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 text-center animate-in fade-in zoom-in-95 duration-150">
         <Hourglass className="w-10 h-10 mx-auto text-[#f59e0b]" aria-hidden="true" />
-        <h3 id="read-limit-title" className="font-display-title text-xl font-bold text-white">Time for a short pause</h3>
+        <h3 id="read-limit-title" className="font-display-title text-xl font-bold text-white">Automated access limit</h3>
         <p id="read-limit-text" className="text-stone-300 text-sm leading-relaxed">{notice.message}</p>
         <p className="text-emerald-200/80 text-sm" aria-live="polite">
           {remaining > 0 ? <>You can continue in <span className="font-mono text-white">{minutes}:{seconds}</span></> : 'You can continue now.'}

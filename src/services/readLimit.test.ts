@@ -9,7 +9,7 @@ function fakeWindow(response: Response) {
 }
 
 test('a read_limit 429 raises the notice event and leaves the body to the caller', async () => {
-  const body = { error: 'read_limit', scope: 'visitor', limit: 1500, retryAfterSeconds: 120, contact: 'petru@scriptorium.ro', message: 'pause' };
+  const body = { error: 'read_limit', scope: 'cookieless', limit: 150, retryAfterSeconds: 120, contact: 'petru@scriptorium.ro', message: 'pause' };
   const target = fakeWindow(new Response(JSON.stringify(body), { status: 429, headers: { 'Content-Type': 'application/json' } }));
   const seen = new Promise<ReadLimitNotice>(resolve =>
     target.addEventListener(READ_LIMIT_EVENT, event => resolve((event as CustomEvent<ReadLimitNotice>).detail)));
@@ -19,7 +19,7 @@ test('a read_limit 429 raises the notice event and leaves the body to the caller
   assert.equal((await response.json()).message, 'pause', 'the caller can still read the body');
   const notice = await seen;
   assert.equal(notice.retryAfterSeconds, 120);
-  assert.equal(notice.scope, 'visitor');
+  assert.equal(notice.scope, 'cookieless');
 });
 
 test('other 429s and ordinary errors raise nothing', async () => {
