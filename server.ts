@@ -28,6 +28,7 @@ import createClient from 'openapi-fetch';
 import type { paths as NestjsPaths } from './src/generated/biblioteca-nestjs-api';
 import { registerTextTwins, canonicalReaderPath, textAlternates } from './src/services/textTwin';
 import { crawlerPageRateLimit } from './src/services/crawlerPageLimit';
+import { responseCompression } from './src/services/httpCompression';
 import { resourceLimitOverridesFromEnv } from './src/services/resourceLimits';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
 import { renderServerErrorPage } from './src/httpErrorPage';
@@ -45,6 +46,8 @@ function asyncRoute(handler: (req: Request, res: Response, next: NextFunction) =
   };
 }
 
+// Compression by the reader itself, for every client - see httpCompression.ts.
+app.use(responseCompression());
 // Body parsing middleware
 app.use(express.json());
 // Automated-access limit - limits in src/services/resourceLimits.ts.
