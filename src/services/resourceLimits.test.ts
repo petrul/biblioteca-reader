@@ -20,6 +20,7 @@ import { createVisitorCookies } from './visitorCookie';
 //   chat/ask/RAG search          a browser                             60/h, 300/day   429 chat_limit until the window
 //   chat/ask/RAG search          one address, all browsers together    240/h           429 chat_limit, scope address
 //   chat/ask/RAG search          an administrator                      never limited   -
+//   cover generation             anyone                                not limited     - (async and cached)
 //
 // The per-request size caps (search results, TOC pages...) are the
 // server's - see biblioteca-server's ResourceLimitsTest.

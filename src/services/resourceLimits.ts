@@ -28,6 +28,9 @@
 // does not. The address ceiling keeps one address from multiplying that with
 // many cookies. Administrators are exempt.
 //
+// Cover generation is NOT limited: it is asynchronous and cached (a work's
+// cover is rendered once, then served from the cache).
+//
 // Why 3000 is out of human reach: reading straight through costs one read per
 // new chapter (the reader prefetches the next one), jumping around at most
 // three (previous, this, next). Opening a new chapter every 5 seconds for a

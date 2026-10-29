@@ -666,51 +666,6 @@ app.get('/api/server-info', asyncRoute(async (req: Request, res: Response) => {
 // same-origin gateway rather than a generic proxy: callers provide stable
 // work metadata, while the theme is selected here and arbitrary upstream
 // paths cannot be reached through the reader.
-const COVER_HOURLY_LIMIT = 20;
-const COVER_DAILY_LIMIT = 100;
-const coverRequestTimes = new Map<string, { timestamps: number[]; lastSeen: number }>();
-let coverQuotaChecks = 0;
-
-async function consumeCoverQuota(req: Request, res: Response): Promise<boolean> {
-  if (req.headers.cookie?.split(';').some(cookie => cookie.trim().startsWith('JSESSIONID='))
-    && await isAdminSession(req)) return true;
-  const now = Date.now();
-  const client = req.ip || req.socket.remoteAddress || 'unknown';
-  const recent = coverRequestTimes.get(client) ?? { timestamps: [], lastSeen: now };
-  recent.timestamps = recent.timestamps.filter(timestamp => timestamp > now - RAG_DAY_MS);
-  recent.lastSeen = now;
-  const hourlyCount = recent.timestamps.filter(timestamp => timestamp > now - RAG_HOUR_MS).length;
-  const dailyCount = recent.timestamps.length;
-  const limit = dailyCount >= COVER_DAILY_LIMIT ? 'day' : hourlyCount >= COVER_HOURLY_LIMIT ? 'hour' : undefined;
-  if (limit) {
-    const retryAt = limit === 'day'
-      ? recent.timestamps[0] + RAG_DAY_MS
-      : recent.timestamps[recent.timestamps.length - hourlyCount] + RAG_HOUR_MS;
-    const retryAfterSeconds = Math.max(1, Math.ceil((retryAt - now) / 1000));
-    res.setHeader('Retry-After', String(retryAfterSeconds));
-    res.status(429).json({ error: 'cover rate limit exceeded', limit, retryAfterSeconds });
-    return false;
-  }
-  recent.timestamps.push(now);
-  coverRequestTimes.set(client, recent);
-  coverQuotaChecks++;
-  if (coverQuotaChecks % 100 === 0) {
-    for (const [key, entry] of coverRequestTimes) {
-      if (entry.lastSeen <= now - RAG_DAY_MS) coverRequestTimes.delete(key);
-    }
-  }
-  while (coverRequestTimes.size > RAG_QUOTA_MAX_CLIENTS) {
-    const oldestClient = coverRequestTimes.keys().next().value;
-    if (oldestClient === undefined) break;
-    coverRequestTimes.delete(oldestClient);
-  }
-  return true;
-}
-
-function coverRateLimit(req: Request, res: Response, next: NextFunction): void {
-  void consumeCoverQuota(req, res).then(allowed => { if (allowed) next(); }).catch(next);
-}
-
 app.post('/api/covers/work', asyncRoute(async (req: Request, res: Response) => {
   const { workId, title, author, subtitle, date, coverArtUrl } = req.body ?? {};
   if (typeof title !== 'string' || !title.trim() || typeof author !== 'string' || !author.trim()) {
@@ -736,8 +691,6 @@ app.post('/api/covers/work', asyncRoute(async (req: Request, res: Response) => {
       return;
     }
   }
-
-  if (!(await consumeCoverQuota(req, res))) return;
 
   const layout = COVER_LAYOUTS[Math.floor(Math.random() * COVER_LAYOUTS.length)];
   const paletteId = COVER_PALETTES[Math.floor(Math.random() * COVER_PALETTES.length)];
@@ -810,8 +763,6 @@ app.get('/api/covers/work/:authorId/:opusId', asyncRoute(async (req: Request, re
     res.send(cached);
     return;
   }
-
-  if (!(await consumeCoverQuota(req, res))) return;
 
   let title: string | undefined;
   let author: string | undefined;
@@ -907,7 +858,7 @@ const nestjsApi = createClient<NestjsPaths>({
 // from; without it nestjs picks a random request as before.
 // Renders, stores and assigns a cover upstream - write traffic, 403 in
 // read-only deployments.
-app.post('/api/admin/covers/work', coverRateLimit, unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
+app.post('/api/admin/covers/work', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
   const path = req.body?.path;
   if (typeof path !== 'string' || !WORK_PATH.test(path)) {
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
@@ -1012,11 +963,6 @@ async function relayRagPost(path: '/api/rag/search' | '/api/rag/ask' | '/api/rag
     res.status(502).json({ error: `biblioteca-nestjs unreachable at ${NESTJS_URL}: ${error.message}` });
   }
 }
-
-// Time windows for the cover-generation quota above.
-const RAG_HOUR_MS = 60 * 60 * 1000;
-const RAG_DAY_MS = 24 * RAG_HOUR_MS;
-const RAG_QUOTA_MAX_CLIENTS = 10_000;
 
 // The chat limit (services/chatLimit.ts; limits in resourceLimits.ts): browsers
 // only - a client without the visitor cookie is refused - with a per-browser
