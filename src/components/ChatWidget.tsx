@@ -3,6 +3,7 @@ import { Bot, Check, MessageCircle, Palette, RotateCcw, Send, X } from 'lucide-r
 import { parseAppPath } from '../router';
 import { useLongPressDrag } from '../hooks/useLongPressDrag';
 import { sameOriginFetch } from '../services/sameOriginFetch';
+import { onPointerDownOutside } from '../services/outsideTap';
 
 type ChatTheme = 'emerald' | 'amber' | 'rose' | 'cyan' | 'azure' | 'mint' | 'slate';
 
@@ -173,6 +174,13 @@ export function ChatWidget({ placement = 'floating', open: openProp, onOpenChang
     return saved && saved in THEMES ? saved : 'emerald';
   });
   const [showThemes, setShowThemes] = useState(false);
+  // The theme picker closes on a tap anywhere outside it (services/outsideTap.ts).
+  const themePickerRef = useRef<HTMLDivElement>(null);
+  const themeToggleRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!showThemes) return;
+    return onPointerDownOutside(document, () => [themePickerRef.current, themeToggleRef.current], () => setShowThemes(false));
+  }, [showThemes]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [, setConversationId] = useState<string | undefined>();
@@ -260,11 +268,11 @@ export function ChatWidget({ placement = 'floating', open: openProp, onOpenChang
             </div>
             <div className="flex items-center gap-1">
               <button type="button" onClick={reset} className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10" title="Resetează conversația" aria-label="Resetează conversația"><RotateCcw className="w-4 h-4" /></button>
-              <button type="button" onClick={() => setShowThemes(value => !value)} className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10" title="Schimbă tema" aria-label="Schimbă tema"><Palette className="w-4 h-4" /></button>
+              <button ref={themeToggleRef} type="button" onClick={() => setShowThemes(value => !value)} className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10" title="Schimbă tema" aria-label="Schimbă tema"><Palette className="w-4 h-4" /></button>
               <button type="button" onClick={() => setOpen(false)} className="p-2 rounded-lg text-white/60 hover:text-white hover:bg-white/10" title="Închide chatul" aria-label="Închide chatul"><X className="w-4 h-4" /></button>
             </div>
             {showThemes && (
-              <div className="absolute mt-28 right-14 w-48 rounded-xl border border-white/15 bg-slate-950/95 p-2 shadow-2xl">
+              <div ref={themePickerRef} className="absolute mt-28 right-14 w-48 rounded-xl border border-white/15 bg-slate-950/95 p-2 shadow-2xl">
                 <p className="px-2 py-1 text-[10px] uppercase tracking-widest text-white/45">Chat themes</p>
                 {(Object.keys(THEMES) as ChatTheme[]).map(key => (
                   <button key={key} type="button" onClick={() => { setTheme(key); setShowThemes(false); }} className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left text-xs text-white/80 hover:bg-white/10">
