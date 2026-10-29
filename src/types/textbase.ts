@@ -323,13 +323,11 @@ export type CatalogTab = 'works' | 'authors' | 'reading-lists';
 // here round-trips through the fragment (see router.ts): the tab plus
 // the per-tab query, filters and page, so any catalog position is a
 // bookmarkable address.
-export type CatalogAccessFilter = 'all' | 'free' | 'premium' | 'unlocked';
 export type CatalogListType = 'all' | 'language' | 'author' | 'repo';
 export interface CatalogState {
   tab: CatalogTab;
   worksQuery: string;
   worksLang: LanguageCode | 'all';
-  worksAccess: CatalogAccessFilter;
   worksPage: number;
   authorsQuery: string;
   authorsPage: number;

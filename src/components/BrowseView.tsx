@@ -177,7 +177,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   const {
     tab: subTab,
     worksQuery,
-    worksLang: worksLangFilter,    worksAccess: worksAccessFilter,
+    worksLang: worksLangFilter,
     worksPage,
     authorsQuery,
     authorsPage,
@@ -229,20 +229,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     void readerService.loadAuthorsPage(authorsPage, authorsQuery);
   }, [subTab, authorsPage, authorsQuery]);
 
-  // Apply access filter
-  const filteredWorks = rawWorksData.works.filter(work => {
-    const isUnlocked = readerService.isWorkUnlocked(work.id);
-    if (worksAccessFilter === 'free') {
-      return work.accessType !== 'premium';
-    }
-    if (worksAccessFilter === 'premium') {
-      return work.accessType === 'premium';
-    }
-    if (worksAccessFilter === 'unlocked') {
-      return isUnlocked;
-    }
-    return true;
-  });
+  const filteredWorks = rawWorksData.works;
 
   const pageSize = 12;
   const totalWorks = rawWorksData.total;
@@ -413,10 +400,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
         totalPages={totalWorksPages}
         query={worksQuery}
         language={worksLangFilter}
-        access={worksAccessFilter}
         onQueryChange={query => onCatalogChange({ ...catalog, worksQuery: query, worksPage: 1 }, { replace: true })}
         onLanguageChange={language => onCatalogChange({ ...catalog, worksLang: language, worksPage: 1 })}
-        onAccessChange={access => onCatalogChange({ ...catalog, worksAccess: access, worksPage: 1 })}
         onPageChange={setWorksPage}
         onSelectWork={onSelectWork}
         onContinueReading={handleContinueReadingWork}

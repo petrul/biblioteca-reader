@@ -23,10 +23,8 @@ export interface WorksCatalogProps {
   totalPages: number;
   query: string;
   language: LanguageCode | "all";
-  access: "all" | "free" | "premium" | "unlocked";
   onQueryChange: (value: string) => void;
   onLanguageChange: (value: LanguageCode | "all") => void;
-  onAccessChange: (value: "all" | "free" | "premium" | "unlocked") => void;
   onPageChange: (page: number) => void;
   onSelectWork: (id: string) => void;
   /** Enter/Space on a card: straight into the book at the reading
@@ -127,25 +125,6 @@ export const WorksCatalog: React.FC<WorksCatalogProps> = (props) => {
           inputClassName="py-2 rounded-lg bg-black/25 border border-white/25 text-xs text-white placeholder:text-white/60 focus:outline-none focus:ring-1 focus:ring-[#f59e0b]"
         />
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center space-x-1.5">
-            <Lock className="w-3.5 h-3.5 text-amber-300" />
-            <span className="text-xs font-medium text-white/90">Edition:</span>
-            <select
-              id="select-work-access"
-              value={props.access}
-              onChange={(e) =>
-                props.onAccessChange(
-                  e.target.value as WorksCatalogProps["access"],
-                )
-              }
-              className="text-xs bg-black/30 border border-white/25 rounded-lg px-2.5 py-1.5 text-white"
-            >
-              <option value="all">All Editions</option>
-              <option value="free">Free Public Domain</option>
-              <option value="premium">Premium Critical ($)</option>
-              <option value="unlocked">My Unlocked</option>
-            </select>
-          </div>
           <div className="flex items-center space-x-1.5">
             <Filter className="w-3.5 h-3.5 text-white/70" />
             <span className="text-xs font-medium text-white/90">Language:</span>

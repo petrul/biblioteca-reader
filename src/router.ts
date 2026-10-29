@@ -1,7 +1,6 @@
 import { parseParagraphRange, paragraphShareUrl, type ParagraphRange } from './services/paragraphLinks';
 import {
   AppView,
-  CatalogAccessFilter,
   CatalogListType,
   CatalogState,
   CatalogTab,
@@ -16,12 +15,11 @@ export const APP_PREFIX = '/app';
 // values a plain /app deep link lands on, and what fragment params
 // override. Fields are only serialized when they differ from these
 // defaults, so common addresses stay short (#authors, not
-// #works?q=&lang=all&access=all&page=1).
+// #works?q=&lang=all&page=1).
 export const DEFAULT_CATALOG_STATE: CatalogState = {
   tab: 'works',
   worksQuery: '',
   worksLang: 'all',
-  worksAccess: 'all',
   worksPage: 1,
   authorsQuery: '',
   authorsPage: 1,
@@ -113,15 +111,11 @@ function parseCatalogFragment(hash: string): CatalogState | undefined {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
   };
   const lang = params.get('lang');
-  const access = params.get('access');
   const type = params.get('type');
   return {
     tab,
     worksQuery: tab === 'works' ? (params.get('q') ?? '') : DEFAULT_CATALOG_STATE.worksQuery,
     worksLang: tab === 'works' && lang ? (lang as LanguageCode) : DEFAULT_CATALOG_STATE.worksLang,
-    worksAccess: tab === 'works' && access && ['free', 'premium', 'unlocked'].includes(access)
-      ? (access as CatalogAccessFilter)
-      : DEFAULT_CATALOG_STATE.worksAccess,
     worksPage: tab === 'works' ? page(params.get('page')) : DEFAULT_CATALOG_STATE.worksPage,
     authorsQuery: tab === 'authors' ? (params.get('q') ?? '') : DEFAULT_CATALOG_STATE.authorsQuery,
     authorsPage: tab === 'authors' ? page(params.get('page')) : DEFAULT_CATALOG_STATE.authorsPage,
@@ -141,7 +135,6 @@ export function buildCatalogFragment(catalog: CatalogState): string {
   if (catalog.tab === 'works') {
     if (catalog.worksQuery) params.set('q', catalog.worksQuery);
     if (catalog.worksLang !== 'all') params.set('lang', catalog.worksLang);
-    if (catalog.worksAccess !== 'all') params.set('access', catalog.worksAccess);
     if (catalog.worksPage > 1) params.set('page', String(catalog.worksPage));
   } else if (catalog.tab === 'authors') {
     if (catalog.authorsQuery) params.set('q', catalog.authorsQuery);
