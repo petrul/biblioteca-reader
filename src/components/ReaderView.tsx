@@ -49,6 +49,7 @@ import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
 import { useReaderScrollPosition } from '../hooks/useReaderScrollPosition';
 import { useSpeechReader } from '../hooks/useSpeechReader';
 import { useSwipeNavigate } from '../hooks/useSwipeNavigate';
+import { swipeTarget } from '../services/swipeNavigation';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { FootnoteSheet } from './FootnoteSheet';
 import { chapterTransitionClass, type PendingChapterTurn } from '../services/chapterTransition';
@@ -506,21 +507,23 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // as the ArrowLeft/ArrowRight keyboard shortcuts above - left = next
   // chapter (content moves left, next page enters from the right, same
   // direction every mobile reader/carousel uses for "forward"), right =
-  // previous.
-  const swipeHandlers = useSwipeNavigate(
-    () => {
-      if (!nextChapter) return;
+  // previous, or back to the work card from the first chapter
+  // (swipeTarget - services/swipeNavigation.ts).
+  const swipeTo = (direction: 'left' | 'right') => {
+    const target = swipeTarget(direction, prevChapter?.id, nextChapter?.id);
+    if (!target) return;
+    if (target.kind === 'work') {
+      onBackToWork();
+    } else if (direction === 'left') {
       flashTapped(['btn-reader-next-chapter-top', 'btn-reader-next-chapter']);
-      turnToChapter('next', nextChapter.id);
-      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-    },
-    () => {
-      if (!prevChapter) return;
+      turnToChapter('next', target.chapterId);
+    } else {
       flashTapped(['btn-reader-prev-chapter']);
-      turnToChapter('prev', prevChapter.id);
-      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      turnToChapter('prev', target.chapterId);
     }
-  );
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  };
+  const swipeHandlers = useSwipeNavigate(() => swipeTo('left'), () => swipeTo('right'));
 
   // Keyboard shortcuts for the reading surface: i flips between the text
   // and the statistics back face (identical to the work card's own (i)/(x)
