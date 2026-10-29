@@ -1,3 +1,4 @@
+import { searchTargetPath } from '../services/searchTargets';
 import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 import { Bookmark, ChevronLeft, ChevronRight, Sparkles, X } from 'lucide-react';
@@ -36,7 +37,7 @@ export function ReaderSimilarityDialog({ query, onClose, onSelect }: {
     request.then(result => {
         if (cancelled) return;
         if (result.vectorUnavailable) { setError(result.degradationNotice || 'Semantic search is temporarily unavailable.'); return; }
-        result.results.forEach(hit => seen.current.set(hit.chapterId || hit.workId, hit));
+        result.results.forEach(hit => seen.current.set(searchTargetPath(hit), hit));
         setResponse(result);
       })
       .catch(() => { if (!cancelled) setError('Semantic search could not be completed. Please retry.'); })

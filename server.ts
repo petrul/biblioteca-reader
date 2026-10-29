@@ -1,3 +1,4 @@
+import { registerFragmentGateway, fragmentSeo } from './src/services/fragmentGateway';
 import { registerQuoteTwins, enrichQuoteSeo } from './src/services/quoteTwin';
 import express, { NextFunction, Request, Response } from 'express';
 import { createHash } from 'node:crypto';
@@ -1277,7 +1278,16 @@ app.get('/sitemap.xml', asyncRoute(async (req: Request, res: Response) => {
 
 async function buildReaderPageSeo(options: Parameters<typeof buildPageSeo>[0]) {
   const seo = await buildPageSeo(options);
-  return options.route.view === 'quote' ? enrichQuoteSeo(seo, options.route.quoteId, options.bibliotecaServerUrl, options.origin) : seo;
+  if (options.route.view === 'quote') return enrichQuoteSeo(seo, options.route.quoteId, options.bibliotecaServerUrl, options.origin);
+  if (options.route.fragment) {
+    try {
+      const fragment = options.route.fragment;
+      const response = await fetch(`${options.bibliotecaServerUrl}/api/fragments?${new URLSearchParams({ path: fragment.sourcePath, selector: fragment.selector, ...(fragment.revision ? { rev: fragment.revision } : {}) })}`, { signal: AbortSignal.timeout(15000) });
+      // Public fragment middleware already checked preview access before rendering the SPA shell.
+      if (response.ok) return fragmentSeo(seo, await response.json(), options.origin);
+    } catch { /* Keep source metadata when upstream metadata is temporarily unavailable. */ }
+  }
+  return seo;
 }
 
 async function renderPageFor(req: Request, template: string): Promise<string> {
@@ -1303,6 +1313,7 @@ async function renderPageFor(req: Request, template: string): Promise<string> {
 }
 
 async function startServer() {
+  registerFragmentGateway(app, { serverUrl: BIBLIOTECA_SERVER_URL, originFor });
   registerQuoteTwins(app, { serverUrl: BIBLIOTECA_SERVER_URL, originFor, apiDocument: openApiPublicDoc });
   registerTextTwins(app, { serverUrl: BIBLIOTECA_SERVER_URL, originFor, defaultImage: defaultOgImage });
   app.use('/api', (req: Request, res: Response) => {

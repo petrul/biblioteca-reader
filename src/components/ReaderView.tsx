@@ -1,3 +1,7 @@
+import { searchTargetPath } from '../services/searchTargets';
+import { FragmentPresentation } from './FragmentPresentation';
+import { resolveReaderFragment, fragmentLocation, fragmentCitation } from '../services/fragmentApi';
+import { type FragmentLocation } from '../services/fragmentAddress';
 import { resolveSelectedQuote } from '../services/serverQuoteApi';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -69,6 +73,8 @@ import { matchesSearch } from '../services/collectionSearch';
 interface ReaderViewProps {
   workId: string;
   chapterId: string;
+  fragment?: FragmentLocation;
+  onFragmentChange?: (fragment?: FragmentLocation, page?: string, replace?: boolean) => void;
   /** Retained for callers compiled against older reader props; navigation is chapter-aware now. */
   onBack?: () => void;
   reallySignedIn: boolean;
@@ -153,6 +159,8 @@ const WIDTH_CLASSES: Record<ReaderWidth, string> = {
 export const ReaderView: React.FC<ReaderViewProps> = ({
   workId,
   chapterId,
+  fragment,
+  onFragmentChange,
   reallySignedIn,
   onBackToWork,
   onSelectWork,
@@ -179,7 +187,11 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // recreating all content DOM and wiping alignPoemStanzas' inline margins
   // (the poem jumped back to left-aligned on the first scroll). Memoizing
   // the object keeps the identity stable while the string is unchanged.
-  const contentHtml = useMemo(() => ({ __html: chapter?.htmlContent ?? '' }), [chapter?.htmlContent]);
+  const [localFragment, setLocalFragment] = useState<FragmentLocation>();
+  const activeFragment = onFragmentChange ? fragment : localFragment;
+  const [expandedSource, setExpandedSource] = useState<{ path: string; html: string }>();
+  const sourceHtml = activeFragment && expandedSource && expandedSource.path === chapter?.id ? expandedSource.html : chapter?.htmlContent ?? '';
+  const contentHtml = useMemo(() => ({ __html: sourceHtml }), [sourceHtml]);
   // Loading depends only on this work, its TOC and the requested chapter.
   const isLiveLoading = (!work && readerService.isWorkLoading(workId)) ||
     Boolean(work && readerService.isLiveWork(work.id) &&
@@ -250,10 +262,14 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   }, [work?.detectedLanguage]);
 
   // Text selection & quotation fragment state
+  const sourceFragmentSelection = useRef<{ text: string; range: Range } | null>(null);
   const [selectedText, setSelectedText] = useState<string>('');
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
   const [selectionCoords, setSelectionCoords] = useState<{ x: number; y: number } | null>(null);
-  const [createdQuote, setCreatedQuote] = useState<Quotation | null>(null);
+  const changeFragment = (next?: FragmentLocation, page?: string, replace = false) => {
+    if (onFragmentChange) onFragmentChange(next, page, replace);
+    else setLocalFragment(next);
+  };
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCitation, setCopiedCitation] = useState(false);
   const [copiedSelection, setCopiedSelection] = useState(false);
@@ -592,7 +608,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // Land back on the reading face when moving to a different chapter, and
   // drop an open footnote popover with the page it belongs to - keyboard
   // page turns (arrow keys) never pass through the outside-click close.
-  useEffect(() => { setShowStats(false); setFootnote(null); setSelectedText(''); setSelectionCoords(null); }, [chapter?.id]);
+  useEffect(() => { sourceFragmentSelection.current = null; setShowStats(false); setFootnote(null); setSelectedText(''); setSelectionCoords(null); }, [chapter?.id]);
 
   // The download dropdown lives on the back face: flipping back to reading
   // closes it, so it is not still open on the next flip.
@@ -671,7 +687,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         return;
       }
 
-      const text = selection.toString().trim();
+      const mapped = sourceFragmentSelection.current;
+      const current = selection.getRangeAt(0);
+      const exact = mapped && current.compareBoundaryPoints(Range.START_TO_START, mapped.range) === 0 && current.compareBoundaryPoints(Range.END_TO_END, mapped.range) === 0;
+      const text = (exact ? mapped.text : selection.toString()).trim();
       if (text.length > 0) {
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
@@ -692,7 +711,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             x: Math.max(10, rect.left + rect.width / 2),
             y: rect.top - 10
           });
-          setCreatedQuote(null);
+
         }
       }
     };
@@ -767,50 +786,52 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     if (!selectedText || quoteCreating) return;
     setQuoteCreating(true); setQuoteError('');
     try {
-      const source = await resolveSelectedQuote(chapter.id, selectedText, quoteContext.context, quoteContext.before);
-      const quote = readerService.createQuotation({
-        workId: work.id, workTitle: work.title, authorName: work.authorName,
-        chapterId: chapter.id, chapterTitle: chapter.title, chapterNumber: chapter.chapterNumber,
-        text: source.text, startOffset: selectionRange?.start || 0,
-        endOffset: selectionRange?.end || selectedText.length, language: work.detectedLanguage
-      }, source.id);
-      setCreatedQuote(quote);
+      if (!contentRef.current) return;
+      const resolved = await resolveReaderFragment(chapter.id, contentRef.current, selectedText, quoteContext.context, quoteContext.before);
+      changeFragment(fragmentLocation(resolved));
     } catch (error) { setQuoteError((error as Error).message); }
     finally { setQuoteCreating(false); }
   };
 
-  // Action: Copy Citation
-  const handleCopyCitation = () => {
-    const citation = `«${selectedText}» — ${work.authorName}, ${work.title} (${chapter.title}). Canonical fragment TEI citation.`;
-    void copyToClipboard(citation).then(ok => {
-      setCopiedCitation(ok);
-      if (ok) setTimeout(() => setCopiedCitation(false), 2000);
-    });
+  const resolveCurrentFragment = async () => {
+    if (!contentRef.current) throw new Error('The source page is not ready');
+    return resolveReaderFragment(chapter.id, contentRef.current, selectedText, quoteContext.context, quoteContext.before);
   };
 
-  // Action: Native Share
-  const handleNativeShare = async (quote?: Quotation) => {
-    const shareText = quote ? quote.text : selectedText;
-    const shareUrl = quote 
-      ? readerService.generateQuoteShareUrl(quote.id) 
-      : window.location.href;
+  const handleCopyCitation = async () => {
+    try {
+      const selected = await resolveCurrentFragment();
+      const ok = await copyToClipboard(fragmentCitation(selected, window.location.origin));
+      setCopiedCitation(ok);
+      if (ok) setTimeout(() => setCopiedCitation(false), 2000);
+    } catch (error) { setQuoteError((error as Error).message); }
+  };
 
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${work.title} - ${work.authorName}`,
-          text: `«${shareText}» — ${work.authorName}`,
-          url: shareUrl
-        });
-      } catch {
-        // User cancelled or unsupported
-      }
-    } else {
-      void copyToClipboard(shareUrl).then(ok => {
-        setCopiedLink(ok);
+  const handleSaveSelectedFragment = async () => {
+    if (quoteCreating) return;
+    setQuoteCreating(true); setQuoteError('');
+    try {
+      const selected = await resolveCurrentFragment();
+      changeFragment(fragmentLocation(selected, true));
+      onOpenAddToCollection({ type: 'quote', referenceId: selected.canonicalPath,
+        workId: selected.workId, workTitle: selected.workTitle, authorName: selected.authorName,
+        chapterId: selected.sourcePath, chapterTitle: selected.chapterTitle, quoteText: selected.text });
+    } catch (error) { setQuoteError((error as Error).message); }
+    finally { setQuoteCreating(false); }
+  };
+
+  const handleNativeShare = async () => {
+    try {
+      const selected = await resolveCurrentFragment();
+      const url = window.location.origin + selected.canonicalPath;
+      if (navigator.share) {
+        try { await navigator.share({ title: `${selected.workTitle} — ${selected.authorName}`, text: selected.text, url }); }
+        catch { /* Native cancellation leaves the source selection intact. */ }
+      } else {
+        const ok = await copyToClipboard(url); setCopiedLink(ok);
         if (ok) setTimeout(() => setCopiedLink(false), 2000);
-      });
-    }
+      }
+    } catch (error) { setQuoteError((error as Error).message); }
   };
 
   return (
@@ -1371,7 +1392,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 dangerouslySetInnerHTML={contentHtml}
                 onClick={handleNoteClick}
               />
-              <ReaderBlockSelection containerRef={contentRef} contentKey={`${chapter.id}:${chapter.htmlContent}`} />
+              <ReaderBlockSelection sourcePath={chapter.id} onLegacyFragment={next => changeFragment(next, undefined, true)} containerRef={contentRef} contentKey={`${chapter.id}:${sourceHtml}`} />
 
               {/* End-of-text ornament, the original server page's own
                   p.deco-end (teidiv.css: img.deco-end { max-width: 100px;
@@ -1679,7 +1700,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       {similarityQuery !== null && <ReaderSimilarityDialog query={similarityQuery}
         onClose={() => setSimilarityQuery(null)} onSelect={hit => {
           setSimilarityQuery(null);
-          if (hit.chapterId) onSelectChapter(hit.workId, hit.chapterId);
+          if (hit.chapterId) onSelectChapter(hit.workId, searchTargetPath(hit));
           else onSelectWork(hit.workId);
         }} />}
 
@@ -1736,16 +1757,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
           <button
             id="btn-sel-save-collection"
-            onClick={() => onOpenAddToCollection({
-              type: 'quote',
-              referenceId: `quote-temp-${Date.now()}`,
-              workId: work.id,
-              workTitle: work.title,
-              authorName: work.authorName,
-              chapterId: chapter.id,
-              chapterTitle: chapter.title,
-              quoteText: selectedText
-            })}
+            onClick={() => void handleSaveSelectedFragment()}
+            disabled={quoteCreating}
             className="flex items-center space-x-1 text-xs font-medium hover:text-[#f59e0b] px-2 py-1 rounded hover:bg-white/10 transition-colors cursor-pointer"
             title="Save selected quote to personal collection"
           >
@@ -1778,80 +1791,23 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </div>
       )}
 
-      {/* Generated Quote Link Modal / Card */}
-      {createdQuote && (
-        <div id="quote-created-modal" className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#0b2921] text-emerald-100 border border-emerald-500/30 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
-              <div className="flex items-center space-x-2 text-[#f59e0b]">
-                <Quote className="w-5 h-5" />
-                <span className="font-bold text-sm">Permanent Fragment Quote Created</span>
-              </div>
-              <button
-                onClick={() => setCreatedQuote(null)}
-                className="text-emerald-300 hover:text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <blockquote className="font-serif-reading text-base italic border-l-2 border-[#f59e0b] pl-4 py-1 text-emerald-50">
-              «{createdQuote.text}»
-            </blockquote>
-
-            <div className="text-xs text-emerald-200/70 font-mono">
-              — {createdQuote.authorName}, <em>{createdQuote.workTitle}</em> ({createdQuote.chapterTitle})
-            </div>
-
-            <div className="bg-[#051a14] p-3 rounded-xl border border-emerald-500/20 flex items-center justify-between gap-2">
-              <input
-                type="text"
-                readOnly
-                value={readerService.generateQuoteShareUrl(createdQuote.id)}
-                className="bg-transparent font-mono text-xs text-[#f59e0b] flex-1 outline-none truncate"
-              />
-              <button
-                onClick={() => {
-                  void copyToClipboard(readerService.generateQuoteShareUrl(createdQuote.id)).then(ok => {
-                    setCopiedLink(ok);
-                    if (ok) setTimeout(() => setCopiedLink(false), 2000);
-                  });
-                }}
-                className="px-3 py-1.5 bg-[#f59e0b] hover:bg-amber-400 text-black rounded-lg text-xs font-bold flex items-center space-x-1 cursor-pointer"
-              >
-                {copiedLink ? <Check className="w-3.5 h-3.5 text-black" /> : <Copy className="w-3.5 h-3.5 text-black" />}
-                <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
-              </button>
-            </div>
-
-            <div className="flex items-center justify-end space-x-2 pt-2">
-              <button
-                onClick={() => onOpenAddToCollection({
-                  type: 'quote',
-                  referenceId: createdQuote.id,
-                  workId: createdQuote.workId,
-                  workTitle: createdQuote.workTitle,
-                  authorName: createdQuote.authorName,
-                  chapterId: createdQuote.chapterId,
-                  chapterTitle: createdQuote.chapterTitle,
-                  quoteText: createdQuote.text
-                })}
-                className="px-4 py-2 bg-[#0f3d30] hover:bg-emerald-700/50 text-white text-xs font-semibold rounded-xl flex items-center space-x-1.5 border border-emerald-500/30 cursor-pointer"
-              >
-                <Bookmark className="w-3.5 h-3.5 text-[#f59e0b]" />
-                <span>Save to Collection</span>
-              </button>
-              <button
-                onClick={() => handleNativeShare(createdQuote)}
-                className="px-4 py-2 bg-[#f59e0b] hover:bg-amber-400 text-black text-xs font-bold uppercase tracking-wider rounded-xl flex items-center space-x-1.5 cursor-pointer"
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>Native Share</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <FragmentPresentation location={activeFragment} containerRef={contentRef} contentKey={sourceHtml} onExpandedSource={setExpandedSource}
+        onChange={(next, page) => changeFragment(next, page, true)}
+        onSelection={(selected, range) => {
+          sourceFragmentSelection.current = selected && range ? { text: selected.text, range: range.cloneRange() } : null;
+          if (!selected) { setSelectedText(''); setSelectionCoords(null); return; }
+          setSelectedText(selected.text.trim());
+          if (range) {
+            const rect = range.getBoundingClientRect();
+            setSelectionCoords({ x: Math.max(10, rect.left + rect.width / 2), y: rect.top - 10 });
+          }
+        }}
+        onSave={selected => onOpenAddToCollection({
+          type: 'quote', referenceId: selected.canonicalPath, workId: selected.workId,
+          workTitle: selected.workTitle, authorName: selected.authorName, chapterId: selected.sourcePath,
+          chapterTitle: selected.chapterTitle, quoteText: selected.text,
+        })}
+        onOpenWork={onSelectWork} onSimilar={text => setSimilarityQuery(text)} />
 
       {/* Stripe Payment Checkout Modal */}
       {work && (

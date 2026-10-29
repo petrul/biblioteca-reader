@@ -1,3 +1,5 @@
+import { fetchSourceTarget } from './fragmentApi';
+import { searchTargetPath } from './searchTargets';
 import {
   Author,
   Work,
@@ -327,18 +329,18 @@ function loadChapterContent(chapter: Chapter): void {
     .finally(() => { contentLoads.delete(chapter.id); notify(); });
 }
 
-// Search results and permanent links can point to a nested TEI leaf that is
-// not promoted into the work TOC (for example .../quiproquo/_5). Resolve that
-// exact path directly instead of leaving ReaderView in an endless loading
-// state. The parent TOC chapter supplies the human title when available.
+// Resolve exceptional genuine divisions omitted from a loaded TOC.
+// A paragraph/fragment must never be appended as a synthetic chapter.
 function loadMissingChapter(workId: string, chapterId: string, chapters: Chapter[]): void {
   if (missingChapterLoads.has(chapterId) || missingChapterFailures.has(chapterId)) return;
   missingChapterLoads.add(chapterId);
   const parent = chapters
     .filter(chapter => chapterId.startsWith(`${chapter.id}/`))
     .sort((a, b) => b.id.length - a.id.length)[0];
-  void fetchRealChapterContent(chapterId, () => missingContent.add(chapterId))
-    .then(content => {
+  void fetchSourceTarget(chapterId).then(target => {
+    if (target.kind !== 'page') throw new Error('A fragment is not a reading chapter');
+    return fetchRealChapterContent(chapterId, () => missingContent.add(chapterId));
+  }).then(content => {
       if (!content) {
         missingChapterFailures.add(chapterId);
         if (!missingContent.has(chapterId)) recordRequestFailure();
@@ -1120,7 +1122,7 @@ export const readerService = {
       for (const tier of tiers) {
         for (const mode of tier) {
           for (const result of resultsByMode.get(mode) ?? []) {
-            const key = result.chapterId ? `${result.workId}::${result.chapterId}` : result.workId;
+            const key = result.chapterId ? `${result.workId}::${searchTargetPath(result)}` : result.workId;
             if (seen.has(key)) continue;
             seen.add(key);
             combined.push(result);
@@ -1168,7 +1170,7 @@ export const readerService = {
   },
 
   generateQuoteShareUrl(quoteId: string): string {
-    return window.location.origin + buildAppPath({ view: 'quote', quoteId });
+    return window.location.origin + (quoteId.startsWith('/') ? quoteId : buildAppPath({ view: 'quote', quoteId }));
   },
 
   // --- PERSONAL COLLECTIONS ---

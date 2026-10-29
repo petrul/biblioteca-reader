@@ -78,3 +78,15 @@ test('a signed-in reader\'s saved searches use the scoped REST API', async () =>
   await deleteSavedSearch('s1');
   assert.ok(calls.some(c => c.method === 'DELETE' && c.url.endsWith('/api/collections/mine/s1')));
 });
+
+test('saved fragment targets retain canonical ranges independently of their reading chapter', async () => {
+  const { saveSearch, getSavedSearches } = await import('./savedSearches');
+  const { sourceTarget, searchTargetPath } = await import('./searchTargets');
+  const path = '/shakespeare/hamlet/1/_2:3..3.1:8?rev=' + 'a'.repeat(64);
+  const result = { ...hit(1), target: sourceTarget(path) };
+  await saveSearch('fragment', 'vector', [result]);
+  const item = getSavedSearches()[0].items[0];
+  assert.equal(item.chapterId, 'shakespeare/hamlet/1');
+  assert.equal(searchTargetPath(item), path);
+  assert.ok(store.get('biblioteca_reader_saved_searches')!.includes('_2:3..3.1:8'));
+});

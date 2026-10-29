@@ -19,5 +19,5 @@ export async function resolveSelectedQuote(path: string, text: string, context?:
   const result = await api.POST('/api/quote', { body: { path, text, context, before }, signal: AbortSignal.timeout(30000) });
   if (!result.data) throw new Error((result.error as { error?: string })?.error || 'The selection could not be resolved in its TEI source.');
   const url = new URL(result.data.canonicalUrl);
-  return { id: 'server:' + url.pathname.slice('/quote/'.length) + url.search, text: result.data.text };
+  return { id: url.pathname.startsWith('/quote/') ? 'server:' + url.pathname.slice('/quote/'.length) + url.search : url.pathname + url.search, text: result.data.text };
 }

@@ -1,3 +1,4 @@
+import { searchTargetPath } from '../services/searchTargets';
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, 
@@ -35,7 +36,7 @@ interface SearchViewProps {
   onSelectAuthor: (authorId: string) => void;
   /** Whose collections decide which results show as saved. */
   currentUserId?: string;
-  onOpenAddToCollection: (item: { type: 'work' | 'chapter'; referenceId: string; workId: string; workTitle: string; authorName: string; chapterId?: string; chapterTitle?: string }) => void;
+  onOpenAddToCollection: (item: { type: 'work' | 'chapter' | 'quote'; referenceId: string; workId: string; workTitle: string; authorName: string; chapterId?: string; chapterTitle?: string; quoteText?: string }) => void;
 }
 
 const SEARCH_MODES: {
@@ -627,7 +628,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         // work route with a bogus id.
                         onSelectAuthor(item.authorId || item.workId);
                       } else if (item.chapterId) {
-                        onSelectChapter(item.workId, item.chapterId);
+                        onSelectChapter(item.workId, searchTargetPath(item));
                       } else {
                         onSelectWork(item.workId);
                       }
@@ -659,20 +660,21 @@ export const SearchView: React.FC<SearchViewProps> = ({
                   {item.type !== 'author' && (
                   <button
                     onClick={() => onOpenAddToCollection({
-                      type: item.chapterId ? 'chapter' : 'work',
-                      referenceId: item.chapterId || item.workId,
+                      type: item.target?.kind === 'fragment' ? 'quote' : item.chapterId ? 'chapter' : 'work',
+                      referenceId: searchTargetPath(item),
                       workId: item.workId,
                       workTitle: item.workTitle,
                       authorName: item.authorName,
                       chapterId: item.chapterId,
-                      chapterTitle: item.chapterTitle
+                      chapterTitle: item.chapterTitle,
+                      ...(item.target?.kind === 'fragment' ? { quoteText: item.snippet } : {})
                     })}
-                    aria-pressed={savedIds.has(item.chapterId || item.workId)}
+                    aria-pressed={savedIds.has(searchTargetPath(item))}
                     className="text-xs text-emerald-200/70 hover:text-white flex items-center space-x-1 transition-colors cursor-pointer"
                   >
                     <Bookmark className="w-3.5 h-3.5 text-[#f59e0b]"
-                      fill={savedIds.has(item.chapterId || item.workId) ? 'currentColor' : 'none'} />
-                    <span>{savedIds.has(item.chapterId || item.workId) ? 'Saved' : 'Save Result'}</span>
+                      fill={savedIds.has(searchTargetPath(item)) ? 'currentColor' : 'none'} />
+                    <span>{savedIds.has(searchTargetPath(item)) ? 'Saved' : 'Save Result'}</span>
                   </button>
                   )}
 
@@ -683,7 +685,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
                         // work route with a bogus id.
                         onSelectAuthor(item.authorId || item.workId);
                       } else if (item.chapterId) {
-                        onSelectChapter(item.workId, item.chapterId);
+                        onSelectChapter(item.workId, searchTargetPath(item));
                       } else {
                         onSelectWork(item.workId);
                       }

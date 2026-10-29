@@ -6,6 +6,7 @@ const INTERACTIVE = 'a, button, input, textarea, select, [contenteditable="true"
 export function attachReaderBlocks(container: HTMLElement, callbacks: {
   onChange: (block: HTMLElement | null) => void;
   onActivate: (block: HTMLElement) => void;
+  onLegacyRange?: (first: HTMLElement, last: HTMLElement) => boolean;
 }) {
   container.querySelectorAll<HTMLElement>(PARAGRAPHS).forEach((block, index) => {
     const id = `p${index + 1}`;
@@ -62,6 +63,7 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     const block = findBlock(event.target);
     // A text drag still belongs to the native selection/quote toolbar.
     if (!block) return;
+    if (!doc.getSelection()?.isCollapsed && !container.classList.contains('reader-block-selection')) return;
     if (block === selected) { clearSelection(); return; }
     if (!doc.getSelection()?.isCollapsed) return;
     select(block);
@@ -111,8 +113,9 @@ export function attachReaderBlocks(container: HTMLElement, callbacks: {
     const range = parseParagraphRange(new URLSearchParams(location.search).get('p') || location.hash);
     if (!range) return;
     const first = container.querySelector<HTMLElement>(`[data-reader-paragraph="p${range.start}"]`);
-    const last = container.querySelector(`[data-reader-paragraph="p${range.end}"]`);
+    const last = container.querySelector<HTMLElement>(`[data-reader-paragraph="p${range.end}"]`);
     if (!first || !last) return;
+    if (callbacks.onLegacyRange?.(first, last)) return;
     select(first);
     for (let n = range.start; n <= range.end; n++) container.querySelector(`[data-reader-paragraph="p${n}"]`)?.classList.add('block-linked');
     first.scrollIntoView({ block: 'center' });

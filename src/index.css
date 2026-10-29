@@ -387,7 +387,8 @@
 /* Mark the right edge without changing paragraph/verse layout. */
 .reader-text-container .block-active,
 .reader-text-container .block-hover,
-.reader-text-container .block-linked {
+.reader-text-container .block-linked,
+.reader-text-container [data-fragment-active] {
   position: relative;
 }
 
@@ -400,7 +401,8 @@
 
 .reader-text-container .block-active::before,
 .reader-text-container .block-hover::before,
-.reader-text-container .block-linked::before {
+.reader-text-container .block-linked::before,
+.reader-text-container [data-fragment-active]::before {
   content: '';
   position: absolute;
   top: 0;
@@ -410,3 +412,14 @@
   background-color: #9ca3af;
   pointer-events: none;
 }
+
+::highlight(biblioteca-fragment) {
+  background-color: rgba(245, 158, 11, 0.3);
+  color: inherit;
+}
+
+.fragment-literary-text p { margin: 0 0 0.8em; }
+.fragment-literary-text .lg { margin: 1em 0; }
+.fragment-literary-text .l { margin: 0; white-space: pre-wrap; }
+.fragment-literary-text table { border-collapse: collapse; margin: 1em 0; }
+.fragment-literary-text td { border: 1px solid rgb(255 255 255 / 0.2); padding: 0.4em; }

@@ -1,3 +1,4 @@
+import { legacyFragmentSelector } from './fragmentAddress';
 import type { PageSeo } from '../seo';
 import createClient from 'openapi-fetch';
 import type { paths } from '../generated/biblioteca-server-api';
@@ -30,9 +31,13 @@ async function resolve(base: string, raw: string, params: URLSearchParams, origi
   const query = new URLSearchParams({ start: source.start, end: source.end });
   const publicPath = `/quote/${source.path.split('/').map(encodeURIComponent).join('/')}?${query}`;
   const upstreamPage = `${base}${publicPath}`;
-  const response = await boundedFetch(upstreamPage, 'text/html');
-  if (!response.ok) throw Object.assign(new Error('Quote unavailable'), { status: [400, 403, 404].includes(response.status) ? response.status : 502 });
-  const $ = load(await response.text());
+  const client = createClient<paths>({ baseUrl: base });
+  const resolved = await client.GET('/api/fragments', { params: { query: { path: source.path, selector: legacyFragmentSelector(source.start, source.end) } }, signal: AbortSignal.timeout(30000) });
+  if (!resolved.data || !resolved.response.ok) throw Object.assign(new Error('Quote unavailable'), { status: resolved.response.status });
+  const fragment = resolved.data;
+  // Compatibility HTML now comes from the typed fragment contract, never a scraped upstream card.
+  const compatibilityHtml = '<html><head></head><body><main class="quote-card"><blockquote class="quote-text">' + fragment.html + '</blockquote><p>' + escapeHtml(fragment.authorName || '') + ' — ' + escapeHtml(fragment.workTitle || '') + '</p><a href="/' + source.path + '">Read source</a></main></body></html>';
+  const $ = load(compatibilityHtml);
   $('script, iframe, form, object, embed, base').remove();
   $('*').each((_, element) => {
     if ('attribs' in element) for (const key of Object.keys(element.attribs)) if (/^on/i.test(key)) $(element).removeAttr(key);
@@ -43,9 +48,9 @@ async function resolve(base: string, raw: string, params: URLSearchParams, origi
       if (value) $(element).attr(key, rewriteTwinLink(value, upstreamPage, new URL(base).origin));
     }
   });
-  const paragraphs = $('.quote-text p').map((_, p) => $(p).text()).get();
+  const paragraphs = (fragment.text || '').split('\n\n');
   if (!paragraphs.length) throw new Error('Quote renderer returned no quoted text');
-  const data: ServerQuote = { workId, chapterId: source.path, workTitle: work.head || workId, chapterTitle: chapter.head || source.path, authorName: work.author?.displayName || 'Anonymous', language: chapter.language || work.language, text: paragraphs.join('\n\n'), paragraphs, canonicalUrl: origin + publicPath };
+  const data: ServerQuote = { workId, chapterId: source.path, workTitle: work.head || workId, chapterTitle: chapter.head || source.path, authorName: work.author?.displayName || 'Anonymous', language: chapter.language || work.language, text: paragraphs.join('\n\n'), paragraphs, canonicalUrl: origin + fragment.canonicalPath };
   $('head title, head meta[property^="og:"], head meta[name^="twitter:"], head link[rel="canonical"]').remove();
   const image = `${origin}/api/covers/work/${workId}`;
   const title = `${data.workTitle} — ${data.authorName}`;

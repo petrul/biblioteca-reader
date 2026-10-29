@@ -1,3 +1,5 @@
+import { fetchFragment } from './services/fragmentApi';
+import { parseFragmentLocation, type FragmentLocation } from './services/fragmentAddress';
 import { useState, useEffect, useRef } from 'react';
 import {
   AppView,
@@ -79,6 +81,7 @@ export default function App() {
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(initialRoute.authorId || null);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(initialRoute.workId || null);
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(initialRoute.chapterId || null);
+  const [selectedFragment, setSelectedFragment] = useState<FragmentLocation | undefined>(initialRoute.fragment);
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(initialRoute.quoteId || null);
 
   // Admin Hamburger Sidebar State
@@ -262,6 +265,7 @@ export default function App() {
       } else if (route.view === 'reader' && route.workId && route.chapterId) {
         setSelectedWorkId(route.workId);
         setSelectedChapterId(route.chapterId);
+        setSelectedFragment(route.fragment);
         setCurrentView('reader');
       } else if (route.view === 'author' && route.authorId) {
         setSelectedAuthorId(route.authorId);
@@ -332,7 +336,7 @@ export default function App() {
     else if (currentView === 'work' && selectedWorkId) path = buildAppPath({ view: 'work', workId: selectedWorkId });
     else if (currentView === 'reader' && selectedChapterId) {
       const existing = parseAppPath(window.location.pathname, window.location.hash, window.location.search);
-      path = buildAppPath({ view: 'reader', chapterId: selectedChapterId, block: existing.chapterId === selectedChapterId ? existing.block : undefined });
+      path = buildAppPath({ view: 'reader', chapterId: selectedChapterId, fragment: selectedFragment, block: existing.chapterId === selectedChapterId ? existing.block : undefined });
     }
     else if (currentView === 'quote' && selectedQuoteId) path = buildAppPath({ view: 'quote', quoteId: selectedQuoteId });
     else if (currentView === 'author' && selectedAuthorId) path = buildAppPath({ view: 'author', authorId: selectedAuthorId });
@@ -352,7 +356,7 @@ export default function App() {
     // Do not reset the viewport on navigation. Opening a work or author from
     // a catalogue should preserve the reader's current place; individual
     // reader pagination/position hooks manage their own scroll state.
-  }, [currentView, catalog, searchMode, searchQuery, searchWorkSeed, selectedWorkId, selectedChapterId, selectedQuoteId, selectedAuthorId]);
+  }, [currentView, catalog, searchMode, searchQuery, searchWorkSeed, selectedWorkId, selectedChapterId, selectedQuoteId, selectedAuthorId, selectedFragment]);
 
   // Navigation handlers
   const handleAppBack = () => {
@@ -365,6 +369,7 @@ export default function App() {
   };
 
   const handleSelectWork = (workId: string) => {
+    setSelectedFragment(undefined);
     setSelectedWorkId(workId);
     setCurrentView('work');
     if (currentUser) readerService.recordWorkViewed(currentUser.id, workId);
@@ -401,8 +406,12 @@ export default function App() {
         ? currentView
         : 'browse');
     }
+    const incoming = new URL(chapterId.startsWith('/') ? chapterId : '/' + chapterId, window.location.origin);
+    const fragment = parseFragmentLocation(incoming.pathname, incoming.search) || undefined;
+    const page = fragment?.sourcePath || chapterId;
     setSelectedWorkId(workId);
-    setSelectedChapterId(chapterId);
+    setSelectedChapterId(page);
+    setSelectedFragment(fragment);
     setCurrentView('reader');
     if (currentUser) readerService.recordWorkViewed(currentUser.id, workId);
     // Reading position ("bookmark") - fire-and-forget, every chapter view
@@ -410,7 +419,7 @@ export default function App() {
     // services/bookmarkStore.ts/identity.ts); reallySignedIn is only null
     // for the brief moment whoami hasn't answered yet, treated as
     // not-signed-in here rather than blocking navigation on it.
-    void bookmarkStoreFor(Boolean(reallySignedIn)).set(workId, { divPath: chapterId, updatedAt: Date.now() });
+    void bookmarkStoreFor(Boolean(reallySignedIn)).set(workId, { divPath: page, updatedAt: Date.now() });
   };
 
   // "Closing the book": return to the page the book visit began on - the
@@ -422,6 +431,12 @@ export default function App() {
   };
 
   const handleOpenQuote = (quoteId: string) => {
+    if (quoteId.startsWith('server:') || quoteId.startsWith('/')) {
+      const address = quoteId.startsWith('server:') ? '/quote/' + quoteId.slice(7) : quoteId;
+      const url = new URL(address, window.location.origin);
+      const fragment = parseFragmentLocation(url.pathname, url.search);
+      if (fragment) { handleSelectChapter(fragment.sourcePath.split('/').slice(0, 2).join('/'), address); return; }
+    }
     setSelectedQuoteId(quoteId);
     setCurrentView('quote');
   };
@@ -443,11 +458,27 @@ export default function App() {
     setCurrentView('search');
   };
 
-  const handleOpenAddToCollection = (item: AddToCollectionPayload) => {
-    setCollectionModalPayload(item);
+  const [collectionLinkError, setCollectionLinkError] = useState('');
+  const handleOpenAddToCollection = async (item: AddToCollectionPayload) => {
+    setCollectionLinkError('');
+    try {
+      if (item.type === 'quote' && item.referenceId.startsWith('/')) {
+        const url = new URL(item.referenceId, window.location.origin);
+        const location = parseFragmentLocation(url.pathname, url.search);
+        if (location) {
+          const selected = await fetchFragment(location);
+          setCollectionModalPayload(selected.kind === 'page'
+            ? { ...item, type: 'chapter', referenceId: selected.sourcePath, chapterId: selected.sourcePath }
+            : { ...item, referenceId: selected.canonicalPath, chapterId: selected.sourcePath, quoteText: selected.text });
+          return;
+        }
+      }
+      setCollectionModalPayload(item);
+    } catch (error) { setCollectionLinkError((error as Error).message); }
   };
 
   const handleRandomDiscovery = async () => {
+    setSelectedFragment(undefined);
     const discovery = await readerService.getRandomDiscovery();
     if (!discovery.workId) return;
     if (discovery.type === 'chapter' && discovery.chapterId) {
@@ -571,6 +602,12 @@ export default function App() {
           <ReaderView
             workId={selectedWorkId}
             chapterId={selectedChapterId}
+            fragment={selectedFragment}
+            onFragmentChange={(fragment, page, replace) => {
+              if (replace) replaceNextPathSyncRef.current = true;
+              setSelectedFragment(fragment);
+              if (page) setSelectedChapterId(page);
+            }}
             reallySignedIn={Boolean(reallySignedIn)}
             onBackToWork={() => setCurrentView('work')}
             onSelectWork={handleSelectWork}
@@ -710,6 +747,7 @@ export default function App() {
       />
 
       {/* Add To Collection Modal */}
+      {collectionLinkError && <div role="alert" className="fixed bottom-20 left-4 right-4 z-[100] mx-auto max-w-xl rounded-xl bg-[#061d28] text-white p-4 border border-amber-300/40">{collectionLinkError}<button className="ml-3 text-amber-300 cursor-pointer" onClick={() => setCollectionLinkError('')}>Dismiss</button></div>}
       <AddToCollectionModal
         isOpen={collectionModalPayload !== null}
         onClose={() => setCollectionModalPayload(null)}

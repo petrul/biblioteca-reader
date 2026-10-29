@@ -1,3 +1,4 @@
+import { parseFragmentLocation, fragmentPath, type FragmentLocation } from './services/fragmentAddress';
 import { parseParagraphRange, paragraphShareUrl, type ParagraphRange } from './services/paragraphLinks';
 import {
   AppView,
@@ -33,6 +34,7 @@ export interface RouteState {
   workId?: string;
   chapterId?: string;
   block?: ParagraphRange;
+  fragment?: FragmentLocation;
   quoteId?: string;
   search?: { mode?: SearchMode; query?: string; workSeed?: string };
 }
@@ -46,6 +48,9 @@ export function parseAppPath(pathname: string, hash = '', search = ''): RouteSta
     return catalog ? { view: 'browse', catalog } : { view: 'browse' };
   }
   const [head, ...rest] = segments;
+  const fragment = parseFragmentLocation(pathname, search);
+  if (fragment) return { view: 'reader', workId: fragment.sourcePath.split('/').slice(0, 2).join('/'), chapterId: fragment.sourcePath, fragment };
+
 
   if (head === 'search') {
     const params = new URLSearchParams(search);
@@ -171,6 +176,7 @@ export function buildAppPath(state: RouteState): string {
         ? `${APP_PREFIX}/work/${state.workId.split('/').map(encodeURIComponent).join('/')}`
         : APP_PREFIX;
     case 'reader':
+      if (state.fragment) return fragmentPath(state.fragment);
       return state.chapterId
         ? (state.block ? paragraphShareUrl(state.chapterId, state.block) : `/${state.chapterId.split('/').map(encodeURIComponent).join('/')}`)
         : APP_PREFIX;

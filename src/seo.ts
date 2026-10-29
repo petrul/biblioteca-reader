@@ -16,6 +16,8 @@ const DEFAULT_DESCRIPTION = 'Read the classics free, cover to cover — searchab
 const DEFAULT_IMAGE_ALT = 'The Biblioteca shelf: live digital editions, reading progress and free classics';
 
 export interface PageSeo {
+  /** Safe fragment markup supplied after public access validation. */
+  noscriptHtml?: string;
   /** BCP-47 language for the initial HTML document shell. */
   language: string;
   title: string;
@@ -346,7 +348,8 @@ export function renderIndexHtml(template: string, seo: PageSeo): string {
     .replaceAll('__CANONICAL_URL__', escapeHtml(seo.canonicalUrl))
     .replaceAll('__OG_URL__', escapeHtml(seo.sharedUrl || seo.canonicalUrl))
     .replaceAll('__ROBOTS__', seo.robots)
-    .replace('__JSON_LD__', jsonLdScript);
+    .replace('__JSON_LD__', jsonLdScript)
+    .replace('</body>', (seo.noscriptHtml ? `<noscript>${seo.noscriptHtml}</noscript>` : '') + '</body>');
 }
 
 export function buildRobotsTxt(origin: string): string {

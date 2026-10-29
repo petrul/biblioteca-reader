@@ -1,9 +1,10 @@
 import { useEffect, type RefObject } from 'react';
+import type { FragmentLocation } from '../services/fragmentAddress';
 import { attachReaderBlocks } from '../services/readerBlocks';
 
 /** Whole-paragraph clicks use exactly the native text-selection toolbar. */
-export function ReaderBlockSelection({ containerRef, contentKey }: {
-  containerRef: RefObject<HTMLDivElement | null>; contentKey: string;
+export function ReaderBlockSelection({ containerRef, contentKey, sourcePath, onLegacyFragment }: {
+  containerRef: RefObject<HTMLDivElement | null>; contentKey: string; sourcePath?: string; onLegacyFragment?: (fragment: FragmentLocation) => void;
 }) {
   useEffect(() => {
     const container = containerRef.current;
@@ -36,6 +37,12 @@ export function ReaderBlockSelection({ containerRef, contentKey }: {
     container.addEventListener('pointerdown', clearAppearance);
     document.addEventListener('selectionchange', selectionChanged);
     const detach = attachReaderBlocks(container, {
+      onLegacyRange: (first, last) => {
+        const revision = container.querySelector<HTMLElement>('[data-fragment-version]')?.dataset.fragmentVersion;
+        if (!sourcePath || !onLegacyFragment || !revision || !first.dataset.sourcePath || !last.dataset.sourcePath) return false;
+        onLegacyFragment({ sourcePath, selector: '_' + first.dataset.sourcePath + (first === last ? '' : '..' + last.dataset.sourcePath), revision });
+        return true;
+      },
       onChange: block => { if (!block) clearAppearance(); }, onActivate: activate,
     });
     return () => {

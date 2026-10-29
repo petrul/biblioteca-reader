@@ -469,55 +469,6 @@
           }
         }
       },
-      "EntityModelTeiOpus": {
-        "type": "object",
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "significantQuote": {
-            "type": "string"
-          },
-          "summary": {
-            "type": "string"
-          },
-          "summarySourceUrl": {
-            "type": "string"
-          },
-          "workEnrichedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "coverUrl": {
-            "type": "string"
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "PagedModelEntityModelTeiOpus": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "teiOpuses": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelTeiOpus"
-                }
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          },
-          "page": {
-            "$ref": "#/components/schemas/PageMetadata"
-          }
-        }
-      },
       "EntityModelTeiDiv": {
         "type": "object",
         "properties": {
@@ -595,23 +546,6 @@
           },
           "completePath": {
             "type": "string"
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "CollectionModelObject": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "objects": {
-                "type": "array",
-                "items": {}
-              }
-            }
           },
           "_links": {
             "$ref": "#/components/schemas/Links"
@@ -766,6 +700,72 @@
           },
           "page": {
             "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "EntityModelTeiOpus": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "significantQuote": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "summarySourceUrl": {
+            "type": "string"
+          },
+          "workEnrichedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "PagedModelEntityModelTeiOpus": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "teiOpuses": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelTeiOpus"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "CollectionModelObject": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "objects": {
+                "type": "array",
+                "items": {}
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
           }
         }
       },
@@ -1366,6 +1366,87 @@
           },
           "replaceCover": {
             "type": "boolean"
+          }
+        }
+      },
+      "Selection": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "rev": {
+            "type": "string"
+          }
+        }
+      },
+      "Fragment": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "sourceVersion": {
+            "type": "string"
+          },
+          "canonicalPath": {
+            "type": "string"
+          },
+          "contextPath": {
+            "type": "string"
+          },
+          "workId": {
+            "type": "string"
+          },
+          "workTitle": {
+            "type": "string"
+          },
+          "chapterId": {
+            "type": "string"
+          },
+          "chapterTitle": {
+            "type": "string"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "startOffset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "endOffset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "readingPages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -1992,6 +2073,9 @@
           },
           "enrichWorkTopic": {
             "type": "string"
+          },
+          "humanEventsTopic": {
+            "type": "string"
           }
         }
       },
@@ -2085,6 +2169,134 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": {}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fragments": {
+      "get": {
+        "tags": [
+          "fragment-rest-controller"
+        ],
+        "operationId": "resolve",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "selector",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rev",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/vnd.hal+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fragment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/vnd.hal+json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/vnd.hal+json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fragments/resolve": {
+      "post": {
+        "tags": [
+          "fragment-rest-controller"
+        ],
+        "operationId": "selection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Selection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/vnd.hal+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fragment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/vnd.hal+json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/vnd.hal+json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -2543,6 +2755,29 @@
               "application/vnd.hal+json": {
                 "schema": {
                   "$ref": "#/components/schemas/CatalogPageDtoTeiDivDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/mine": {
+      "get": {
+        "tags": [
+          "div-collection-rest-controller"
+        ],
+        "operationId": "mine_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/vnd.hal+json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DivCollectionDto"
+                  }
                 }
               }
             }
@@ -3135,7 +3370,7 @@
         },
         "responses": {
           "200": {
-              "description": "OK (Stripe live)",
+            "description": "OK (Stripe live)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3213,7 +3448,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "error": { "type": "string" }
+                    "error": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -3367,7 +3604,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "error": { "type": "string" }
+                    "error": {
+                      "type": "string"
+                    }
                   }
                 }
               }

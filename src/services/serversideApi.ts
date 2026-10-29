@@ -1,3 +1,4 @@
+import { sourceTarget } from './searchTargets';
 import createClient from 'openapi-fetch';
 import type { components, paths } from '../generated/same-origin-api';
 import type { paths as bibliotecaServerPaths } from '../generated/biblioteca-server-api';
@@ -361,7 +362,8 @@ export function chapterContentUrl(path: string, extension: 'txt' | 'xml' | 'json
 }
 
 async function rawText(path: string, extension: 'txt' | 'xml' | 'json' | 'html', skeleton = false): Promise<string> {
-  const response = await trackedFetch(chapterContentUrl(path, extension, skeleton));
+  const url = chapterContentUrl(path, extension, skeleton);
+  const response = await trackedFetch(extension === 'html' ? url + (url.includes('?') ? '&' : '?') + 'fragments=1' : url);
   if (!response.ok) throw new ServerHttpError(`textbase-server ${path}.${extension} -> HTTP ${response.status}`, response.status);
   return response.text();
 }
@@ -516,7 +518,9 @@ export async function realSearch(mode: SearchMode, q: string, limit: number, wor
     const authorId = String(data.strId || work?.authorId || workPath.split('/')[0] || '');
     const author = String(data.displayName || work?.authorName || authorId);
     const workTitle = String(data.head || work?.title || data.displayName || hitPath);
+    const target = mode === 'author' ? { kind: 'author' as const, authorId } : mode === 'title' ? { kind: 'work' as const, workId: workPath } : sourceTarget(hitPath);
     const result: SearchResult = {
+      target,
       id: `live-${mode}-${index}-${hitPath || authorId}`,
       mode,
       // An author hit is an AUTHOR result: clicking it must open the
@@ -533,7 +537,7 @@ export async function realSearch(mode: SearchMode, q: string, limit: number, wor
       workTitle,
       authorId,
       authorName: author,
-      chapterId: mode === 'grep' || mode === 'lucene' || mode === 'vector' ? hitPath : undefined,
+      chapterId: target.kind === 'fragment' ? target.reference.sourcePath : target.kind === 'page' ? target.sourcePath : undefined,
       chapterTitle: mode === 'grep' || mode === 'lucene' || mode === 'vector' ? hitPath.split('/').pop() : undefined,
       snippet: mode === 'lucene'
         ? luceneSnippet(hit.content || String(data.description || data.head || data.displayName || ''), q)

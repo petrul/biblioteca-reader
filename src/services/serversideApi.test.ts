@@ -17,7 +17,7 @@ test('reading succeeds without requesting the XML or JSON export endpoints', asy
     const url = String(input);
     requests.push(url);
     if (url.endsWith('.txt')) return new Response('Chapter text.');
-    if (url.endsWith('.html')) return new Response('<p>Chapter text.</p>');
+    if (url.endsWith('.html?fragments=1')) return new Response('<p>Chapter text.</p>');
     return new Response(null, { status: 503 });
   };
   try {
@@ -25,7 +25,7 @@ test('reading succeeds without requesting the XML or JSON export endpoints', asy
     assert.equal(chapter?.htmlContent, '<p>Chapter text.</p>');
     assert.equal(chapter?.plainText, 'Chapter text.');
     assert.deepEqual(requests.sort(), [
-      '/api/server-content/author/work/chapter.html',
+      '/api/server-content/author/work/chapter.html?fragments=1',
       '/api/server-content/author/work/chapter.txt'
     ]);
   } finally {

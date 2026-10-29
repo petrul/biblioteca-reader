@@ -32,7 +32,7 @@ interface CacheShape {
   books: CachedBook[]; // ordered oldest-touched first isn't required - lastAccessed is authoritative
 }
 
-const STORAGE_KEY = 'biblioteca.reader.chapterCache.v1';
+const STORAGE_KEY = 'biblioteca.reader.chapterCache.v2';
 // Books, not chapters or bytes - simple and matches how a reader thinks
 // about "how much is cached" ("my last 3 books"), and naturally caps
 // total size too since no single classical text is large enough on its

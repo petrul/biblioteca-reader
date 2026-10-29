@@ -167,7 +167,14 @@ export interface SystemReadingList {
 
 export type SearchMode = 'author' | 'title' | 'grep' | 'lucene' | 'vector';
 
+export type SearchTarget =
+  | { kind: 'author'; authorId: string }
+  | { kind: 'work'; workId: string }
+  | { kind: 'page'; sourcePath: string }
+  | { kind: 'fragment'; reference: import('../services/fragmentAddress').FragmentLocation };
+
 export interface SearchResult {
+  target?: SearchTarget;
   id: string;
   mode: SearchMode;
   // 'author' results navigate to the author page (onSelectAuthor) - they
@@ -244,6 +251,7 @@ export interface PersonalCollection extends Collection<CollectionItem> {
 }
 
 export interface SavedSearchItem extends CollectionEntry {
+  target?: SearchTarget;
   workId: string; // stable authorId/opusId path
   chapterId?: string;
   workTitle: string;

@@ -19,6 +19,8 @@ const BIBLIOTECA_SERVER_URL = (process.env.BIBLIOTECA_SERVER_URL || 'http://loca
 
 const BIBLIOTECA_PATHS = {
     '/api/users/me': ['get'],
+    '/api/fragments': ['get'],
+    '/api/fragments/resolve': ['post'],
     '/api/lucene/status': ['get'],
     '/api/reading-progress': ['get', 'put'],
     '/api/reading-progress/one': ['get'],

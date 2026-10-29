@@ -1,3 +1,4 @@
+import { searchTargetPath, sourceTarget } from './searchTargets';
 // Saved searches: the results of a search kept as a collection of kind
 // 'search'. A signed-in reader's live in biblioteca-server's database (REST
 // via the explicit same-origin gateway); an anonymous reader's stay in
@@ -72,7 +73,7 @@ export function defaultSearchName(query: string): string {
 }
 
 function itemPath(result: SearchResult): string {
-  return result.chapterId || result.workId;
+  return searchTargetPath(result).replace(/^\//, '');
 }
 
 function fromServer(col: ServerCollection): SavedSearch {
@@ -87,11 +88,13 @@ function fromServer(col: ServerCollection): SavedSearch {
     createdAt: col.createdAt,
     updatedAt: col.createdAt,
     items: (col.items ?? []).map((item): SavedSearchItem => {
-      const parts = item.divPath.split('/');
+      const target = sourceTarget(item.divPath);
+      const path = target.kind === 'fragment' ? target.reference.sourcePath : item.divPath.replace(/^\//, '').split('?')[0];
+      const parts = path.split('/');
       return {
-        id: item.id,
+        id: item.id, target,
         workId: parts.slice(0, 2).join('/'),
-        chapterId: parts.length > 2 ? item.divPath : undefined,
+        chapterId: target.kind === 'fragment' ? target.reference.sourcePath : parts.length > 2 ? path : undefined,
         workTitle: item.divHead ?? item.divPath,
         authorName: parts[0],
         snippet: item.snippet ?? '',
@@ -153,7 +156,7 @@ export async function saveSearch(query: string, mode: SearchMode | 'all', result
       id: newId(), kind: 'search', name: unique, query: trimmed, mode: mode === 'all' ? undefined : mode,
       createdAt: now, updatedAt: now,
       items: hits.map((r): SavedSearchItem => ({
-        id: newId(), workId: r.workId, chapterId: r.chapterId, workTitle: r.workTitle, authorName: r.authorName,
+        id: newId(), target: r.target, workId: r.workId, chapterId: r.chapterId, workTitle: r.workTitle, authorName: r.authorName,
         chapterTitle: r.chapterTitle, snippet: r.snippet, score: r.score, addedAt: now,
       })),
     };

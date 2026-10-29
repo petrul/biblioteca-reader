@@ -26,7 +26,7 @@ export function canonicalReaderPath(path: string): string {
 }
 export function textAlternates(path: string, params: URLSearchParams): string {
   const base = new URLSearchParams();
-  for (const key of ['p', 'start', 'end']) if (params.has(key)) base.set(key, params.get(key)!);
+  for (const key of ['p', 'start', 'end', 'rev', 'display']) if (params.has(key)) base.set(key, params.get(key)!);
   base.set('view', 'text');
   return `<link rel="alternate" type="text/html" title="Plain text version" href="${escapeHtml(path + '?' + base)}">`;
 }

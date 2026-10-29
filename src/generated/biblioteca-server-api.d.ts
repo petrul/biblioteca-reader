@@ -744,7 +744,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/drest/teiDivs/search/getBottomDivIds": {
+    "/api/drest/teiDivs/search/getBottomDivIdsWithFilename": {
         parameters: {
             query?: never;
             header?: never;
@@ -1038,6 +1038,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/collections/mine/{id}/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["reorder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/runtime-config/{key}": {
         parameters: {
             query?: never;
@@ -1086,6 +1102,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fragments/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["selection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/collections/mine": {
         parameters: {
             query?: never;
@@ -1102,7 +1134,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/collections/mine/{name}/items": {
+    "/api/collections/mine/{id}/items": {
         parameters: {
             query?: never;
             header?: never;
@@ -1112,6 +1144,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["addItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/collections/mine/searches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["saveSearch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1132,6 +1180,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/collections/mine/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_2"];
+        put?: never;
+        post?: never;
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch: operations["rename"];
         trace?: never;
     };
     "/util/random": {
@@ -1343,6 +1407,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fragments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/divs": {
         parameters: {
             query?: never;
@@ -1528,22 +1608,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/collections/mine/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["get_2"];
-        put?: never;
-        post?: never;
-        delete: operations["delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/authors/{strId}": {
         parameters: {
             query?: never;
@@ -1656,7 +1720,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/collections/mine/{name}/items/{itemId}": {
+    "/api/collections/mine/{id}/items/{itemId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1703,6 +1767,80 @@ export interface components {
         RepresentationModelObject: {
             _links?: components["schemas"]["Links"];
         };
+        EntityModelEmbeddingBatchStat: {
+            /** Format: date-time */
+            recordedAt?: string;
+            /** Format: int32 */
+            batchSize?: number;
+            /** Format: int64 */
+            totalChars?: number;
+            /** Format: int32 */
+            vectorDimension?: number;
+            embedderModel?: string;
+            /** Format: int64 */
+            durationMs?: number;
+            _links?: components["schemas"]["Links"];
+        };
+        PageMetadata: {
+            /** Format: int64 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int64 */
+            totalPages?: number;
+            /** Format: int64 */
+            number?: number;
+        };
+        PagedModelEntityModelEmbeddingBatchStat: {
+            _embedded?: {
+                embeddingBatchStats?: components["schemas"]["EntityModelEmbeddingBatchStat"][];
+            };
+            _links?: components["schemas"]["Links"];
+            page?: components["schemas"]["PageMetadata"];
+        };
+        EntityModelTeiElem: {
+            xpath?: string;
+            domPath?: string;
+            /** @enum {string} */
+            lang?: "BG" | "BR" | "CA" | "DA" | "DE" | "EN" | "ES" | "FI" | "FR" | "GR" | "HU" | "IT" | "LA" | "NL" | "NO" | "PT" | "RO" | "RU" | "ZH";
+            name?: string;
+            /** Format: int32 */
+            nth?: number;
+            urlFragment?: string;
+            /** Format: byte */
+            txtSha256?: string;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int32 */
+            wordSize?: number;
+            leaf?: boolean;
+            completePath?: string;
+            _links?: components["schemas"]["Links"];
+        };
+        PagedModelEntityModelTeiElem: {
+            _embedded?: {
+                teiElems?: components["schemas"]["EntityModelTeiElem"][];
+            };
+            _links?: components["schemas"]["Links"];
+            page?: components["schemas"]["PageMetadata"];
+        };
+        EntityModelTeiOpus: {
+            description?: string;
+            significantQuote?: string;
+            summary?: string;
+            summarySourceUrl?: string;
+            /** Format: date-time */
+            workEnrichedAt?: string;
+            coverUrl?: string;
+            _links?: components["schemas"]["Links"];
+        };
+        PagedModelEntityModelTeiOpus: {
+            _embedded?: {
+                teiOpuses?: components["schemas"]["EntityModelTeiOpus"][];
+            };
+            _links?: components["schemas"]["Links"];
+            page?: components["schemas"]["PageMetadata"];
+        };
         EntityModelTeiDiv: {
             /** Format: int64 */
             id?: number;
@@ -1727,15 +1865,11 @@ export interface components {
             completePath?: string;
             _links?: components["schemas"]["Links"];
         };
-        PageMetadata: {
-            /** Format: int64 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int64 */
-            totalPages?: number;
-            /** Format: int64 */
-            number?: number;
+        CollectionModelObject: {
+            _embedded?: {
+                objects?: unknown[];
+            };
+            _links?: components["schemas"]["Links"];
         };
         PagedModelEntityModelTeiDiv: {
             _embedded?: {
@@ -1782,72 +1916,6 @@ export interface components {
             timestamp?: string;
             author?: components["schemas"]["Author"];
         };
-        EntityModelTeiOpus: {
-            description?: string;
-            significantQuote?: string;
-            coverUrl?: string;
-            _links?: components["schemas"]["Links"];
-        };
-        PagedModelEntityModelTeiOpus: {
-            _embedded?: {
-                teiOpuses?: components["schemas"]["EntityModelTeiOpus"][];
-            };
-            _links?: components["schemas"]["Links"];
-            page?: components["schemas"]["PageMetadata"];
-        };
-        CollectionModelObject: {
-            _embedded?: {
-                objects?: unknown[];
-            };
-            _links?: components["schemas"]["Links"];
-        };
-        EntityModelTeiElem: {
-            xpath?: string;
-            domPath?: string;
-            /** @enum {string} */
-            lang?: "BG" | "BR" | "CA" | "DA" | "DE" | "EN" | "ES" | "FI" | "FR" | "GR" | "HU" | "IT" | "LA" | "NL" | "NO" | "PT" | "RO" | "RU" | "ZH";
-            name?: string;
-            /** Format: int32 */
-            nth?: number;
-            urlFragment?: string;
-            /** Format: byte */
-            txtSha256?: string;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int32 */
-            wordSize?: number;
-            leaf?: boolean;
-            completePath?: string;
-            _links?: components["schemas"]["Links"];
-        };
-        PagedModelEntityModelTeiElem: {
-            _embedded?: {
-                teiElems?: components["schemas"]["EntityModelTeiElem"][];
-            };
-            _links?: components["schemas"]["Links"];
-            page?: components["schemas"]["PageMetadata"];
-        };
-        EntityModelOpusVectorizingStat: {
-            /** Format: date-time */
-            recordedAt?: string;
-            /** Format: int64 */
-            opusId?: number;
-            /** Format: int32 */
-            totalParas?: number;
-            /** Format: int32 */
-            totalBatches?: number;
-            embedderModel?: string;
-            /** Format: int64 */
-            durationMs?: number;
-            _links?: components["schemas"]["Links"];
-        };
-        PagedModelEntityModelOpusVectorizingStat: {
-            _embedded?: {
-                opusVectorizingStats?: components["schemas"]["EntityModelOpusVectorizingStat"][];
-            };
-            _links?: components["schemas"]["Links"];
-            page?: components["schemas"]["PageMetadata"];
-        };
         EntityModelAuthor: {
             /** Format: int64 */
             id?: number;
@@ -1881,23 +1949,23 @@ export interface components {
             };
             _links?: components["schemas"]["Links"];
         };
-        EntityModelEmbeddingBatchStat: {
+        EntityModelOpusVectorizingStat: {
             /** Format: date-time */
             recordedAt?: string;
-            /** Format: int32 */
-            batchSize?: number;
             /** Format: int64 */
-            totalChars?: number;
+            opusId?: number;
             /** Format: int32 */
-            vectorDimension?: number;
+            totalParas?: number;
+            /** Format: int32 */
+            totalBatches?: number;
             embedderModel?: string;
             /** Format: int64 */
             durationMs?: number;
             _links?: components["schemas"]["Links"];
         };
-        PagedModelEntityModelEmbeddingBatchStat: {
+        PagedModelEntityModelOpusVectorizingStat: {
             _embedded?: {
-                embeddingBatchStats?: components["schemas"]["EntityModelEmbeddingBatchStat"][];
+                opusVectorizingStats?: components["schemas"]["EntityModelOpusVectorizingStat"][];
             };
             _links?: components["schemas"]["Links"];
             page?: components["schemas"]["PageMetadata"];
@@ -2000,6 +2068,10 @@ export interface components {
             teiDiv?: string;
             description?: string;
             significantQuote?: string;
+            summary?: string;
+            summarySourceUrl?: string;
+            /** Format: date-time */
+            workEnrichedAt?: string;
             coverUrl?: string;
         };
         SaveRequest: {
@@ -2030,6 +2102,39 @@ export interface components {
             /** Format: int64 */
             secondsDelta?: number;
         };
+        ReorderRequest: {
+            itemIds?: string[];
+        };
+        DivCollectionDto: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            /** @enum {string} */
+            kind?: "FAVORITES" | "USER" | "SEARCH";
+            searchQuery?: string;
+            searchParams?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            items?: components["schemas"]["DivCollectionItemDto"][];
+            favorites?: boolean;
+        };
+        DivCollectionItemDto: {
+            /** Format: uuid */
+            id?: string;
+            kind?: string;
+            divPath?: string;
+            divHead?: string;
+            fragmentStart?: string;
+            fragmentEnd?: string;
+            fragmentText?: string[];
+            snippet?: string;
+            /** Format: float */
+            score?: number;
+            /** Format: int32 */
+            sortOrder?: number;
+            /** Format: date-time */
+            addedAt?: string;
+        };
         RuntimeConfigUpdate: {
             value?: string;
         };
@@ -2052,6 +2157,9 @@ export interface components {
             bio?: string;
             bioSourceUrl?: string;
             summary?: string;
+            summarySourceUrl?: string;
+            workEnriched?: boolean;
+            overwrite?: boolean;
             significantQuote?: string;
             birthDate?: string;
             deathDate?: string;
@@ -2062,35 +2170,57 @@ export interface components {
             coverUrl?: string;
             replaceCover?: boolean;
         };
+        Selection: {
+            path?: string;
+            selector?: string;
+            start?: string;
+            end?: string;
+            rev?: string;
+        };
+        Fragment: {
+            kind?: string;
+            sourcePath?: string;
+            selector?: string;
+            sourceVersion?: string;
+            canonicalPath?: string;
+            contextPath?: string;
+            workId?: string;
+            workTitle?: string;
+            chapterId?: string;
+            chapterTitle?: string;
+            authorName?: string;
+            language?: string;
+            text?: string;
+            html?: string;
+            /** Format: int32 */
+            startOffset?: number;
+            /** Format: int32 */
+            endOffset?: number;
+            readingPages?: string[];
+        };
         CreateCollectionRequest: {
             name?: string;
-        };
-        DivCollectionDto: {
-            /** Format: int64 */
-            id?: number;
-            name?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            items?: components["schemas"]["DivCollectionItemDto"][];
-            favorites?: boolean;
-        };
-        DivCollectionItemDto: {
-            /** Format: int64 */
-            id?: number;
-            kind?: string;
-            divPath?: string;
-            divHead?: string;
-            fragmentStart?: string;
-            fragmentEnd?: string;
-            fragmentText?: string[];
-            /** Format: date-time */
-            addedAt?: string;
         };
         AddItemRequest: {
             type?: string;
             path?: string;
             start?: string;
             end?: string;
+        };
+        SaveSearchRequest: {
+            name?: string;
+            query?: string;
+            params?: string;
+            hits?: components["schemas"]["SearchHitToSave"][];
+        };
+        SearchHitToSave: {
+            path?: string;
+            snippet?: string;
+            /** Format: float */
+            score?: number;
+        };
+        RenameRequest: {
+            name?: string;
         };
         AuthorDto: {
             strId?: string;
@@ -2144,6 +2274,8 @@ export interface components {
             summarySourceUrl?: string;
             coverUrl?: string;
             description?: string;
+            summary?: string;
+            workEnrichedAt?: string;
             significantQuote?: string;
             author?: unknown;
             leaf?: boolean;
@@ -2173,6 +2305,8 @@ export interface components {
             summarySourceUrl?: string;
             coverUrl?: string;
             description?: string;
+            summary?: string;
+            workEnrichedAt?: string;
             significantQuote?: string;
             children?: components["schemas"]["TeiDivDto"][];
             author?: components["schemas"]["AuthorDto"];
@@ -2318,6 +2452,7 @@ export interface components {
             opusReimportedTopic?: string;
             opusRemovedTopic?: string;
             enrichWorkTopic?: string;
+            humanEventsTopic?: string;
         };
         Milvus: {
             collection?: string;
@@ -5081,6 +5216,32 @@ export interface operations {
             };
         };
     };
+    reorder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": components["schemas"]["DivCollectionDto"];
+                };
+            };
+        };
+    };
     get_1: {
         parameters: {
             query?: {
@@ -5207,6 +5368,52 @@ export interface operations {
             };
         };
     };
+    selection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Selection"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": components["schemas"]["Fragment"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
     mine_1: {
         parameters: {
             query?: never;
@@ -5256,7 +5463,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -5273,6 +5480,30 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.hal+json": components["schemas"]["DivCollectionItemDto"];
+                };
+            };
+        };
+    };
+    saveSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": components["schemas"]["DivCollectionDto"];
                 };
             };
         };
@@ -5301,6 +5532,74 @@ export interface operations {
                     "application/vnd.hal+json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    get_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": components["schemas"]["DivCollectionDto"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rename: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": components["schemas"]["DivCollectionDto"];
                 };
             };
         };
@@ -5594,6 +5893,52 @@ export interface operations {
             };
         };
     };
+    resolve: {
+        parameters: {
+            query: {
+                path: string;
+                selector?: string;
+                rev?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": components["schemas"]["Fragment"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
     getElemByPath: {
         parameters: {
             query: {
@@ -5848,48 +6193,6 @@ export interface operations {
             };
         };
     };
-    get_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/vnd.hal+json": components["schemas"]["DivCollectionDto"];
-                };
-            };
-        };
-    };
-    delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     getAuthor: {
         parameters: {
             query?: never;
@@ -6045,8 +6348,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
-                itemId: number;
+                id: string;
+                itemId: string;
             };
             cookie?: never;
         };

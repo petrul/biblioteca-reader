@@ -1,3 +1,4 @@
+import { searchTargetPath } from '../services/searchTargets';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Bookmark,
@@ -150,7 +151,7 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
       else if (item.type === 'chapter' && item.chapterId) onSelectChapter(item.workId, item.chapterId);
       else onSelectWork(item.workId);
     } else if (gi.item.chapterId) {
-      onSelectChapter(gi.item.workId, gi.item.chapterId);
+      onSelectChapter(gi.item.workId, searchTargetPath(gi.item));
     } else {
       onSelectWork(gi.item.workId);
     }
