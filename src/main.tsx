@@ -5,6 +5,7 @@ import {relayConsoleToServer} from './services/logRelay.ts';
 import {installReleasePointerFocus} from './services/releasePointerFocus.ts';
 import {installReadLimitWatcher} from './services/readLimit.ts';
 import {ReadLimitModal} from './components/ReadLimitModal.tsx';
+import './fonts.ts';
 import './index.css';
 
 // The reader's own logging now also shows in the `rake run`
