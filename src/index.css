@@ -225,14 +225,16 @@
 
 /* Drama: biblioteca-server renders each TEI speech as div.sp[data-who] >
    span.speaker + p, and a TEI <stage> as p.stage (teidiv2html.xsl). Set as
-   a script: the speaker an all-caps, letter-spaced cue right above its
-   speech, in the text's own colour; stage directions italic and muted. */
+   a script: the speaker an all-caps, letter-spaced cue centred above its
+   speech, in the text's own colour; stage directions centred, italic and
+   muted. */
 .reader-text-container .sp {
   margin-block: 1.15em;
 }
 .reader-text-container .sp .speaker {
   display: block;
-  margin-bottom: 0.15em;
+  margin-bottom: 0.6em;
+  text-align: center;
   font-size: 0.78em;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -246,7 +248,7 @@
 }
 .reader-text-container p.stage {
   font-style: italic;
-  text-align: left;
+  text-align: center;
   opacity: 0.72;
 }
 
