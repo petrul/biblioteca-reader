@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { heroCard } from './heroCard';
+import { heroCard, personalShelves } from './heroCard';
 
 test('nothing is shown while the shelf is not known yet - no Explore flash for a signed-in reader', () => {
   // the sign-in check or the shelf fetch is still running: whatever the
@@ -18,4 +18,11 @@ test('a reader without real reading time gets the Explore card', () => {
 test('an engaged reader gets My Books, and never the Explore card while its works load', () => {
   assert.equal(heroCard({ shelfKnown: true, isEngagedReader: true, shelfWorks: 2 }), 'workspace');
   assert.equal(heroCard({ shelfKnown: true, isEngagedReader: true, shelfWorks: 0 }), null);
+});
+
+test('guests get the Discover shelf, signed-in readers their collections, nobody either before sign-in is known', () => {
+  assert.equal(personalShelves({ identityKnown: false, reallySignedIn: false }), null);
+  assert.equal(personalShelves({ identityKnown: false, reallySignedIn: true }), null);
+  assert.equal(personalShelves({ identityKnown: true, reallySignedIn: false }), 'discover');
+  assert.equal(personalShelves({ identityKnown: true, reallySignedIn: true }), 'collections');
 });

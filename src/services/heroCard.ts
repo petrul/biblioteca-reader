@@ -41,3 +41,14 @@ export function isEngagedReader(positions: Record<string, BookmarkPosition>): bo
     (position) => (position.attentionSeconds ?? 0) >= REAL_READER_THRESHOLD_SECONDS
   );
 }
+
+// Which shelves follow Featured on the home page (BrowseView): a guest's
+// Discover shelf of random works, or a signed-in reader's own collections,
+// one shelf each. Neither while the sign-in check is still running - a
+// signed-in reader must not see the guest shelf flash first.
+export type PersonalShelves = 'discover' | 'collections' | null;
+
+export function personalShelves({ identityKnown, reallySignedIn }: { identityKnown: boolean; reallySignedIn: boolean }): PersonalShelves {
+  if (!identityKnown) return null;
+  return reallySignedIn ? 'collections' : 'discover';
+}

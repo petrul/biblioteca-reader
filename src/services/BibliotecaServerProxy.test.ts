@@ -51,3 +51,27 @@ test('every registered same-origin Biblioteca proxy propagates upstream 404, inc
     globalThis.fetch = originalFetch;
   }
 });
+
+test('the Discover shelf route is public and relays its size to biblioteca-server unchanged', async () => {
+  const routes = new Map<string, Function>();
+  new BibliotecaServerProxy('http://upstream.test').register({ get: (path: string, handler: Function) => routes.set(path, handler), put: () => {} } as any);
+  const handler = routes.get('/api/collections/system/discover');
+  assert.ok(handler, 'discover must be a registered public GET route');
+  const originalFetch = globalThis.fetch;
+  const upstreamUrls: string[] = [];
+  globalThis.fetch = async input => {
+    upstreamUrls.push(String(input));
+    return Response.json([{ path: 'plato/apology' }]);
+  };
+  try {
+    const req = { originalUrl: '/api/collections/system/discover?size=20', path: '/api/collections/system/discover', headers: {}, get: () => 'application/json' };
+    const body = await new Promise<Buffer>((resolve) => {
+      const res = { statusCode: 0, status(code: number) { this.statusCode = code; return this; }, setHeader() {}, send: resolve };
+      handler(req, res);
+    });
+    assert.deepEqual(upstreamUrls, ['http://upstream.test/api/collections/system/discover?size=20']);
+    assert.deepEqual(JSON.parse(body.toString()), [{ path: 'plato/apology' }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

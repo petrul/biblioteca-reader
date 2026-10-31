@@ -164,6 +164,15 @@ test('home/browse page: generic default image, indexable, WebSite JSON-LD with a
   assert.equal(ld.potentialAction['@type'], 'SearchAction');
 });
 
+test('catalogue page: its own title, indexable, at /app/catalog and at the server-side /catalog path', async () => {
+  for (const path of ['/app/catalog', '/catalog']) {
+    const seo = await seoFor(parseAppPath(path), path);
+    assert.equal(seo.title, 'Catalogue | Biblioteca', path);
+    assert.equal(seo.robots, 'index, follow', path);
+    assert.equal(seo.image, DEFAULT_IMAGE, path);
+  }
+});
+
 test('a resolution failure (biblioteca-server unreachable) falls back to generic SEO rather than throwing', async () => {
   const seo = await withFetchMock(
     [[/\/api\/divs\?path=/, () => { throw new Error('ECONNREFUSED'); }]],

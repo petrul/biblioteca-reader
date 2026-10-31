@@ -9,7 +9,7 @@ import { getSavedSearches } from '../services/savedSearches';
 import { collectionShelves, ShelfEntry } from '../services/collectionShelves';
 import { FeaturedBookCarousel } from './FeaturedBookCarousel';
 import { CollectionShelfCarousel } from './CollectionShelfCarousel';
-import { heroCard } from '../services/heroCard';
+import { heroCard, personalShelves } from '../services/heroCard';
 
 interface BrowseViewProps {
   reallySignedIn: boolean;
@@ -85,9 +85,10 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   // whose sign-in check is still running.
   const showSignInInvitation = identityKnown && !reallySignedIn;
 
+  const lowerShelves = personalShelves({ identityKnown, reallySignedIn });
   // Read on every render (dataRevision re-renders this view on any
   // collection or saved-search change), never copied into state.
-  const shelves = identityKnown && reallySignedIn && collectionsUserId
+  const shelves = lowerShelves === 'collections' && collectionsUserId
     ? collectionShelves(readerService.getCollections(collectionsUserId), getSavedSearches())
     : [];
   const openShelfEntry = (entry: ShelfEntry) => {
@@ -227,9 +228,8 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
       </div>
 
       {/* Guests also get a Discover shelf: 20 random works from the whole
-          catalog, a new sample on every page load. Shown only once identity
-          is known, like the sign-in invitation. */}
-      {showSignInInvitation && (
+          catalog, a new sample on every page load (see personalShelves). */}
+      {lowerShelves === 'discover' && (
         <div id="hero-discover-carousel" className="mb-8">
           <FeaturedBookCarousel
             instanceId="discover-works"
