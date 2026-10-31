@@ -12,8 +12,8 @@ import {
 /** Application pages use /app; author/work/chapter paths mirror biblioteca-server. */
 export const APP_PREFIX = '/app';
 
-// The catalog state every browse URL implicitly starts from - the
-// values a plain /app deep link lands on, and what fragment params
+// The catalog state every catalogue URL implicitly starts from - the
+// values a plain /app/catalog deep link lands on, and what fragment params
 // override. Fields are only serialized when they differ from these
 // defaults, so common addresses stay short (#authors, not
 // #works?q=&lang=all&page=1).
@@ -44,8 +44,10 @@ export function parseAppPath(pathname: string, hash = '', search = ''): RouteSta
   const segments = raw.split('/').filter(Boolean).map(decodeURIComponent);
 
   if (segments.length === 0) {
+    // Catalogue links from before it had its own page (/app#authors?q=...)
+    // still open the catalogue; a plain /app is the home page.
     const catalog = parseCatalogFragment(hash);
-    return catalog ? { view: 'browse', catalog } : { view: 'browse' };
+    return catalog ? { view: 'catalog', catalog } : { view: 'browse' };
   }
   const [head, ...rest] = segments;
   const fragment = parseFragmentLocation(pathname, search);
@@ -63,6 +65,10 @@ export function parseAppPath(pathname: string, hash = '', search = ''): RouteSta
         workSeed: params.get('seed') ?? undefined
       }
     };
+  }
+  if (head === 'catalog' && rest.length === 0) {
+    const catalog = parseCatalogFragment(hash);
+    return catalog ? { view: 'catalog', catalog } : { view: 'catalog' };
   }
   if (head === 'admin') return { view: 'admin' };
   if (head === 'collections') return { view: 'collections' };
@@ -97,9 +103,9 @@ export function parseAppPath(pathname: string, hash = '', search = ''): RouteSta
   return { view: 'notFound' };
 }
 
-// BrowseView's catalog fragment: #<tab>[?key=value&...]. Returns the
+// CatalogView's fragment: #<tab>[?key=value&...]. Returns the
 // full catalog state (defaults overridden by the fragment's params) for
-// any non-empty fragment, undefined for a plain /app - App.tsx uses that
+// any non-empty fragment, undefined for a plain /app/catalog - CatalogView uses that
 // undefined-ness to decide whether the remembered-tab preference may
 // apply (a deep link always wins over the preference).
 function parseCatalogFragment(hash: string): CatalogState | undefined {
@@ -131,9 +137,9 @@ function parseCatalogFragment(hash: string): CatalogState | undefined {
 }
 
 // The inverse of parseCatalogFragment: emits #<tab>?params for any state
-// that differs from the defaults, and '' (plain /app) for the default
-// works tab with no filters - so /app itself stays the canonical home
-// address. Only the active tab's own params are serialized; the other
+// that differs from the defaults, and '' (plain /app/catalog) for the
+// default works tab with no filters - so that stays the catalogue's
+// canonical address. Only the active tab's own params are serialized; the other
 // tabs' filters are not URL state while their tab is hidden.
 export function buildCatalogFragment(catalog: CatalogState): string {
   const params = new URLSearchParams();
@@ -180,8 +186,9 @@ export function buildAppPath(state: RouteState): string {
       return state.chapterId
         ? (state.block ? paragraphShareUrl(state.chapterId, state.block) : `/${state.chapterId.split('/').map(encodeURIComponent).join('/')}`)
         : APP_PREFIX;
+    case 'catalog':
+      return `${APP_PREFIX}/catalog` + buildCatalogFragment(state.catalog ?? DEFAULT_CATALOG_STATE);
     case 'browse':
-      return APP_PREFIX + buildCatalogFragment(state.catalog ?? DEFAULT_CATALOG_STATE);
     default:
       return APP_PREFIX;
   }

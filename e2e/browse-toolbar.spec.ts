@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Covers the Browse page's Works/Authors/Lists toolbar (BrowseView.tsx's
+ * Covers the catalogue page's Works/Authors/Lists toolbar (CatalogView.tsx's
  * subTab) staying on whichever tab a reader last picked, across a
  * navigation away and back - previously reset to "Works" every time,
- * since BrowseView unmounts entirely while viewing an author/work (see
- * App.tsx's `{currentView === 'browse' && <BrowseView ... />}`), losing
+ * since the view unmounts entirely while viewing an author/work (see
+ * App.tsx's `{currentView === 'catalog' && <CatalogView ... />}`), losing
  * its own component state. Now backed by preferencesStore.ts
  * (localStorage), a small interface deliberately modeled after
  * BookmarkStore's local-vs-remote split - every preference today is
@@ -18,7 +18,7 @@ import { test, expect } from '@playwright/test';
 const ACTIVE_TAB_CLASS = /bg-\[#f59e0b\]/;
 
 test('the Works/Authors/Lists toolbar restores its last tab after navigating to an author and back', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await expect(page.locator('#tab-sub-works')).toHaveClass(ACTIVE_TAB_CLASS);
 
   await page.locator('#tab-sub-authors').click();
@@ -32,7 +32,7 @@ test('the Works/Authors/Lists toolbar restores its last tab after navigating to 
 });
 
 test('a first-time visitor with no stored preference still starts on the Works tab', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
 

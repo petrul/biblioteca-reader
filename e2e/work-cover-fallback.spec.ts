@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // whose URL fails to load. No khaki default-work-cover.svg, no empty frame.
 test('works whose stored cover fails to load show the default cover in the catalog and on the work page', async ({ page }) => {
   await page.route('**/api/cover-thumbnails?**', route => route.fulfill({ status: 404, body: '' }));
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
 
   const firstWork = page.locator('[id^="btn-open-work-"]').first();
   await expect(firstWork).toBeVisible({ timeout: 20000 });

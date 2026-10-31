@@ -26,8 +26,8 @@ test('reading a chapter caches its content, and reopening it after a reload skip
   // default timeout on a busy dev server - this test opens and reloads
   // full browse pages several times.
   test.slow();
-  await page.goto('/app/');
-  // The works list lives behind the browse page's Works tab.
+  await page.goto('/app/catalog');
+  // The works list lives behind the catalogue page's Works tab.
   await page.locator('#tab-sub-works').click();
   await page.locator('[id^="card-work-"][id*="/"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
@@ -59,8 +59,8 @@ test('the chapter cache keeps at most 3 books, evicting the least recently touch
   await page.evaluate(() => localStorage.removeItem('biblioteca.reader.chapterCache.v1'));
 
   const openWorkAndGetId = async (nth: number): Promise<string> => {
-    await page.goto('/app/');
-    // The works list lives behind the browse page's Works tab.
+    await page.goto('/app/catalog');
+    // The works list lives behind the catalogue page's Works tab.
     await page.locator('#tab-sub-works').click();
     await page.locator('[id^="card-work-"][id*="/"]').nth(nth).click();
     const workId = await page.evaluate(() =>

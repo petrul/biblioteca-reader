@@ -8,10 +8,13 @@ import { test, expect } from '@playwright/test';
  * assertion is structural, not on any specific target: the icon tumbles,
  * the drawer copy closes the drawer first, and the app lands on a reader
  * deep link (the reader's getRandomDiscovery always resolves to a full
- * author/opus/chapter path).
+ * author/opus/chapter path, served at the canonical root URL).
  *
  * Requires the dev server already running (see playwright.config.ts).
  */
+
+// /author/opus/chapter... - the root reading URL, not an /app page.
+const READER_PAGE = /^https?:\/\/[^/]+\/(?!app\/)[a-z0-9_]+\/[^/?#]+\/[^?#]+/;
 
 test('the navbar dice button tumbles its icon and navigates to a random chapter', async ({ page }) => {
   await page.goto('/app');
@@ -23,7 +26,7 @@ test('the navbar dice button tumbles its icon and navigates to a random chapter'
     page.locator('#nav-random-btn svg').evaluate(el => el.classList.contains('shuffle-tumble'))
   ).toBe(true);
   // And the app lands on some reader deep link.
-  await page.waitForURL(/\/app\/reader\/[^/]+\/[^/]+/, { timeout: 30_000 });
+  await page.waitForURL(READER_PAGE, { timeout: 30_000 });
 });
 
 test('the Library drawer carries its own Random Discovery card: click closes the drawer and navigates', async ({ page }) => {
@@ -40,5 +43,5 @@ test('the Library drawer carries its own Random Discovery card: click closes the
   await page.click('#sidebar-random-btn');
   // The drawer dismisses and the app navigates to a random reader page.
   await expect(page.locator('#sidebar-random-btn')).toHaveCount(0);
-  await page.waitForURL(/\/app\/reader\/[^/]+\/[^/]+/, { timeout: 30_000 });
+  await page.waitForURL(READER_PAGE, { timeout: 30_000 });
 });

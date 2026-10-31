@@ -321,7 +321,7 @@ export type ReaderTheme = 'parch' | 'paper' | 'night';
 export type ReaderFontFamily = 'serif' | 'gentium' | 'sans' | 'mono';
 export type ReaderWidth = 'narrow' | 'standard' | 'wide';
 
-export type AppView = 'browse' | 'author' | 'work' | 'reader' | 'search' | 'collections' | 'admin' | 'quote' | 'notFound';
+export type AppView = 'browse' | 'catalog' | 'author' | 'work' | 'reader' | 'search' | 'collections' | 'admin' | 'quote' | 'notFound';
 
 // BrowseView's catalog sub-tabs - part of the URL (/app, /app#authors,
 // /app#lists) so each tab is a bookmarkable, back-button-addressable page.

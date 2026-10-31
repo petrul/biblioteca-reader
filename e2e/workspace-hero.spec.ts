@@ -29,9 +29,12 @@ import { test, expect } from '@playwright/test';
  * Requires the dev server already running (see playwright.config.ts).
  */
 
-const BOOKMARKS_STORAGE_KEY = 'textbase.reader.bookmarks.v1';
+const BOOKMARKS_STORAGE_KEY = 'biblioteca.reader.bookmarks.v1';
 
 test.beforeEach(async ({ page }) => {
+  // The guest Discover shelf's 20 random covers are irrelevant here and
+  // slow every home-page load down (networkidle waits for all of them).
+  await page.route('**/api/collections/system/discover**', route => route.fulfill({ json: [] }));
   await page.goto('/app/');
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
@@ -46,11 +49,12 @@ test('the Explore card invites a signed-out visitor to sign in, and the button o
   const invitation = page.locator('#hero-sign-in-invitation');
   await expect(invitation).toBeVisible();
   await expect(invitation).toContainText('Sign in to sync your collections across devices.');
-  // Beneath Discover, in Discover's own button theme.
+  // Beside Discover, on the same row, in Discover's own button theme.
   const discover = await page.locator('#btn-hero-random').boundingBox();
   const signIn = page.locator('#btn-hero-sign-in');
   const signInBox = await signIn.boundingBox();
-  expect(signInBox!.y).toBeGreaterThan(discover!.y + discover!.height - 1);
+  expect(signInBox!.x).toBeGreaterThan(discover!.x + discover!.width - 1);
+  expect(Math.abs((signInBox!.y + signInBox!.height / 2) - (discover!.y + discover!.height / 2))).toBeLessThan(2);
   for (const property of ['background-color', 'border-radius', 'padding-top', 'font-size']) {
     await expect(signIn).toHaveCSS(property, await page.locator('#btn-hero-random').evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), property));
   }
@@ -69,16 +73,18 @@ test('a signed-in reader still on the Explore card gets no sign-in invitation', 
 });
 
 test('merely opening a chapter is not enough - Explore card still shows until real reading time accrues', async ({ page }) => {
+  await page.locator('#btn-open-catalog').click();
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await page.locator('#btn-reader-back-work').click();
-  await page.locator('#nav-browse-btn, #mobile-nav-browse').first().click({ force: true });
+  await page.locator('#nav-logo-title-btn').click({ force: true });
 
   await expect(page.locator('#hero-explore-card')).toBeVisible();
   await expect(page.locator('#hero-workspace-carousel')).toHaveCount(0);
 });
 
 test('after 5+ real minutes on one work, the returning visitor sees My Books instead of Explore', async ({ page }) => {
+  await page.locator('#btn-open-catalog').click();
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
 
@@ -93,7 +99,7 @@ test('after 5+ real minutes on one work, the returning visitor sees My Books ins
   }, BOOKMARKS_STORAGE_KEY);
 
   await page.locator('#btn-reader-back-work').click();
-  await page.locator('#nav-browse-btn, #mobile-nav-browse').first().click({ force: true });
+  await page.locator('#nav-logo-title-btn').click({ force: true });
 
   await expect(page.locator('#hero-workspace-carousel')).toBeVisible();
   await expect(page.locator('#hero-explore-card')).toHaveCount(0);
@@ -116,13 +122,14 @@ test('after 5+ real minutes on one work, the returning visitor sees My Books ins
 
 test('My Books orders by time spent, not recency - the most-read work leads even if touched longer ago', async ({ page }) => {
   const openWorkAndGetId = async (nth: number): Promise<string> => {
+    await page.locator('#btn-open-catalog').click();
     await page.locator('[id^="btn-open-work-"]').nth(nth).click();
     const workId = await page.evaluate(() =>
       location.pathname.replace(/^\/app\/work\//, '').split('/').map(decodeURIComponent).join('/')
     );
     await page.locator('#btn-read-first-chapter').click();
     await page.locator('#btn-reader-back-work').click();
-    await page.locator('#nav-browse-btn, #mobile-nav-browse').first().click({ force: true });
+    await page.locator('#nav-logo-title-btn').click({ force: true });
     return workId;
   };
 
@@ -161,6 +168,7 @@ test('My Books recovers once the real catalog finishes loading, even if the shel
   // Establish a real, resolvable engaged position first, no delay yet,
   // and land back on the Browse page's path before reloading below - a
   // reload while still on /app/reader/... never renders BrowseView at all.
+  await page.locator('#btn-open-catalog').click();
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await page.evaluate((key) => {
@@ -170,7 +178,7 @@ test('My Books recovers once the real catalog finishes loading, even if the shel
     localStorage.setItem(key, JSON.stringify(all));
   }, BOOKMARKS_STORAGE_KEY);
   await page.locator('#btn-reader-back-work').click();
-  await page.locator('#nav-browse-btn, #mobile-nav-browse').first().click({ force: true });
+  await page.locator('#nav-logo-title-btn').click({ force: true });
 
   // Artificially delay the real catalog response so the shelf's own
   // (fast, local) bookmark-store lookup resolves well before
@@ -206,9 +214,13 @@ test.describe('main page visual chrome', () => {
   test("section titles use the display serif face (Cinzel) at their designed size", async ({ page }) => {
     const heroTitle = page.locator('#hero-explore-card h1');
     await expect(heroTitle).toHaveCSS('font-family', 'Cinzel, Newsreader, serif');
-    await expect(heroTitle).toHaveCSS('font-size', '30px');
+    // text-3xl sm:text-4xl md:text-5xl - Playwright's default 1280px-wide
+    // viewport gets the md size.
+    await expect(heroTitle).toHaveCSS('font-size', '48px');
     await expect(heroTitle).toHaveCSS('font-weight', '700');
 
+    // Work cards live on the catalogue page.
+    await page.locator('#btn-open-catalog').click();
     const cardTitle = page.locator('[id^="card-work-"] h3').first();
     await expect(cardTitle).toHaveCSS('font-family', 'Cinzel, Newsreader, serif');
     await expect(cardTitle).toHaveCSS('font-size', '18px');
@@ -223,6 +235,7 @@ test.describe('main page visual chrome', () => {
   });
 
   test('the search toolbar and the Works/Authors/Lists toolbar share the same translucent glass styling', async ({ page }) => {
+    await page.locator('#btn-open-catalog').click();
     for (const toolbar of [
       page.locator('#works-search-toolbar'),
       page.locator('#subnav-tab-toolbar'),
@@ -238,6 +251,7 @@ test.describe('main page visual chrome', () => {
   });
 
   test('the selected Works tab and the hamburger badge use the same precise orange with black content on top', async ({ page }) => {
+    await page.locator('#btn-open-catalog').click();
     const worksTab = page.locator('#tab-sub-works');
     await expect(worksTab).toHaveCSS('background-color', 'rgb(245, 158, 11)');
     await expect(worksTab).toHaveCSS('color', 'rgb(0, 0, 0)');

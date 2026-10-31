@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 
 // Saves the first book's first chapter into Favorites (anonymous: local storage).
 async function saveFirstChapter(page: Page) {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await expect(page.locator('.reader-text-container')).toBeVisible();

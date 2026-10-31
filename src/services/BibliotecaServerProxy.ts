@@ -28,6 +28,7 @@ export class BibliotecaServerProxy {
     '/api/users/me', '/api/lucene/status', '/api/reading-progress', '/api/reading-progress/one',
     '/api/divs', '/api/divs/:id/toc', '/api/authors', '/api/authors/page', '/api/authors/:strId',
     '/api/works', '/api/collections/mine', '/api/collections/system/repos', '/api/collections/system/featured',
+    '/api/collections/system/discover',
     '/api/drest/teiDivs/search/findOpera', '/api/search/authors', '/api/search/divHeads',
     '/api/search/grep', '/api/search/lucene', '/api/search/vector', '/api/util/random'
   ];

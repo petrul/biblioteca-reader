@@ -74,15 +74,15 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     <div id="mobile-bottom-nav" className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[linear-gradient(90deg,rgba(2,64,99,0.96)_0%,rgba(60,168,63,0.92)_22%,rgba(4,74,111,0.96)_100%)] backdrop-blur-lg border-t border-emerald-400/25 px-4 py-2 flex items-center justify-around shadow-2xl transition-transform duration-300 ${visible ? 'translate-y-0' : 'translate-y-full'} ${chatDragActive ? (chatDragOver ? 'ring-2 ring-inset ring-amber-300/90' : 'ring-2 ring-inset ring-amber-400/50') : ''}`}>
       <button
         id="mobile-nav-browse"
-        onClick={() => navigate('browse')}
+        onClick={() => navigate('catalog')}
         className={`flex flex-col items-center justify-center py-1 px-3 rounded-lg transition-all cursor-pointer active:scale-95 active:brightness-90 ${
-          activeView === 'browse' || activeView === 'work' || activeView === 'author'
+          activeView === 'catalog' || activeView === 'work' || activeView === 'author'
             ? ACTIVE_TAB_CLASSES
             : INACTIVE_TAB_CLASSES
         }`}
       >
-        <Compass className={`w-5 h-5 mb-0.5 ${activeView === 'browse' || activeView === 'work' || activeView === 'author' ? 'tab-pop' : ''}`} />
-        <span className={`text-[10px] uppercase tracking-wider ${activeView === 'browse' || activeView === 'work' || activeView === 'author' ? 'font-extrabold' : 'font-bold'}`}>Catalog</span>
+        <Compass className={`w-5 h-5 mb-0.5 ${activeView === 'catalog' || activeView === 'work' || activeView === 'author' ? 'tab-pop' : ''}`} />
+        <span className={`text-[10px] uppercase tracking-wider ${activeView === 'catalog' || activeView === 'work' || activeView === 'author' ? 'font-extrabold' : 'font-bold'}`}>Catalog</span>
       </button>
 
       <button

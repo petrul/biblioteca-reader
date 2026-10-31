@@ -36,6 +36,7 @@ const BIBLIOTECA_PATHS = {
     '/api/collections/mine': ['get'],
     '/api/collections/system/repos': ['get'],
     '/api/collections/system/featured': ['get'],
+    '/api/collections/system/discover': ['get'],
     '/api/drest/teiDivs/search/findOpera': ['get'],
     '/api/search/authors': ['get'],
     '/api/search/divHeads': ['get'],

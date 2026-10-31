@@ -246,6 +246,14 @@ export async function fetchRealFeaturedWorks(authors: AuthorDto[] = []): Promise
   return divs.map(div => workFromServerDiv(div, imageByAuthor.get(div.author?.strId)));
 }
 
+/** A fresh random sample of works for the Discover shelf, drawn by the server on every call. */
+export async function fetchDiscoverWorks(size = 20, authors: AuthorDto[] = []): Promise<Work[]> {
+  const result = await api.GET('/api/collections/system/discover', { params: { query: { size } } });
+  const divs = requireData(result as any, '/api/collections/system/discover') as TeiDiv[];
+  const imageByAuthor = new Map(authors.map(author => [author.strId, author.image_href]));
+  return divs.map(div => workFromServerDiv(div, imageByAuthor.get(div.author?.strId)));
+}
+
 export function authorFromServer(author: AuthorDto, works: Work[] = []): Author {
   const authorWorks = works.filter(work => work.authorId === author.strId);
   const year = (value?: string) => {

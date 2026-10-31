@@ -95,9 +95,6 @@ export const WorksCatalog: React.FC<WorksCatalogProps> = (props) => {
 
   const changePagePreservingPosition = (page: number) => {
     if (paginationBusy || page === props.page) return;
-    window.dispatchEvent(
-      new CustomEvent("reader-pagination-section", { detail: "works" }),
-    );
     pendingScrollY.current = window.scrollY;
     setPaginationBusy(true);
     setPaginationBusyDirection(page > props.page ? "next" : "previous");
@@ -113,7 +110,7 @@ export const WorksCatalog: React.FC<WorksCatalogProps> = (props) => {
     <div className="space-y-6">
       <div
         id="works-search-toolbar"
-        className="bg-white/0.12 backdrop-blur-xl p-4 rounded-xl border border-white/30 shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4"
+        className="bg-white/12 backdrop-blur-xl p-4 rounded-xl border border-white/30 shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4"
       >
         <SearchField
           id="input-filter-works"

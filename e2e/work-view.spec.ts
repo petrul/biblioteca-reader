@@ -19,28 +19,29 @@ import { test, expect } from '@playwright/test';
  */
 
 test('the header card flips to reveal TEI/technical metadata, hidden from the front', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await expect(page.locator('h1')).toBeVisible();
 
-  const flipBtn = page.locator('#btn-work-flip-technical');
-  await expect(flipBtn).toBeVisible();
-  await expect(flipBtn).toHaveAttribute('aria-label', 'Show technical metadata');
+  // Each face has its own button: Info on the front, X on the back.
+  const showBtn = page.locator('#btn-work-flip-technical-front');
+  const backBtn = page.locator('#btn-work-flip-technical-back');
+  await expect(showBtn).toBeVisible();
+  await expect(showBtn).toHaveAttribute('aria-label', 'Show technical metadata');
+  await expect(backBtn).toHaveAttribute('aria-label', 'Back to overview');
 
   const flipContainer = page.locator('.transform-3d');
   await expect(flipContainer).not.toHaveClass(/rotate-y-180/);
 
-  await flipBtn.click();
-  await expect(flipBtn).toHaveAttribute('aria-label', 'Back to overview');
+  await showBtn.click();
   await expect(flipContainer).toHaveClass(/rotate-y-180/);
 
-  await flipBtn.click();
-  await expect(flipBtn).toHaveAttribute('aria-label', 'Show technical metadata');
+  await backBtn.click();
   await expect(flipContainer).not.toHaveClass(/rotate-y-180/);
 });
 
 test('Table of Contents opens as a modal, not shown inline on the page', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await expect(page.locator('h1')).toBeVisible();
 
@@ -96,6 +97,7 @@ test('a work with a MinIO cover uses it instead of the default fallback', async 
       },
     ],
   }));
+  await page.route('**/api/collections/system/discover**', (route) => route.fulfill({ json: [] }));
   await page.route('**/api/works?**', (route) => route.fulfill({
     json: {
       totalItems: 2,
@@ -115,12 +117,13 @@ test('a work with a MinIO cover uses it instead of the default fallback', async 
 
   await page.goto('/app/');
 
-  // featured carousel (the third cover slot, BrowseView): the MinIO
+  // featured carousel (on the home page, BrowseView): the MinIO
   // object there too
   await expect(page.locator('img[alt="Lume Ridicată"]')).toHaveAttribute('src', coverThumbnailUrl(minioCover)!);
 
   // catalog card: the MinIO object for the covered work, the fallback
   // only for the genuinely coverless one - exactly one DefaultWorkCover
+  await page.locator('#btn-open-catalog').click();
   await expect(page.locator('img[alt="Cover of Lume Ridicată"]')).toHaveAttribute('src', coverThumbnailUrl(minioCover)!);
   await expect(page.locator('[aria-label="Default cover for Coverless Poem by Alt Autor"]')).toBeVisible();
   await expect(page.locator('[aria-label^="Default cover for"]')).toHaveCount(1);

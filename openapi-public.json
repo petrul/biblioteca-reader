@@ -81,9 +81,83 @@
           }
         }
       },
-      "EntityModelTeiElem": {
+      "EntityModelTeiOpus": {
         "type": "object",
         "properties": {
+          "description": {
+            "type": "string"
+          },
+          "significantQuote": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "summarySourceUrl": {
+            "type": "string"
+          },
+          "workEnrichedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "PageMetadata": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "PagedModelEntityModelTeiOpus": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "teiOpuses": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelTeiOpus"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "EntityModelTeiDiv": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
           "xpath": {
             "type": "string"
           },
@@ -138,6 +212,17 @@
             "type": "integer",
             "format": "int32"
           },
+          "head": {
+            "type": "string",
+            "maxLength": 3000,
+            "minLength": 0
+          },
+          "summarySourceUrl": {
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
           "leaf": {
             "type": "boolean"
           },
@@ -149,46 +234,20 @@
           }
         }
       },
-      "PageMetadata": {
-        "type": "object",
-        "properties": {
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "totalElements": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "totalPages": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "number": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "PagedModelEntityModelTeiElem": {
+      "CollectionModelObject": {
         "type": "object",
         "properties": {
           "_embedded": {
             "type": "object",
             "properties": {
-              "teiElems": {
+              "objects": {
                 "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelTeiElem"
-                }
+                "items": {}
               }
             }
           },
           "_links": {
             "$ref": "#/components/schemas/Links"
-          },
-          "page": {
-            "$ref": "#/components/schemas/PageMetadata"
           }
         }
       },
@@ -416,142 +475,6 @@
           }
         }
       },
-      "EntityModelEmbeddingBatchStat": {
-        "type": "object",
-        "properties": {
-          "recordedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "batchSize": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "totalChars": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "vectorDimension": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "embedderModel": {
-            "type": "string"
-          },
-          "durationMs": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "PagedModelEntityModelEmbeddingBatchStat": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "embeddingBatchStats": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelEmbeddingBatchStat"
-                }
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          },
-          "page": {
-            "$ref": "#/components/schemas/PageMetadata"
-          }
-        }
-      },
-      "EntityModelTeiDiv": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "xpath": {
-            "type": "string"
-          },
-          "domPath": {
-            "type": "string"
-          },
-          "lang": {
-            "type": "string",
-            "enum": [
-              "BG",
-              "BR",
-              "CA",
-              "DA",
-              "DE",
-              "EN",
-              "ES",
-              "FI",
-              "FR",
-              "GR",
-              "HU",
-              "IT",
-              "LA",
-              "NL",
-              "NO",
-              "PT",
-              "RO",
-              "RU",
-              "ZH"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "nth": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "urlFragment": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 0
-          },
-          "txtSha256": {
-            "type": "string",
-            "format": "byte"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "wordSize": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "head": {
-            "type": "string",
-            "maxLength": 3000,
-            "minLength": 0
-          },
-          "summarySourceUrl": {
-            "type": "string"
-          },
-          "coverUrl": {
-            "type": "string"
-          },
-          "leaf": {
-            "type": "boolean"
-          },
-          "completePath": {
-            "type": "string"
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
       "PagedModelEntityModelTeiDiv": {
         "type": "object",
         "properties": {
@@ -650,6 +573,149 @@
           }
         }
       },
+      "EntityModelTeiElem": {
+        "type": "object",
+        "properties": {
+          "xpath": {
+            "type": "string"
+          },
+          "domPath": {
+            "type": "string"
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "BG",
+              "BR",
+              "CA",
+              "DA",
+              "DE",
+              "EN",
+              "ES",
+              "FI",
+              "FR",
+              "GR",
+              "HU",
+              "IT",
+              "LA",
+              "NL",
+              "NO",
+              "PT",
+              "RO",
+              "RU",
+              "ZH"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "nth": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "urlFragment": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0
+          },
+          "txtSha256": {
+            "type": "string",
+            "format": "byte"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "wordSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "leaf": {
+            "type": "boolean"
+          },
+          "completePath": {
+            "type": "string"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "PagedModelEntityModelTeiElem": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "teiElems": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelTeiElem"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "EntityModelEmbeddingBatchStat": {
+        "type": "object",
+        "properties": {
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "batchSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalChars": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "vectorDimension": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "embedderModel": {
+            "type": "string"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "PagedModelEntityModelEmbeddingBatchStat": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "embeddingBatchStats": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelEmbeddingBatchStat"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
       "EntityModelOpusVectorizingStat": {
         "type": "object",
         "properties": {
@@ -700,72 +766,6 @@
           },
           "page": {
             "$ref": "#/components/schemas/PageMetadata"
-          }
-        }
-      },
-      "EntityModelTeiOpus": {
-        "type": "object",
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "significantQuote": {
-            "type": "string"
-          },
-          "summary": {
-            "type": "string"
-          },
-          "summarySourceUrl": {
-            "type": "string"
-          },
-          "workEnrichedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "coverUrl": {
-            "type": "string"
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "PagedModelEntityModelTeiOpus": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "teiOpuses": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelTeiOpus"
-                }
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          },
-          "page": {
-            "$ref": "#/components/schemas/PageMetadata"
-          }
-        }
-      },
-      "CollectionModelObject": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "objects": {
-                "type": "array",
-                "items": {}
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
           }
         }
       },
@@ -2814,6 +2814,41 @@
           "div-collection-rest-controller"
         ],
         "operationId": "featured",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/vnd.hal+json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeiDivDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collections/system/discover": {
+      "get": {
+        "tags": [
+          "div-collection-rest-controller"
+        ],
+        "operationId": "discover",
+        "parameters": [
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",

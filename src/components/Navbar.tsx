@@ -568,9 +568,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             <nav className="hidden lg:flex items-center space-x-1.5">
               <button
                 id="nav-browse-btn"
-                onClick={() => navigate('browse')}
+                onClick={() => navigate('catalog')}
                 className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs uppercase tracking-wider font-semibold transition-all cursor-pointer ${
-                  activeView === 'browse' || activeView === 'author' || activeView === 'work'
+                  activeView === 'catalog' || activeView === 'author' || activeView === 'work'
                     ? 'bg-[#0f3d30] text-white border border-emerald-500/30 shadow-sm'
                     : 'text-emerald-100/70 hover:text-white hover:bg-emerald-500/10'
                 }`}

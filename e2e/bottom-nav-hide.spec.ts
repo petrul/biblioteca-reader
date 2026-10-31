@@ -14,7 +14,7 @@ import { test, expect } from '@playwright/test';
 test.use({ viewport: { width: 600, height: 400 } });
 
 async function openLongChapter(page: import('@playwright/test').Page) {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await expect(page.locator('.reader-text-container')).toBeVisible();

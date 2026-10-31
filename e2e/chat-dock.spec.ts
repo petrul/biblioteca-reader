@@ -99,7 +99,7 @@ test('the docked placement survives a reload', async ({ page }) => {
 });
 
 test('grabbing the bubble reveals the auto-hidden bar as a drop target', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await expect(page.locator('.reader-text-container')).toBeVisible();
@@ -185,7 +185,7 @@ test.describe('desktop: the navbar is the dock target', () => {
   });
 
   test('grabbing the bubble reveals the auto-hidden navbar as a drop target', async ({ page }) => {
-    await page.goto('/app/');
+    await page.goto('/app/catalog');
     await page.locator('[id^="btn-open-work-"]').first().click();
     await page.locator('#btn-read-first-chapter').click();
     await expect(page.locator('.reader-text-container')).toBeVisible();

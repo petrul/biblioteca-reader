@@ -15,6 +15,7 @@ import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { AdminSidebar } from './components/AdminSidebar';
 import { BrowseView } from './components/BrowseView';
+import { CatalogView } from './components/CatalogView';
 import { AuthorView } from './components/AuthorView';
 import { WorkView } from './components/WorkView';
 import { ReaderView } from './components/ReaderView';
@@ -77,7 +78,7 @@ export default function App() {
   // "Closing the book" (the reader heading's arrow and the navbar badge
   // while reading) returns there; chapter-to-chapter hops inside the same
   // book never change it. Deep links default to the main catalog.
-  const [readerOrigin, setReaderOrigin] = useState<'browse' | 'work' | 'author' | 'search'>('browse');
+  const [readerOrigin, setReaderOrigin] = useState<'browse' | 'catalog' | 'work' | 'author' | 'search'>('browse');
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(initialRoute.authorId || null);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(initialRoute.workId || null);
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(initialRoute.chapterId || null);
@@ -279,11 +280,10 @@ export default function App() {
         setCurrentView(route.view);
       } else if (route.view === 'notFound') {
         setCurrentView('notFound');
-      } else if (route.catalog) {
-        setCatalog(route.catalog);
-        setCurrentView('browse');
+      } else if (route.view === 'catalog') {
+        setCatalog(route.catalog ?? DEFAULT_CATALOG_STATE);
+        setCurrentView('catalog');
       } else {
-        setCatalog(DEFAULT_CATALOG_STATE);
         setCurrentView('browse');
       }
     };
@@ -332,7 +332,8 @@ export default function App() {
       return;
     }
     let path: string | null = null;
-    if (currentView === 'browse') path = buildAppPath({ view: 'browse', catalog });
+    if (currentView === 'browse') path = buildAppPath({ view: 'browse' });
+    else if (currentView === 'catalog') path = buildAppPath({ view: 'catalog', catalog });
     else if (currentView === 'work' && selectedWorkId) path = buildAppPath({ view: 'work', workId: selectedWorkId });
     else if (currentView === 'reader' && selectedChapterId) {
       const existing = parseAppPath(window.location.pathname, window.location.hash, window.location.search);
@@ -387,7 +388,7 @@ export default function App() {
     }
   }, [currentView, selectedAuthorId]);
 
-  // BrowseView's catalog interactions (tab clicks, filters, pagination)
+  // CatalogView's interactions (tab clicks, filters, pagination)
   // push their own history entries, so Back walks between catalog
   // positions; query typing asks for a silent replaceState instead (see
   // replaceNextPathSyncRef above) so keystrokes don't flood the history.
@@ -402,7 +403,7 @@ export default function App() {
     // never on chapter-to-chapter hops inside the same book (closing the
     // book must return to the original entry point, not the last page).
     if (currentView !== 'reader') {
-      setReaderOrigin(currentView === 'work' || currentView === 'author' || currentView === 'search'
+      setReaderOrigin(currentView === 'catalog' || currentView === 'work' || currentView === 'author' || currentView === 'search'
         ? currentView
         : 'browse');
     }
@@ -423,7 +424,7 @@ export default function App() {
   };
 
   // "Closing the book": return to the page the book visit began on - the
-  // main catalog, the work card, the author page or the search it was
+  // home page, the catalogue, the work card, the author page or the search it was
   // opened from - NOT a browser-history back.
   const handleCloseBook = () => {
     setCurrentView(readerOrigin);
@@ -563,13 +564,26 @@ export default function App() {
             reallySignedIn={Boolean(reallySignedIn)}
             identityKnown={reallySignedIn !== null}
             dataRevision={dataRevision}
+            collectionsUserId={reallySignedIn ? currentUser?.id : undefined}
+            onSelectWork={handleSelectWork}
+            onSelectAuthor={handleSelectAuthor}
+            onSelectChapter={handleSelectChapter}
+            onOpenQuote={handleOpenQuote}
+            onOpenCatalog={() => setCurrentView('catalog')}
+            onRandomDiscovery={handleRandomDiscovery}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
+            onOpenAddToCollection={handleOpenAddToCollection}
+          />
+        )}
+
+        {currentView === 'catalog' && (
+          <CatalogView
+            reallySignedIn={Boolean(reallySignedIn)}
             catalog={catalog}
             onCatalogChange={handleCatalogChange}
             onSelectWork={handleSelectWork}
             onSelectAuthor={handleSelectAuthor}
             onSelectChapter={handleSelectChapter}
-            onRandomDiscovery={handleRandomDiscovery}
-            onOpenAuth={() => setIsAuthModalOpen(true)}
             onOpenAddToCollection={handleOpenAddToCollection}
           />
         )}

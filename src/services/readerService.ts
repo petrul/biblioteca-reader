@@ -35,6 +35,7 @@ import {
   fetchRealWorkPage,
   fetchRandomServerLocation,
   fetchRealFeaturedWorks,
+  fetchDiscoverWorks,
   realSearch,
   trackedFetch,
   fetchPaymentConfig,
@@ -65,6 +66,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 // There is no global catalogue download, boot load, or refresh.
 let realWorks: Work[] = [];
 let realFeaturedWorks: Work[] = [];
+let realDiscoverWorks: Work[] = [];
 let realAuthors: Author[] = [];
 const authorLoadInFlight = new Set<string>();
 // Authors whose opera were fetched and mapped into realWorks by
@@ -106,6 +108,7 @@ const contentPrefetches = new Set<string>();
 function isLiveWorkId(workId: string): boolean {
   return realWorks.some(work => work.id === workId)
     || realFeaturedWorks.some(work => work.id === workId)
+    || realDiscoverWorks.some(work => work.id === workId)
     || pendingWorks.has(workId);
 }
 
@@ -174,6 +177,8 @@ function notify(): void {
 let serverDown = false;
 let featuredLoading = false;
 let featuredRequested = false;
+let discoverLoading = false;
+let discoverRequested = false;
 let reposRequested = false;
 let connectionRetry: Promise<void> | undefined;
 const failedPageRetries = new Map<string, () => Promise<void>>();
@@ -192,6 +197,18 @@ function ensureFeaturedWorks(): void {
     .then(works => { realFeaturedWorks = works; })
     .catch(error => { console.warn('featured works failed', error); recordRequestFailure(error); })
     .finally(() => { featuredLoading = false; notify(); });
+}
+
+// Drawn once per page load: the shelf stays put while the reader browses,
+// and a reload brings a new sample.
+function ensureDiscoverWorks(): void {
+  if (discoverRequested) return;
+  discoverRequested = true;
+  discoverLoading = true;
+  void fetchDiscoverWorks()
+    .then(works => { realDiscoverWorks = works; })
+    .catch(error => { console.warn('discover works failed', error); recordRequestFailure(error); })
+    .finally(() => { discoverLoading = false; notify(); });
 }
 
 function ensureRepos(): void {
@@ -703,6 +720,10 @@ export const readerService = {
     return featuredLoading;
   },
 
+  isDiscoverLoading(): boolean {
+    return discoverLoading;
+  },
+
   isWorksLoading(): boolean {
     return worksPageInFlight;
   },
@@ -832,9 +853,18 @@ export const readerService = {
     }));
   },
 
+  /** The guest Discover shelf: a random sample of works, drawn once per page load. */
+  getDiscoverWorks(): Work[] {
+    ensureDiscoverWorks();
+    return realDiscoverWorks.map(work => ({
+      ...work,
+      isPurchased: this.isWorkUnlocked(work.id)
+    }));
+  },
+
   /**
    * A work's cover changed (the admin's "Generate cover"): every copy of it
-   * held here - the loaded catalog page, the featured shelf, single-work
+   * held here - the loaded catalog page, the featured and discover shelves, single-work
    * loads, author pages - shows the new one at once. Without this, going
    * back to an already-loaded catalog page kept the old cover: the page is
    * not fetched again. (Each render has a new object URL, so no HTTP cache
@@ -845,6 +875,7 @@ export const readerService = {
       work.id === workId ? { ...work, coverImage: coverUrl, coverArtUrl: coverUrl } : work;
     realWorks = realWorks.map(withCover);
     realFeaturedWorks = realFeaturedWorks.map(withCover);
+    realDiscoverWorks = realDiscoverWorks.map(withCover);
     const pending = pendingWorks.get(workId);
     if (pending) pendingWorks.set(workId, withCover(pending));
     for (const [authorId, entry] of hydratedAuthors) {
@@ -857,6 +888,7 @@ export const readerService = {
   getWorkById(id: string): Work | undefined {
     const work = realWorks.find(w => w.id === id)
       || realFeaturedWorks.find(w => w.id === id)
+      || realDiscoverWorks.find(w => w.id === id)
       || pendingWorks.get(id);
     if (!work) {
       // Resolve the canonical work directly, without loading browse pages.

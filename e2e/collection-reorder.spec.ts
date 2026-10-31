@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('collection items can be reordered, and the order survives a reload (anonymous: local preferences)', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await expect(page.locator('.reader-text-container')).toBeVisible();

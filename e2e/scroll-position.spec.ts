@@ -20,7 +20,7 @@ import { test, expect } from '@playwright/test';
 test.use({ viewport: { width: 600, height: 400 } });
 
 test('scrolling into a chapter and reloading restores the same scroll position', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
 
@@ -55,7 +55,7 @@ test('scrolling into a chapter and reloading restores the same scroll position',
 });
 
 test('a fresh chapter never seen before opens at the top, not some other chapter\'s position', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'networkidle' });
 

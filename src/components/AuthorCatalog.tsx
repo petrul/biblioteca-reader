@@ -17,8 +17,7 @@ export const AuthorCatalog: React.FC<AuthorCatalogProps> = props => {
   // a busy latch with a cooldown matching the page-enter animation, so a
   // rapid double-click cannot race the URL-backed page state (the stale
   // page arithmetic was exactly the "next jumps somewhere strange" bug),
-  // a direction-aware enter animation on the grid, and the
-  // reader-pagination-section event BrowseView's arrow keys route by.
+  // and a direction-aware enter animation on the grid.
   const [paginationBusy, setPaginationBusy] = useState(false);
   const [paginationBusyDirection, setPaginationBusyDirection] = useState<
     "next" | "previous" | null
@@ -51,9 +50,6 @@ export const AuthorCatalog: React.FC<AuthorCatalogProps> = props => {
 
   const changePagePreservingPosition = (page: number) => {
     if (paginationBusy || page === props.page) return;
-    window.dispatchEvent(
-      new CustomEvent('reader-pagination-section', { detail: 'authors' }),
-    );
     pendingScrollY.current = window.scrollY;
     setPaginationBusy(true);
     setPaginationBusyDirection(page > props.page ? 'next' : 'previous');

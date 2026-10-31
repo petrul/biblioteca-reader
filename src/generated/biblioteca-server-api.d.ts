@@ -792,7 +792,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/drest/teiDivs/search/getOperaPathsForTeiFileId": {
+    "/api/drest/teiDivs/search/getOperaIdsWithFilename": {
         parameters: {
             query?: never;
             header?: never;
@@ -800,6 +800,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["executeSearch-teidiv-get_20"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/drest/teiDivs/search/getOperaPathsForTeiFileId": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["executeSearch-teidiv-get_21"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1560,6 +1576,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/collections/system/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["discover"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/collections/system/by-repo/{repoName}": {
         parameters: {
             query?: never;
@@ -1767,18 +1799,14 @@ export interface components {
         RepresentationModelObject: {
             _links?: components["schemas"]["Links"];
         };
-        EntityModelEmbeddingBatchStat: {
+        EntityModelTeiOpus: {
+            description?: string;
+            significantQuote?: string;
+            summary?: string;
+            summarySourceUrl?: string;
             /** Format: date-time */
-            recordedAt?: string;
-            /** Format: int32 */
-            batchSize?: number;
-            /** Format: int64 */
-            totalChars?: number;
-            /** Format: int32 */
-            vectorDimension?: number;
-            embedderModel?: string;
-            /** Format: int64 */
-            durationMs?: number;
+            workEnrichedAt?: string;
+            coverUrl?: string;
             _links?: components["schemas"]["Links"];
         };
         PageMetadata: {
@@ -1790,49 +1818,6 @@ export interface components {
             totalPages?: number;
             /** Format: int64 */
             number?: number;
-        };
-        PagedModelEntityModelEmbeddingBatchStat: {
-            _embedded?: {
-                embeddingBatchStats?: components["schemas"]["EntityModelEmbeddingBatchStat"][];
-            };
-            _links?: components["schemas"]["Links"];
-            page?: components["schemas"]["PageMetadata"];
-        };
-        EntityModelTeiElem: {
-            xpath?: string;
-            domPath?: string;
-            /** @enum {string} */
-            lang?: "BG" | "BR" | "CA" | "DA" | "DE" | "EN" | "ES" | "FI" | "FR" | "GR" | "HU" | "IT" | "LA" | "NL" | "NO" | "PT" | "RO" | "RU" | "ZH";
-            name?: string;
-            /** Format: int32 */
-            nth?: number;
-            urlFragment?: string;
-            /** Format: byte */
-            txtSha256?: string;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int32 */
-            wordSize?: number;
-            leaf?: boolean;
-            completePath?: string;
-            _links?: components["schemas"]["Links"];
-        };
-        PagedModelEntityModelTeiElem: {
-            _embedded?: {
-                teiElems?: components["schemas"]["EntityModelTeiElem"][];
-            };
-            _links?: components["schemas"]["Links"];
-            page?: components["schemas"]["PageMetadata"];
-        };
-        EntityModelTeiOpus: {
-            description?: string;
-            significantQuote?: string;
-            summary?: string;
-            summarySourceUrl?: string;
-            /** Format: date-time */
-            workEnrichedAt?: string;
-            coverUrl?: string;
-            _links?: components["schemas"]["Links"];
         };
         PagedModelEntityModelTeiOpus: {
             _embedded?: {
@@ -1871,19 +1856,6 @@ export interface components {
             };
             _links?: components["schemas"]["Links"];
         };
-        PagedModelEntityModelTeiDiv: {
-            _embedded?: {
-                teiDivs?: components["schemas"]["EntityModelTeiDiv"][];
-            };
-            _links?: components["schemas"]["Links"];
-            page?: components["schemas"]["PageMetadata"];
-        };
-        CollectionModelEntityModelTeiDiv: {
-            _embedded?: {
-                teiDivs?: components["schemas"]["EntityModelTeiDiv"][];
-            };
-            _links?: components["schemas"]["Links"];
-        };
         Author: {
             /** Format: int64 */
             id?: number;
@@ -1902,19 +1874,6 @@ export interface components {
             country?: string;
             visualName?: string;
             anonymous?: boolean;
-        };
-        TeiFile: {
-            /** Format: int64 */
-            id?: number;
-            filename?: string;
-            title?: string;
-            authors?: components["schemas"]["Author"][];
-            /** @enum {string} */
-            language?: "BG" | "BR" | "CA" | "DA" | "DE" | "EN" | "ES" | "FI" | "FR" | "GR" | "HU" | "IT" | "LA" | "NL" | "NO" | "PT" | "RO" | "RU" | "ZH";
-            repoName?: string;
-            /** Format: date-time */
-            timestamp?: string;
-            author?: components["schemas"]["Author"];
         };
         EntityModelAuthor: {
             /** Format: int64 */
@@ -1948,6 +1907,79 @@ export interface components {
                 authors?: components["schemas"]["EntityModelAuthor"][];
             };
             _links?: components["schemas"]["Links"];
+        };
+        PagedModelEntityModelTeiDiv: {
+            _embedded?: {
+                teiDivs?: components["schemas"]["EntityModelTeiDiv"][];
+            };
+            _links?: components["schemas"]["Links"];
+            page?: components["schemas"]["PageMetadata"];
+        };
+        CollectionModelEntityModelTeiDiv: {
+            _embedded?: {
+                teiDivs?: components["schemas"]["EntityModelTeiDiv"][];
+            };
+            _links?: components["schemas"]["Links"];
+        };
+        TeiFile: {
+            /** Format: int64 */
+            id?: number;
+            filename?: string;
+            title?: string;
+            authors?: components["schemas"]["Author"][];
+            /** @enum {string} */
+            language?: "BG" | "BR" | "CA" | "DA" | "DE" | "EN" | "ES" | "FI" | "FR" | "GR" | "HU" | "IT" | "LA" | "NL" | "NO" | "PT" | "RO" | "RU" | "ZH";
+            repoName?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            author?: components["schemas"]["Author"];
+        };
+        EntityModelTeiElem: {
+            xpath?: string;
+            domPath?: string;
+            /** @enum {string} */
+            lang?: "BG" | "BR" | "CA" | "DA" | "DE" | "EN" | "ES" | "FI" | "FR" | "GR" | "HU" | "IT" | "LA" | "NL" | "NO" | "PT" | "RO" | "RU" | "ZH";
+            name?: string;
+            /** Format: int32 */
+            nth?: number;
+            urlFragment?: string;
+            /** Format: byte */
+            txtSha256?: string;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int32 */
+            wordSize?: number;
+            leaf?: boolean;
+            completePath?: string;
+            _links?: components["schemas"]["Links"];
+        };
+        PagedModelEntityModelTeiElem: {
+            _embedded?: {
+                teiElems?: components["schemas"]["EntityModelTeiElem"][];
+            };
+            _links?: components["schemas"]["Links"];
+            page?: components["schemas"]["PageMetadata"];
+        };
+        EntityModelEmbeddingBatchStat: {
+            /** Format: date-time */
+            recordedAt?: string;
+            /** Format: int32 */
+            batchSize?: number;
+            /** Format: int64 */
+            totalChars?: number;
+            /** Format: int32 */
+            vectorDimension?: number;
+            embedderModel?: string;
+            /** Format: int64 */
+            durationMs?: number;
+            _links?: components["schemas"]["Links"];
+        };
+        PagedModelEntityModelEmbeddingBatchStat: {
+            _embedded?: {
+                embeddingBatchStats?: components["schemas"]["EntityModelEmbeddingBatchStat"][];
+            };
+            _links?: components["schemas"]["Links"];
+            page?: components["schemas"]["PageMetadata"];
         };
         EntityModelOpusVectorizingStat: {
             /** Format: date-time */
@@ -4298,6 +4330,33 @@ export interface operations {
     };
     "executeSearch-teidiv-get_20": {
         parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": components["schemas"]["CollectionModelEntityModelTeiDiv"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "executeSearch-teidiv-get_21": {
+        parameters: {
             query?: {
                 teiFileId?: number;
             };
@@ -6110,6 +6169,28 @@ export interface operations {
     featured: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.hal+json": components["schemas"]["TeiDivDto"][];
+                };
+            };
+        };
+    };
+    discover: {
+        parameters: {
+            query?: {
+                size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;

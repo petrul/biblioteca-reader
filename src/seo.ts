@@ -328,6 +328,8 @@ export async function buildPageSeo(opts: {
       return { ...fallback, title: 'Admin | Biblioteca', robots: 'noindex, nofollow' };
     case 'collections':
       return { ...fallback, title: 'My Collections | Biblioteca', robots: 'noindex, nofollow' };
+    case 'catalog':
+      return { ...fallback, title: 'Catalogue | Biblioteca' };
     case 'browse':
     default:
       return { ...fallback, jsonLd: websiteJsonLd(origin) };

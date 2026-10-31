@@ -13,7 +13,7 @@ import { test, expect } from '@playwright/test';
  */
 
 test('the chapter text renders in the Alegreya serif face by default', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
 
@@ -23,13 +23,12 @@ test('the chapter text renders in the Alegreya serif face by default', async ({ 
 });
 
 test('the navbar wordmark becomes the work title while reading and opens the work card; the chapter title lives in the reader once', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   const navTitle = page.locator('#nav-logo-title-btn');
   await expect(navTitle).toContainText('BIBLIOTECA');
 
-  // The works list lives behind the browse page's Works tab, and the
-  // title must come from the very card that gets opened (the featured
-  // carousel also carries card-work- ids, in a different order).
+  // The works list lives behind the catalogue page's Works tab, and the
+  // title must come from the very card that gets opened.
   await page.locator('#tab-sub-works').click();
   const card = page.locator('[id^="card-work-"][id*="/"]').first();
   await card.waitFor({ timeout: 15_000 });
@@ -151,7 +150,7 @@ test('the work root is a title page that keeps the text the chapters do not carr
 });
 
 test('the header hides on scroll down and reappears on scroll up', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await expect(page.locator('.reader-text-container')).toBeVisible();
@@ -171,7 +170,7 @@ test('a hard refresh on a deep-linked chapter shows a loading state, not a wrong
   // this must be a genuinely live work (id has no "/"), since
   // only a real work's own catalog entry is subject to the loading race
   // this test exercises.
-  await page.goto('/app/', { waitUntil: 'networkidle' });
+  await page.goto('/app/catalog', { waitUntil: 'networkidle' });
   await page.locator('[id^="btn-open-work-"][id*="/"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await expect(page.locator('.reader-text-container')).toBeVisible();
@@ -215,7 +214,7 @@ test('a hard refresh on a deep-linked chapter shows a loading state, not a wrong
 });
 
 test('the top bar bookmark button saves the current chapter to a collection, Favorites preselected', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await expect(page.locator('.reader-text-container')).toBeVisible();
@@ -380,7 +379,7 @@ test('footnote markers render as visible numbered emerald chips, not invisible b
 });
 
 test('a long press on the bookmark button opens the collections menu and saves into the picked one', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await expect(page.locator('.reader-text-container')).toBeVisible();
@@ -417,7 +416,7 @@ test('a long press on the bookmark button opens the collections menu and saves i
 test('opening a book flips the page; next/previous within it slides, in the right direction', async ({ page }) => {
   // The rule itself is unit-tested (chapterTransition.test.ts); this pins
   // that ReaderView applies it.
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await page.locator('#btn-reader-next-chapter').waitFor({ timeout: 15_000 });
@@ -448,7 +447,7 @@ test('opening a book flips the page; next/previous within it slides, in the righ
 });
 
 test('the reader toolbar back returns to the work presentation from its first chapter', async ({ page }) => {
-  await page.goto('/app/');
+  await page.goto('/app/catalog');
   await page.locator('[id^="btn-open-work-"]').first().click();
   await page.locator('#btn-read-first-chapter').click();
   await page.locator('#btn-reader-back-work').waitFor();

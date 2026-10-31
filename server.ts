@@ -547,6 +547,7 @@ const BIBLIOTECA_GET_ROUTES = [
   '/api/works',
   '/api/collections/system/repos',
   '/api/collections/system/featured',
+  '/api/collections/system/discover',
   '/api/drest/teiDivs/search/findOpera',
   '/api/search/authors',
   '/api/search/divHeads',

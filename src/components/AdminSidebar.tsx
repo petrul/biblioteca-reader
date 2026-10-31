@@ -596,7 +596,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   )}
 
                   <button
-                    onClick={() => handleNavigate('browse')}
+                    onClick={() => handleNavigate('catalog')}
                     className="w-full p-3.5 rounded-xl bg-[#0b2921]/90 hover:bg-[#0f3d30] border border-emerald-500/20 flex items-center justify-between text-left transition-all cursor-pointer group"
                   >
                     <div className="flex items-center space-x-3">
