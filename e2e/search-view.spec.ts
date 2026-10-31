@@ -76,32 +76,39 @@ test('a search that never ends: one hung mode does not block the other 4 from sh
   await expect(page.getByText('Still searching more modes…')).toHaveCount(0, { timeout: 12_000 });
 });
 
-test('the navbar quick search remembers the last query and results across a reload', async ({ page }) => {
-  await page.route('**/api/search/divHeads**', route => route.fulfill({
+// The quick search used to restore its last query on load and re-run it -
+// a long pasted query then broke opening any page (6c393b2). Every page
+// load starts empty now, and the old stored query is cleared.
+test('the navbar quick search starts empty after a reload and never re-runs the last query', async ({ page }) => {
+  let divHeadRequests = 0;
+  await page.route('**/api/search/divHeads**', route => { divHeadRequests++; return route.fulfill({
     contentType: 'application/json',
     body: JSON.stringify([{
       type: 'div', url: 'test-fixture/remembered',
       data: { head: 'Remembered Search Fixture', path: 'test-fixture/remembered', wordSize: 500, opus: true, author: { strId: 'test-fixture', displayName: 'Fixture Author' } }
     }])
-  }));
+  }); });
   await page.route('**/api/search/authors**', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
   await page.route('**/api/search/grep**', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
   await page.route('**/api/search/lucene**', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
   await page.route('**/api/search/vector**', route => route.fulfill({ contentType: 'application/json', body: '[]' }));
 
   await page.goto('/app/');
-  await page.evaluate(() => localStorage.removeItem('textbase.reader.lastSearch.v1'));
   await page.locator('#nav-expand-search-btn').click();
   await page.locator('input[placeholder*="Search classical"]').fill('Remembered');
   await expect(page.getByText('Remembered Search Fixture')).toBeVisible({ timeout: 4_000 });
 
-  // A real reload, not a same-document nav - the cache must survive a
-  // fresh module load, not just persist in still-mounted component state.
+  // What an older build left behind is cleared on load.
+  await page.evaluate(() => localStorage.setItem('biblioteca.reader.lastSearch.v1', JSON.stringify({ query: 'Remembered' })));
+  // A real reload, not a same-document nav.
   await page.reload({ waitUntil: 'networkidle' });
+  const requestsBeforeReopening = divHeadRequests;
   await page.locator('#nav-expand-search-btn').click();
 
-  await expect(page.locator('input[placeholder*="Search classical"]')).toHaveValue('Remembered');
-  await expect(page.getByText('Remembered Search Fixture')).toBeVisible();
+  await expect(page.locator('input[placeholder*="Search classical"]')).toHaveValue('');
+  await expect(page.getByText('Remembered Search Fixture')).toHaveCount(0);
+  expect(divHeadRequests).toBe(requestsBeforeReopening);
+  expect(await page.evaluate(() => localStorage.getItem('biblioteca.reader.lastSearch.v1'))).toBeNull();
 });
 
 test('the clear (X) button empties the search input, on both the navbar and the Search page', async ({ page }) => {
@@ -269,10 +276,10 @@ test('an author hit ranks first in the combined dropdown, and clicking it opens 
   await expect(dropdown).toHaveCount(2, { timeout: 4_000 });
   await expect(dropdown.first()).toContainText('Giovanni Papini');
 
-  // Clicking it opens the author's page - the URL is the author route,
-  // and the "Work not found" dead end never appears.
+  // Clicking it opens the author's page - the root author URL, like
+  // biblioteca-server's own - and the "Work not found" dead end never appears.
   await dropdown.first().click();
-  await expect(page).toHaveURL(/\/app\/author\/papini/);
+  await expect(page).toHaveURL(/\/papini$/);
   await expect(page.getByText('Work not found in textbase repository')).toHaveCount(0);
   await expect(page.getByText('Giovanni Papini')).toBeVisible();
 });

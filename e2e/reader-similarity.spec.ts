@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
-const path = '/sagarra/paulina/primera_part/i';
+const path = '/sagarra/paulina_buxareu/primera_part/i';
 const chapters = ['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii','xiii','xiv','xv','xvi','xvii','xviii','xix','xx','xxi','xxii','xxiii','xxiv'];
-const hits = chapters.map((chapter, index) => ({ score: 1 - index / 100, url: '/sagarra/paulina/primera_part/' + chapter, content: `Vector snippet ${index + 1}`, data: { path: 'sagarra/paulina/primera_part/' + chapter, head: `Similar section ${index + 1}`, language: 'CA' } }));
+const hits = chapters.map((chapter, index) => ({ score: 1 - index / 100, url: '/sagarra/paulina_buxareu/primera_part/' + chapter, content: `Vector snippet ${index + 1}`, data: { path: 'sagarra/paulina_buxareu/primera_part/' + chapter, head: `Similar section ${index + 1}`, language: 'CA' } }));
 async function paragraph(page: Page) {
   await page.goto(path);
   const p = page.locator('.reader-text-container p').filter({ hasText: /\S.{12}/ }).first();
@@ -39,7 +39,7 @@ test('clicked paragraph similarity is paged and saved using the selected text an
   expect(queries.every(query => query === text)).toBe(true);
   await dialog.locator('[data-similarity-result]').first().click();
   await expect(dialog).toHaveCount(0);
-  await expect(page).toHaveURL(/\/sagarra\/paulina\/primera_part\/ix/);
+  await expect(page).toHaveURL(/\/sagarra\/paulina_buxareu\/primera_part\/ix/);
 });
 
 test('mouse text selection uses the same toolbar and similarity searches exactly that fragment', async ({ page }) => {
@@ -90,7 +90,7 @@ test('phone taps show the toolbar and a dialog contained within the viewport', a
 });
 
 test('semantic pagination discovers the next page beyond the initial fifty results', async ({ page }) => {
-  const many = Array.from({ length: 72 }, (_, index) => ({ score: 1 - index / 100, content: `Boundary passage ${index + 1}`, data: { path: 'sagarra/paulina/primera_part/section_' + (index + 1), head: 'Section ' + (index + 1), language: 'CA' } }));
+  const many = Array.from({ length: 72 }, (_, index) => ({ score: 1 - index / 100, content: `Boundary passage ${index + 1}`, data: { path: 'sagarra/paulina_buxareu/primera_part/section_' + (index + 1), head: 'Section ' + (index + 1), language: 'CA' } }));
   await page.route('**/api/search/vector?*', route => {
     const limit = Number(new URL(route.request().url()).searchParams.get('limit'));
     return route.fulfill({ json: many.slice(0, limit) });

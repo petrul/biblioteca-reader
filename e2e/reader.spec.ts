@@ -60,6 +60,9 @@ test('the reader toolbar matches the page width and the title has no back arrow'
   await expect(page.locator('#nav-close-book-btn')).toBeVisible();
   await expect(page.locator('#btn-reader-back-work')).toBeVisible();
 
+  // Opening a book page-flips the column (chapter-turn-next, a 3D
+  // transform the bounding box includes): measure once it has settled.
+  await expect(page.locator('main > div.relative')).not.toHaveClass(/chapter-(turn|slide)-/);
   const toolbar = await page.locator('#reader-chapter-toolbar').boundingBox();
   const pageColumn = await page.locator('main > div.relative').boundingBox();
   const topNavbar = await page.locator('header').first().boundingBox();
@@ -72,7 +75,7 @@ test('the reader toolbar matches the page width and the title has no back arrow'
 });
 
 test('TOC search keeps matching chapters grouped under their book divisions', async ({ page }) => {
-  await page.goto('/app/reader/cassiodorus/the_letters_of_cassiodorus/book_i/1_king');
+  await page.goto('/app/reader/cassiodorus/the_letters_of_cassiodorus/book_i/king');
   await page.locator('#btn-reader-toc-menu').waitFor();
   await page.click('#btn-reader-toc-menu');
   await page.locator('#reader-toc-search').fill('King Theodoric');
@@ -81,12 +84,12 @@ test('TOC search keeps matching chapters grouped under their book divisions', as
   await expect(sidebar.getByText('BOOK I.')).toBeVisible();
   await expect(sidebar.getByText('BOOK II.')).toBeVisible();
   await expect(sidebar.getByText('BOOK III.')).toBeVisible();
-  await expect(sidebar.getByText('1. King Theodoric to Emperor Anastasius.')).toBeVisible();
-  await expect(sidebar.getByText('1. King Theodoric to Anastasius, Most Pious Emperor. a.d. 511.')).toBeVisible();
+  await expect(sidebar.getByText('King Theodoric to Emperor Anastasius.')).toBeVisible();
+  await expect(sidebar.getByText('King Theodoric to Anastasius, Most Pious Emperor. a.d. 511.')).toBeVisible();
 });
 
 test('TOC sections are collapsed except the ones leading to the chapter being read', async ({ page }) => {
-  await page.goto('/app/reader/sagarra/paulina/primera_part/i');
+  await page.goto('/app/reader/sagarra/paulina_buxareu/primera_part/i');
   await page.locator('#btn-reader-toc-menu').waitFor();
   await page.click('#btn-reader-toc-menu');
 
@@ -106,7 +109,7 @@ test('TOC sections are collapsed except the ones leading to the chapter being re
 });
 
 test('the first tap on a collapsed ToC section expands it, and the second opens its page', async ({ page }) => {
-  await page.goto('/app/reader/sagarra/paulina/primera_part/i');
+  await page.goto('/app/reader/sagarra/paulina_buxareu/primera_part/i');
   await page.locator('#btn-reader-toc-menu').waitFor();
   await page.click('#btn-reader-toc-menu');
 
@@ -125,9 +128,9 @@ test('the first tap on a collapsed ToC section expands it, and the second opens 
 test('a section opens as its own title page, fetched without its sub-chapters', async ({ page }) => {
   const contentRequests: string[] = [];
   page.on('request', request => {
-    if (request.url().includes('/api/server-content/sagarra/paulina/primera_part.')) contentRequests.push(request.url());
+    if (request.url().includes('/api/server-content/sagarra/paulina_buxareu/primera_part.')) contentRequests.push(request.url());
   });
-  await page.goto('/app/reader/sagarra/paulina/primera_part');
+  await page.goto('/app/reader/sagarra/paulina_buxareu/primera_part');
   const text = page.locator('.reader-text-container.reader-section-page');
   await expect(text).toBeVisible();
   await expect(text.locator('h1, h2, h3').first()).toContainText('PRIMERA PART');
@@ -266,6 +269,9 @@ test('ArrowRight/ArrowLeft navigate chapters and flash the corresponding buttons
   expect(await readFlash()).toBe(true);
   await expect(page).not.toHaveURL(originalUrl);
 
+  // The new chapter renders its bottom navigation once its content is in;
+  // a watch armed before that finds no button to observe.
+  await page.locator('#btn-reader-prev-chapter').waitFor({ timeout: 15_000 });
   await armFlashWatch(['btn-reader-prev-chapter']);
   await page.keyboard.press('ArrowLeft');
   expect(await readFlash()).toBe(true);

@@ -33,7 +33,7 @@ test('reading a chapter caches its content, and reopening it after a reload skip
   await page.locator('#btn-read-first-chapter').click();
   await skipTitlePages(page);
 
-  const cacheRaw = await page.evaluate(() => localStorage.getItem('biblioteca.reader.chapterCache.v1'));
+  const cacheRaw = await page.evaluate(() => localStorage.getItem('biblioteca.reader.chapterCache.v2'));
   expect(cacheRaw).toBeTruthy();
   const cache = JSON.parse(cacheRaw!);
   expect(cache.books.length).toBeGreaterThan(0);
@@ -56,7 +56,7 @@ test('the chapter cache keeps at most 3 books, evicting the least recently touch
   // Four full browse-page boots in one test - see the slow() note above.
   test.slow();
   await page.goto('/app/');
-  await page.evaluate(() => localStorage.removeItem('biblioteca.reader.chapterCache.v1'));
+  await page.evaluate(() => localStorage.removeItem('biblioteca.reader.chapterCache.v2'));
 
   const openWorkAndGetId = async (nth: number): Promise<string> => {
     await page.goto('/app/catalog');
@@ -76,7 +76,7 @@ test('the chapter cache keeps at most 3 books, evicting the least recently touch
   await openWorkAndGetId(2);
   const fourth = await openWorkAndGetId(3);
 
-  const cache = JSON.parse((await page.evaluate(() => localStorage.getItem('biblioteca.reader.chapterCache.v1')))!);
+  const cache = JSON.parse((await page.evaluate(() => localStorage.getItem('biblioteca.reader.chapterCache.v2')))!);
   const cachedWorkIds: string[] = cache.books.map((b: { workId: string }) => b.workId);
   expect(cachedWorkIds.length).toBe(3);
   expect(cachedWorkIds).not.toContain(first);
@@ -92,7 +92,7 @@ test('a chapter cached before the /_binary/ URL rewrite is healed when served fr
   // proxy, so even a never-refetched cached chapter shows its images.
   await page.goto('/app');
   await page.evaluate(() => {
-    localStorage.setItem('biblioteca.reader.chapterCache.v1', JSON.stringify({
+    localStorage.setItem('biblioteca.reader.chapterCache.v2', JSON.stringify({
       books: [{
         workId: 'pardo_bazan/la_dama_joven',
         lastAccessed: Date.now(),
@@ -100,7 +100,7 @@ test('a chapter cached before the /_binary/ URL rewrite is healed when served fr
           'pardo_bazan/la_dama_joven/primer_amor': {
             teiXml: '<tei/>',
             htmlContent: '<div type="div4"><p class="justify">Stale cached text.</p>'
-              + '<img class="illustration" src="/pardo_bazan/la_dama_joven/primer_amor.html/_binary/d3e6489"></div>',
+              + '<img class="illustration" src="/pardo_bazan/la_dama_joven/primer_amor.html/_binary/d3e6426"></div>',
             plainText: 'Stale cached text.',
             jsonAst: {}
           }
@@ -110,9 +110,12 @@ test('a chapter cached before the /_binary/ URL rewrite is healed when served fr
   });
 
   await page.goto('/app/reader/pardo_bazan/la_dama_joven/primer_amor');
+  // Served from the seeded cache entry, not refetched (the live chapter
+  // carries the same illustration, so the image alone proves nothing).
+  await expect(page.locator('.reader-text-container')).toContainText('Stale cached text.');
   const img = page.locator('.reader-text-container img').first();
   await img.waitFor();
-  await expect(img).toHaveAttribute('src', /^\/api\/server-content\/pardo_bazan\/la_dama_joven\/primer_amor\.html\/_binary\/d3e6489$/);
+  await expect(img).toHaveAttribute('src', /^\/api\/server-content\/pardo_bazan\/la_dama_joven\/primer_amor\.html\/_binary\/d3e6426$/);
   // And the healed URL actually loads the image (not the SPA fallback).
   await expect.poll(() => img.evaluate(el => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 });

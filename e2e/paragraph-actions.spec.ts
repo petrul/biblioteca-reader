@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 async function openChapter(page: Page) {
-  await page.goto('/app/reader/sagarra/paulina/primera_part/i');
+  await page.goto('/app/reader/sagarra/paulina_buxareu/primera_part/i');
   const paragraph = page.locator('.reader-text-container p').filter({ hasText: /\S.{12}/ }).first();
   await expect(paragraph).toBeVisible({ timeout: 20000 });
   await paragraph.scrollIntoViewIfNeeded();

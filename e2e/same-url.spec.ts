@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-const path = '/sagarra/paulina/primera_part/i';
+const path = '/sagarra/paulina_buxareu/primera_part/i';
 
 test('one root URL serves a hydrated reader or a complete script-free text edition', async ({ page, request }) => {
   const backendRequests: string[] = [];
@@ -52,21 +52,21 @@ test('legacy reader URLs redirect to the root and exported formats contain chapt
 
 
 test('the work root is a reading title page and application routes remain under app', async ({ page }) => {
-  await page.goto('/sagarra/paulina');
+  await page.goto('/sagarra/paulina_buxareu');
   await expect(page.locator('.reader-text-container')).toBeVisible({ timeout: 20000 });
-  await expect(page).toHaveURL(/\/sagarra\/paulina$/);
+  await expect(page).toHaveURL(/\/sagarra\/paulina_buxareu$/);
   await page.goto('/app/search?q=Buxareu');
   await expect(page).toHaveURL(/\/app\/search/);
 });
 
 test('server-addressed quotes share one root URL between reader, curl and social scrapers', async ({ page, request }) => {
-  const quotePath = '/quote/sagarra/paulina/primera_part/i?start=2.0&end=2.25';
+  const quotePath = '/quote/sagarra/paulina_buxareu/primera_part/i?start=2.0&end=2.25';
   const source = await request.get(quotePath, { headers: { 'User-Agent': 'facebookexternalhit', Accept: 'text/html' } });
   expect(source.status()).toBe(200);
   const html = await source.text();
   expect(html).not.toMatch(/<script\b/);
   await page.goto(quotePath);
-  await expect(page).toHaveURL(new RegExp('/quote/sagarra/paulina/primera_part/i'));
+  await expect(page).toHaveURL(new RegExp('/quote/sagarra/paulina_buxareu/primera_part/i'));
   const plain = await request.get(quotePath, { headers: { Accept: 'text/plain' } });
   const words = await plain.text();
   expect(words.length).toBeGreaterThan(0);
@@ -87,7 +87,7 @@ test('a newly created quote is readable in a fresh browser and by the server ren
   const modal = page.locator('#quote-created-modal');
   await expect(modal).toBeVisible({ timeout: 20000 });
   const url = await modal.locator('input').inputValue();
-  expect(url).toMatch(/\/quote\/sagarra\/paulina\/primera_part\/i\?start=\d+\.\d+&end=\d+\.\d+/);
+  expect(url).toMatch(/\/quote\/sagarra\/paulina_buxareu\/primera_part\/i\?start=\d+\.\d+&end=\d+\.\d+/);
   const response = await request.get(url, { headers: { Accept: 'text/plain' } });
   expect(response.status()).toBe(200);
   expect((await response.text()).replace(/\s+/g, ' ').trim()).toBe(words.replace(/\s+/g, ' ').trim());
