@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
-import satori from 'satori';
+import satoriModule from 'satori';
 
 // The picture a shared quote link shows in a chat or a feed (og:image): the
 // reader's quote card - FragmentCard.tsx - drawn as a 1200x630 PNG. The same
@@ -10,6 +10,11 @@ import satori from 'satori';
 // the work and chapter beneath. Fonts are the reader's own @fontsource
 // packages, so the image speaks the site's type; Greek and Cyrillic fall back
 // to Gentium Book Plus.
+
+// The CommonJS server bundle (scripts/build-server.mjs, a "type": "module"
+// package) hands satori's whole namespace in as the default import; tsx and
+// Vite hand the function itself.
+const satori: typeof satoriModule = (satoriModule as unknown as { default?: typeof satoriModule }).default ?? satoriModule;
 
 export const QUOTE_CARD_WIDTH = 1200;
 export const QUOTE_CARD_HEIGHT = 630;

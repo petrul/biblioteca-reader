@@ -3,6 +3,20 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
+import { createRequire } from 'node:module';
+import { build } from 'esbuild';
+
+// The quote card renderer, bundled exactly as build-server.mjs bundles the
+// server: its packages' CommonJS interop only shows in this form.
+{
+  const { dependencies } = JSON.parse(await readFile('package.json', 'utf8'));
+  await build({ entryPoints: ['src/services/quoteCardImage.ts'], bundle: true, platform: 'node', format: 'cjs',
+    external: Object.keys(dependencies).filter(name => name !== 'openapi-fetch'), outfile: 'dist/quote-card-check.cjs', logLevel: 'error' });
+  const { renderQuoteCard } = createRequire(import.meta.url)('../dist/quote-card-check.cjs');
+  const png = await renderQuoteCard({ text: 'Bundled.', authorName: 'Biblioteca', workTitle: 'Check' });
+  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1200, 630]);
+  console.log('Packaged quote card renderer check passed');
+}
 
 const probe = createServer();
 await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));
