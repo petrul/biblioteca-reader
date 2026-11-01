@@ -76,9 +76,10 @@ export function registerFragmentGateway(app: Express, opts: { serverUrl: string;
       const p = new URLSearchParams(req.originalUrl.split('?')[1]);
       for (const key of ['path', 'selector', 'rev']) if (p.getAll(key).length > 1) throw Object.assign(new Error('Repeated fragment parameter'), { status: 400 });
       const location = { sourcePath: p.get('path') || '', selector: p.get('selector') || '', revision: p.get('rev') || undefined };
-      const png = await cachedQuoteCard(JSON.stringify(location), async () => {
+      const site = opts.originFor(req);
+      const png = await cachedQuoteCard(JSON.stringify({ ...location, site }), async () => {
         const data = await resolve(location);
-        return { text: data.text, authorName: data.authorName, workTitle: data.workTitle, chapterTitle: data.chapterTitle };
+        return { text: data.text, authorName: data.authorName, workTitle: data.workTitle, chapterTitle: data.chapterTitle, site };
       });
       res.set('Cache-Control', `public, max-age=${location.revision ? 604800 : 3600}`).type('image/png').send(png);
     } catch (error) { res.status(status(error)).json({ error: (error as Error).message }); }

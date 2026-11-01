@@ -5,8 +5,8 @@ import satoriModule from 'satori';
 
 // The picture a shared quote link shows in a chat or a feed (og:image): the
 // reader's quote card - FragmentCard.tsx - drawn as a 1200x630 PNG. The same
-// card blue on the site's blue-green gradient, BIBLIOTECA in amber at the
-// top left, the amber rule, the quotation in Newsreader, then the author in Cinzel and
+// card blue on the site's blue-green gradient, "BIBLIOTECA ◆ <site address>"
+// at the top left, the amber rule, the quotation in Newsreader, then the author in Cinzel and
 // the work and chapter beneath. Fonts are the reader's own @fontsource
 // packages, so the image speaks the site's type; Greek and Cyrillic fall back
 // to Gentium Book Plus.
@@ -24,7 +24,11 @@ export interface QuoteCardContent {
   authorName: string;
   workTitle: string;
   chapterTitle?: string;
+  /** The address shown after BIBLIOTECA: the site that serves the card. */
+  site?: string;
 }
+
+export const DEFAULT_SITE = 'https://biblioteca.scriptorium.ro';
 
 type Weight = 400 | 500 | 600 | 700;
 interface Font { name: string; data: Buffer; weight: Weight; style: 'normal' | 'italic' }
@@ -96,7 +100,10 @@ function card(content: QuoteCardContent): Node {
     display: 'flex', alignItems: 'center',
     padding: '22px 48px', borderBottom: '1px solid rgba(255,255,255,0.15)',
   },
-  h('div', { display: 'flex', fontFamily: DISPLAY, fontWeight: 600, fontSize: 24, color: '#fcd34d', letterSpacing: 3 }, 'BIBLIOTECA')),
+  h('div', { display: 'flex', fontFamily: DISPLAY, fontWeight: 600, fontSize: 24, color: '#fcd34d', letterSpacing: 3 }, 'BIBLIOTECA'),
+  // the diamond is drawn, not a glyph: no font of the card need have one
+  h('div', { display: 'flex', width: 9, height: 9, margin: '0 18px', background: '#f59e0b', transform: 'rotate(45deg)' }),
+  h('div', { display: 'flex', fontFamily: SANS, fontSize: 21, color: 'rgba(255,255,255,0.7)' }, clip(content.site || DEFAULT_SITE, 60))),
   h('div', { flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', overflow: 'hidden', padding: '20px 56px 12px' },
     h('div', {
       display: 'flex', width: '100%', borderLeft: '6px solid #f59e0b', paddingLeft: 30,
