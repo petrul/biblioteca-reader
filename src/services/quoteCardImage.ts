@@ -54,9 +54,16 @@ const stack = (name: string) => [...LATIN.map(subset => `${name} ${subset}`), ..
   .map(family => `'${family}'`).join(', ');
 const SERIF = stack('Newsreader'), DISPLAY = stack('Cinzel'), SANS = stack('Plus Jakarta Sans');
 
+/**
+ * Text as the card's fonts can draw it: composed (NFC). Some sources spell
+ * ş, ţ, ă as a letter plus a combining mark (S + U+0327), and the fonts have
+ * the composed letters but no combining marks - those drew as squares.
+ */
+const drawable = (text: string) => text.normalize('NFC');
+
 /** The quotation as it fits the card: whole words, an ellipsis when cut. */
 export function fittedQuote(text: string): { text: string; fontSize: number } {
-  const plain = text.replace(/\s+/g, ' ').trim();
+  const plain = drawable(text).replace(/\s+/g, ' ').trim();
   const sizes: Array<[number, number]> = [[110, 50], [190, 42], [300, 35], [420, 30]];
   for (const [chars, fontSize] of sizes) if (plain.length <= chars) return { text: plain, fontSize };
   const cut = plain.slice(0, 400);
@@ -64,7 +71,10 @@ export function fittedQuote(text: string): { text: string; fontSize: number } {
   return { text: `${(lastSpace > 300 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.—-]+$/u, '')}…`, fontSize: 30 };
 }
 
-const clip = (value: string, max: number) => value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value;
+const clip = (value: string, max: number) => {
+  const text = drawable(value);
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+};
 
 type Node = { type: string; props: { style?: Record<string, unknown>; children?: unknown } };
 const h = (type: string, style: Record<string, unknown>, ...children: unknown[]): Node =>

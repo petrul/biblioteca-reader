@@ -21,6 +21,11 @@ test('a short quote is set large; a long one smaller, cut at a word with an elli
   assert.ok(long.text.length <= 401 && long.text.endsWith('cuvânt…'), long.text);
 });
 
+test('letters spelled with a combining mark are composed, so the fonts can draw them', () => {
+  // Ana Comnena's Alexiada: "[S\u0327efii cumani amintit\u0326i ..." drew squares
+  assert.equal(fittedQuote('S\u0327efii amintit\u0326i s\u0326i letopiset\u0327ele').text, 'Şefii amintiți și letopiseţele');
+});
+
 test('a card is rendered once, then served from memory', async () => {
   let resolved = 0;
   const content = async () => { resolved++; return { text: 'Vin ploile.', authorName: 'A', workTitle: 'W' }; };
