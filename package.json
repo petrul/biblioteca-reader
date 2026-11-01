@@ -1,7 +1,7 @@
 {
   "name": "biblioteca-reader",
   "private": true,
-  "version": "0.1.17-SNAPSHOT",
+  "version": "0.1.17",
   "releaseName": "Ethereal Exedra",
   "type": "module",
   "scripts": {
