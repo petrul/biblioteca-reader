@@ -149,3 +149,21 @@ test('reading the current user fabricates nothing, and stale demo personas are p
   readerService.getCurrentUser();
   assert.notEqual(localStorageMock.getItem(STORED_USER), null);
 });
+
+test('the My Books shelf lists its workIds before any work has loaded', async () => {
+  // The shelf used to resolve works inside the progress fetch, so the
+  // home page refetched /api/reading-progress for every catalog change -
+  // dozens of parallel calls, exhausting biblioteca-server's connection
+  // pool (500s). Its ids must not depend on the catalog having loaded.
+  const { getMyBooksShelf } = await import('./identity');
+  const { LocalBookmarkStore } = await import('./bookmarkStore');
+  localStorageMock.clear();
+  const store = new LocalBookmarkStore(localStorageMock as unknown as Storage);
+  await store.set('dante/inferno', { divPath: 'dante/inferno/canto_i', updatedAt: 1 });
+  await store.set('plato/apology', { divPath: 'plato/apology/i', updatedAt: 2 });
+  await store.addAttention('dante/inferno', 30);
+
+  const shelf = await getMyBooksShelf(false);
+
+  assert.deepEqual(shelf.workIds, ['dante/inferno', 'plato/apology'], 'most attention first, then most recent');
+});

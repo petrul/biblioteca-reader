@@ -131,7 +131,11 @@ export function preferencesStoreFor(signedIn: boolean): PreferencesStore {
 }
 
 export type MyBooksShelf = {
-  works: Work[];
+  // In shelf order. Resolve them with myBooksWorks() on every render: the
+  // works load asynchronously, and refetching the progress list for each
+  // catalog change sent dozens of parallel /api/reading-progress calls -
+  // enough to exhaust biblioteca-server's connection pool (500s).
+  workIds: string[];
   // Whether this reader has demonstrated real engagement (not just
   // clicking around) - see heroCard.ts's REAL_READER_THRESHOLD_SECONDS. `works` itself
   // is NOT filtered by this - once a reader qualifies, they see every
@@ -154,14 +158,20 @@ export async function getMyBooksShelf(signedIn: boolean, limit = 20): Promise<My
   const all = await bookmarkStoreFor(signedIn).getAll();
   const entries = Object.entries(all);
 
-  const works = entries
+  const workIds = entries
     .sort(([, a], [, b]) => {
       const byAttention = (b.attentionSeconds ?? 0) - (a.attentionSeconds ?? 0);
       return byAttention !== 0 ? byAttention : b.updatedAt - a.updatedAt;
     })
     .slice(0, limit)
-    .map(([workId]) => readerService.getWorkById(workId))
-    .filter((work): work is Work => Boolean(work));
+    .map(([workId]) => workId);
 
-  return { works, isEngagedReader: isEngagedReader(all) };
+  return { workIds, isEngagedReader: isEngagedReader(all) };
+}
+
+/** The shelf's works that have loaded so far, in shelf order. */
+export function myBooksWorks(workIds: string[]): Work[] {
+  return workIds
+    .map(workId => readerService.getWorkById(workId))
+    .filter((work): work is Work => Boolean(work));
 }

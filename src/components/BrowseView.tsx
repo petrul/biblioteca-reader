@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Sparkles, ChevronRight, LogIn, Library
 } from 'lucide-react';
-import { Work } from '../types/textbase';
 import { readerService } from '../services/readerService';
-import { getMyBooksShelf } from '../services/identity';
+import { getMyBooksShelf, myBooksWorks } from '../services/identity';
 import { getSavedSearches } from '../services/savedSearches';
 import { collectionShelves, ShelfEntry } from '../services/collectionShelves';
 import { FeaturedBookCarousel } from './FeaturedBookCarousel';
@@ -17,12 +16,11 @@ interface BrowseViewProps {
   // a provisional false, and a signed-in reader's shelf is not known yet.
   identityKnown?: boolean;
   // Bumped by App.tsx whenever readerService's real catalog data changes
-  // (see readerService.subscribe) or a saved search changes - the My Books
-  // shelf below resolves each touched workId through that catalog, which
-  // loads asynchronously after this component's own mount; without this
-  // in the effect's dependency array, a shelf fetch that resolves before
-  // the real catalog has loaded would fail every lookup and never retry
-  // once it arrives. The collection shelves are re-read on it too.
+  // (see readerService.subscribe) or a saved search changes. Each bump
+  // re-renders this view, which resolves the My Books shelf's workIds
+  // through that catalog as its works arrive (myBooksWorks) - without
+  // fetching the reading progress again - and re-reads the collection
+  // shelves.
   dataRevision: number;
   // Whose stored collections get a shelf each - the signed-in reader's;
   // undefined for guests, who get the Discover shelf instead.
@@ -66,18 +64,20 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
   // not just clicked around); until then, and for every brand-new
   // visitor, the "Explore..." hero card below is shown instead - that's
   // the pitch that has to earn a first-time visitor's interest, on purpose.
-  const [myBooks, setMyBooks] = useState<Work[]>([]);
+  const [myBookIds, setMyBookIds] = useState<string[]>([]);
   const [isEngagedReader, setIsEngagedReader] = useState(false);
   // Whether the shelf has been read for the reader's actual identity.
   const [shelfKnown, setShelfKnown] = useState(false);
   useEffect(() => {
     if (!identityKnown) return; // a signed-in reader would read the wrong (local) store
     let cancelled = false;
-    void getMyBooksShelf(reallySignedIn).then(({ works, isEngagedReader }) => {
-      if (!cancelled) { setMyBooks(works); setIsEngagedReader(isEngagedReader); setShelfKnown(true); }
+    void getMyBooksShelf(reallySignedIn).then(({ workIds, isEngagedReader }) => {
+      if (!cancelled) { setMyBookIds(workIds); setIsEngagedReader(isEngagedReader); setShelfKnown(true); }
     });
     return () => { cancelled = true; };
-  }, [reallySignedIn, identityKnown, dataRevision]);
+  }, [reallySignedIn, identityKnown]);
+  // Once per render, not per fetch: dataRevision re-renders as works load.
+  const myBooks = myBooksWorks(myBookIds);
   // Neither hero until the shelf is known for the reader's real identity -
   // see heroCard (and its unit test) for the rule.
   const hero = heroCard({ shelfKnown, isEngagedReader, shelfWorks: myBooks.length });
