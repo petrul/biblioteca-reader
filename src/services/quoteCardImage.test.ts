@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { fragmentCardImagePath } from './fragmentGateway';
-import { QUOTE_CARD_HEIGHT, QUOTE_CARD_MAX_CHARS, QUOTE_CARD_WIDTH, cachedQuoteCard, fittedQuote, quoteCardLayout, quoteCardText, quoteShareTitle, renderQuoteCard, type Node } from './quoteCardImage';
+import { QUOTE_CARD_HEIGHT, QUOTE_CARD_MAX_CHARS, QUOTE_CARD_WIDTH, cachedQuoteCard, fittedQuote, loadFonts, quoteCardLayout, quoteCardText, quoteShareTitle, renderQuoteCard, type Node } from './quoteCardImage';
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const size = (png: Buffer) => [png.readUInt32BE(16), png.readUInt32BE(20)];
@@ -79,4 +79,74 @@ test('footnotes are left out of the quotation', () => {
   assert.equal(quoteCardText(html, 'unused'), 'Togortak, Maniak şi alţi cîţiva războinici');
   assert.equal(quoteCardText('<p>un vers<br/>alt vers</p>', 'unused'), 'un vers alt vers');
   assert.equal(quoteCardText(null, 'the plain text'), 'the plain text');
+});
+
+// --- the card's look, specified ---------------------------------------------
+
+/** Every node of a layout tree. */
+const allNodes = (node: unknown): Node[] => Array.isArray(node) ? node.flatMap(allNodes)
+  : node && typeof node === 'object' ? [node as Node, ...allNodes((node as Node).props.children)] : [];
+
+/** The style of the node that draws exactly this text. */
+const styleOf = (layout: Node, text: string) => {
+  const node = allNodes(layout).find(candidate => candidate.props.children === text);
+  assert.ok(node, `nothing draws ${JSON.stringify(text)}`);
+  return node.props.style ?? {};
+};
+const firstFamily = (style: Record<string, unknown>) => String(style.fontFamily).split(',')[0].replace(/'/g, '').trim();
+
+const AMBER = '#fcd34d', AMBER_DEEP = '#f59e0b', CARD_BLUE = '#061d28', WHITE = '#ffffff';
+const SITE = 'https://biblioteca.scriptorium.ro';
+const byron = (text: string) => quoteCardLayout({ text, authorName: 'George Byron', workTitle: 'Poetry. Vol. VI.', site: SITE });
+
+test('fonts: Cinzel for BIBLIOTECA and the author, Newsreader for the quote and the work, Plus Jakarta Sans for the address', () => {
+  const layout = byron('Vin ploile.');
+  assert.equal(firstFamily(styleOf(layout, 'BIBLIOTECA')), 'Cinzel latin');
+  assert.equal(firstFamily(styleOf(layout, SITE)), 'Plus Jakarta Sans latin');
+  assert.equal(firstFamily(styleOf(layout, '«Vin ploile.»')), 'Newsreader latin');
+  assert.equal(firstFamily(styleOf(layout, 'George Byron')), 'Cinzel latin');
+  assert.equal(firstFamily(styleOf(layout, 'Poetry. Vol. VI.')), 'Newsreader latin');
+  assert.equal(styleOf(layout, 'Poetry. Vol. VI.').fontStyle, 'italic');
+  // every script falls back to Gentium Book Plus
+  for (const text of ['BIBLIOTECA', '«Vin ploile.»', SITE])
+    assert.match(String(styleOf(layout, text).fontFamily), /'Gentium Book Plus greek'.*'Gentium Book Plus cyrillic'/);
+});
+
+test('every family, weight and style the card asks for is a loaded font', () => {
+  const loaded = new Set(loadFonts().map(font => `${font.name}|${font.weight}|${font.style}`));
+  const layout = byron('Vin ploile.');
+  for (const node of allNodes(layout).filter(n => n.props.style?.fontFamily)) {
+    const style = node.props.style!;
+    const weight = Number(style.fontWeight ?? 400), fontStyle = String(style.fontStyle ?? 'normal');
+    for (const family of String(style.fontFamily).split(',').map(name => name.replace(/'/g, '').trim()))
+      if (!family.startsWith('Gentium')) assert.ok(loaded.has(`${family}|${weight}|${fontStyle}`), `${family} ${weight} ${fontStyle} is not loaded`);
+  }
+});
+
+test('colours: amber BIBLIOTECA, work and diamond; white quote on the card blue; an amber rule beside the quote', () => {
+  const layout = byron('Vin ploile.');
+  assert.equal(styleOf(layout, 'BIBLIOTECA').color, AMBER);
+  assert.equal(styleOf(layout, 'Poetry. Vol. VI.').color, AMBER);
+  assert.equal(styleOf(layout, '«Vin ploile.»').color, WHITE);
+  assert.match(String(styleOf(layout, '«Vin ploile.»').borderLeft), new RegExp(`${AMBER_DEEP}$`));
+  assert.equal(styleOf(layout, SITE).color, 'rgba(255,255,255,0.75)');
+  const diamond = allNodes(layout).find(n => n.props.style?.transform === 'rotate(45deg)')!;
+  assert.equal(diamond.props.style!.background, AMBER_DEEP);
+  assert.ok(allNodes(layout).some(n => n.props.style?.background === CARD_BLUE), 'the card is the reader\'s card blue');
+});
+
+test('sizes: the shorter the quote, the larger its type; the header and byline keep theirs', () => {
+  const words = (chars: number) => 'cuvânt '.repeat(Math.ceil(chars / 7)).slice(0, chars).trim();
+  const cases: Array<[number, number]> = [[20, 84], [60, 84], [61, 72], [100, 72], [101, 62], [130, 62], [131, 62], [2000, 62]];
+  for (const [chars, fontSize] of cases) {
+    const text = words(chars);
+    const fitted = fittedQuote(text);
+    assert.equal(fitted.fontSize, fontSize, `${chars} chars`);
+    assert.equal(styleOf(byron(text), `«${fitted.text}»`).fontSize, fontSize, `${chars} chars, as laid out`);
+  }
+  const layout = byron('Vin ploile.');
+  assert.equal(styleOf(layout, 'BIBLIOTECA').fontSize, 30);
+  assert.equal(styleOf(layout, SITE).fontSize, 26);
+  assert.equal(styleOf(layout, 'George Byron').fontSize, 38);
+  assert.equal(styleOf(layout, 'Poetry. Vol. VI.').fontSize, 36);
 });

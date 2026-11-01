@@ -35,7 +35,8 @@ type Weight = 400 | 500 | 600 | 700;
 interface Font { name: string; data: Buffer; weight: Weight; style: 'normal' | 'italic' }
 
 let fonts: Font[] | undefined;
-function loadFonts(): Font[] {
+/** The fonts the card is drawn with (loaded once). */
+export function loadFonts(): Font[] {
   if (fonts) return fonts;
   const file = (pkg: string, name: string) =>
     readFileSync(path.join(process.cwd(), 'node_modules', '@fontsource', pkg, 'files', `${name}.woff`));
