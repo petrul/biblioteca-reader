@@ -35,6 +35,12 @@ import { createVisitorCookies } from './src/services/visitorCookie';
 import { chatRateLimit } from './src/services/chatLimit';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
 import { renderServerErrorPage } from './src/httpErrorPage';
+import { prefixProcessOutput, propagateInitiator, runAs } from './src/services/initiator';
+import { createSessionInitiators } from './src/services/readerInitiator';
+
+// Every line this process writes starts with its initiator - see initiator.ts.
+prefixProcessOutput();
+const sessionInitiators = createSessionInitiators();
 
 
 const app = express();
@@ -56,6 +62,9 @@ app.use(express.json());
 // Automated-access limit - limits in src/services/resourceLimits.ts.
 // One set of visitor cookies for every limit that tells browsers from bots.
 const visitors = createVisitorCookies();
+// Each request runs - and logs - as its reader: the signed-in user, or a guest.
+app.use((req: Request, _res: Response, next: NextFunction) => runAs(sessionInitiators.labelFor(
+  req.headers.cookie, visitors.identify(req) ?? `${req.ip}|${req.get('user-agent') ?? ''}`), next));
 app.use(crawlerPageRateLimit({ ...resourceLimitOverridesFromEnv(), visitors }));
 
 // Client log relay: the reader is an SPA, so its logging (page
@@ -356,6 +365,10 @@ if (!BIBLIOTECA_INTERNAL_API_TOKEN) {
 // browser never needs to know its host, and deployments can override the
 // local development default without adding another public origin.
 const COVERS_API_URL = (process.env.COVERS_API_URL || 'http://localhost:3335').replace(/\/$/, '');
+// The reader's calls to its services carry the request's initiator; the
+// server's answers say who each session belongs to.
+propagateInitiator([BIBLIOTECA_SERVER_URL, NESTJS_URL, COVERS_API_URL],
+  (request, response) => sessionInitiators.learn(request.headers.get('cookie'), response));
 
 // Read-only deployments: a local reader pointed at a production
 // biblioteca-server it must never mutate (reader.config.json's readOnly,
