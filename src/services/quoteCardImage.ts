@@ -5,8 +5,8 @@ import satoriModule from 'satori';
 
 // The picture a shared quote link shows in a chat or a feed (og:image): the
 // reader's quote card - FragmentCard.tsx - drawn as a 1200x630 PNG. The same
-// card blue on the site's blue-green gradient, the amber "Source fragment"
-// label and rule, the quotation in Newsreader, then the author in Cinzel and
+// card blue on the site's blue-green gradient, BIBLIOTECA in amber at the
+// top left, the amber rule, the quotation in Newsreader, then the author in Cinzel and
 // the work and chapter beneath. Fonts are the reader's own @fontsource
 // packages, so the image speaks the site's type; Greek and Cyrillic fall back
 // to Gentium Book Plus.
@@ -93,11 +93,10 @@ function card(content: QuoteCardContent): Node {
   },
   h('div', { position: 'absolute', top: -40, right: 40, fontFamily: SERIF, fontSize: 360, lineHeight: 1, color: 'rgba(252,211,77,0.07)' }, '”'),
   h('div', {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    display: 'flex', alignItems: 'center',
     padding: '22px 48px', borderBottom: '1px solid rgba(255,255,255,0.15)',
   },
-  h('div', { display: 'flex', fontFamily: SANS, fontWeight: 700, fontSize: 22, color: '#fcd34d' }, '“  Source fragment'),
-  h('div', { display: 'flex', fontFamily: DISPLAY, fontWeight: 600, fontSize: 24, color: 'rgba(255,255,255,0.75)', letterSpacing: 2 }, 'Biblioteca')),
+  h('div', { display: 'flex', fontFamily: DISPLAY, fontWeight: 600, fontSize: 24, color: '#fcd34d', letterSpacing: 3 }, 'BIBLIOTECA')),
   h('div', { flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', overflow: 'hidden', padding: '20px 56px 12px' },
     h('div', {
       display: 'flex', width: '100%', borderLeft: '6px solid #f59e0b', paddingLeft: 30,
