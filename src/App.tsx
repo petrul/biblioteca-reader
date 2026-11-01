@@ -1,3 +1,4 @@
+import { savedQuoteAddress, type SavedQuote } from './services/serverQuoteApi';
 import { fetchFragment } from './services/fragmentApi';
 import { parseFragmentLocation, type FragmentLocation } from './services/fragmentAddress';
 import { useState, useEffect, useRef } from 'react';
@@ -431,7 +432,16 @@ export default function App() {
     setSelectedChapterId(null);
   };
 
-  const handleOpenQuote = (quoteId: string) => {
+  const handleOpenQuote = (quoteId: string, saved?: SavedQuote) => {
+    // A legacy browser-local quote saved in a collection from another
+    // browser: find the passage again from the item's own snapshot.
+    if (saved && !quoteId.startsWith('server:') && !quoteId.startsWith('/') && !readerService.getQuotationById(quoteId)) {
+      void savedQuoteAddress(saved).then(address => {
+        if (address) handleOpenQuote(address);
+        else { setSelectedQuoteId(quoteId); setCurrentView('quote'); }
+      });
+      return;
+    }
     if (quoteId.startsWith('server:') || quoteId.startsWith('/')) {
       const address = quoteId.startsWith('server:') ? '/quote/' + quoteId.slice(7) : quoteId;
       const url = new URL(address, window.location.origin);

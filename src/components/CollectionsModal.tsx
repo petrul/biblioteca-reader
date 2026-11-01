@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { ExternalLink, X } from 'lucide-react';
 import { CollectionsPanel } from './CollectionsPanel';
 import { useDragToDismiss } from '../hooks/useDragToDismiss';
+import type { SavedQuote } from '../services/serverQuoteApi';
 
 interface CollectionsModalProps {
   isOpen: boolean;
@@ -9,7 +10,7 @@ interface CollectionsModalProps {
   onClose: () => void;
   onSelectWork: (workId: string) => void;
   onSelectChapter: (workId: string, chapterId: string) => void;
-  onOpenQuote: (quoteId: string) => void;
+  onOpenQuote: (quoteId: string, saved?: SavedQuote) => void;
   onRunSearch: (query: string) => void;
   /** Open the full Collections page, where items can be reordered and removed. */
   onManage: () => void;

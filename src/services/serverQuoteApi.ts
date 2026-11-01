@@ -15,6 +15,28 @@ export async function fetchServerQuote(id: string): Promise<Quotation | null> {
     startOffset: 0, endOffset: data.text.length, createdAt: '', language: mapServerLanguage((data as { language?: string }).language) };
 }
 
+/**
+ * What a collection item keeps of a saved quotation. Enough to find the
+ * passage again when a legacy browser-local quote id (quote-temp-...) is
+ * gone - another browser saved it, or its storage was cleared.
+ */
+export type SavedQuote = { workId: string; chapterId?: string; quoteText?: string };
+
+/**
+ * The reader address of a saved quotation: its exact fragment when the
+ * text still resolves in its chapter, else the chapter itself; null when
+ * the snapshot names no chapter.
+ */
+export async function savedQuoteAddress(saved: SavedQuote): Promise<string | null> {
+  if (!saved.chapterId) return null;
+  if (saved.quoteText) {
+    try {
+      return (await resolveSelectedQuote(saved.chapterId, saved.quoteText)).id;
+    } catch { /* source changed or unavailable - the chapter still opens */ }
+  }
+  return '/' + saved.chapterId;
+}
+
 export async function resolveSelectedQuote(path: string, text: string, context?: string, before?: string) {
   const result = await api.POST('/api/quote', { body: { path, text, context, before }, signal: AbortSignal.timeout(30000) });
   if (!result.data) throw new Error((result.error as { error?: string })?.error || 'The selection could not be resolved in its TEI source.');

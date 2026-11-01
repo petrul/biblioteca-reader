@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Sparkles, ChevronRight, LogIn, Library
 } from 'lucide-react';
+import type { SavedQuote } from '../services/serverQuoteApi';
 import { readerService } from '../services/readerService';
 import { getMyBooksShelf, myBooksWorks } from '../services/identity';
 import { getSavedSearches } from '../services/savedSearches';
@@ -28,7 +29,7 @@ interface BrowseViewProps {
   onSelectWork: (workId: string) => void;
   onSelectAuthor: (authorId: string) => void;
   onSelectChapter: (workId: string, chapterId: string) => void;
-  onOpenQuote: (quoteId: string) => void;
+  onOpenQuote: (quoteId: string, saved?: SavedQuote) => void;
   onOpenCatalog: () => void;
   onRandomDiscovery?: () => void;
   // Opens the sign-in modal - the explore card invites signed-out visitors.
@@ -93,7 +94,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({
     : [];
   const openShelfEntry = (entry: ShelfEntry) => {
     const target = entry.target;
-    if (target.kind === 'quote') onOpenQuote(target.quoteId);
+    if (target.kind === 'quote') onOpenQuote(target.quoteId, target.saved);
     else if (target.kind === 'chapter') onSelectChapter(target.workId, target.chapterId);
     else onSelectWork(target.workId);
   };

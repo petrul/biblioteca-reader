@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bookmark, Plus } from 'lucide-react';
 import { User } from '../types/textbase';
+import type { SavedQuote } from '../services/serverQuoteApi';
 import { readerService, ANONYMOUS_USER_ID } from '../services/readerService';
 import { CollectionsPanel } from './CollectionsPanel';
 import { useSwipeDismiss } from '../hooks/useSwipeDismiss';
@@ -11,7 +12,7 @@ interface CollectionsViewProps {
   onOpenAuth: () => void;
   onSelectWork: (workId: string) => void;
   onSelectChapter: (workId: string, chapterId: string) => void;
-  onOpenQuote: (quoteId: string) => void;
+  onOpenQuote: (quoteId: string, saved?: SavedQuote) => void;
   onRunSearch: (query: string) => void;
   onBack: () => void;
 }

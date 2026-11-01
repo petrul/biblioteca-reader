@@ -1,3 +1,4 @@
+import type { SavedQuote } from '../services/serverQuoteApi';
 import { searchTargetPath } from '../services/searchTargets';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -40,7 +41,7 @@ export interface CollectionsPanelProps {
   autoFocus?: boolean;
   onSelectWork: (workId: string) => void;
   onSelectChapter: (workId: string, chapterId: string) => void;
-  onOpenQuote: (quoteId: string) => void;
+  onOpenQuote: (quoteId: string, saved?: SavedQuote) => void;
   onRunSearch: (query: string) => void;
   /** Called after something was opened - the modal closes itself here. */
   onNavigate?: () => void;
@@ -147,7 +148,7 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
   const openItem = (gi: GroupItem) => {
     if (gi.kind === 'collection') {
       const item = gi.item;
-      if (item.type === 'quote') onOpenQuote(item.referenceId);
+      if (item.type === 'quote') onOpenQuote(item.referenceId, item);
       else if (item.type === 'chapter' && item.chapterId) onSelectChapter(item.workId, item.chapterId);
       else onSelectWork(item.workId);
     } else if (gi.item.chapterId) {

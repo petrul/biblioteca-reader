@@ -1,3 +1,4 @@
+import type { SavedQuote } from './serverQuoteApi';
 import { PersonalCollection, SavedSearch } from '../types/textbase';
 import { searchTargetPath } from './searchTargets';
 
@@ -9,7 +10,7 @@ import { searchTargetPath } from './searchTargets';
 export type ShelfEntryTarget =
   | { kind: 'work'; workId: string }
   | { kind: 'chapter'; workId: string; chapterId: string }
-  | { kind: 'quote'; quoteId: string };
+  | { kind: 'quote'; quoteId: string; saved: SavedQuote };
 
 export interface ShelfEntry {
   key: string;
@@ -42,7 +43,7 @@ export function collectionShelves(collections: PersonalCollection[], searches: S
     entries: collection.items.map((item): ShelfEntry => {
       const base = { key: item.id, workId: item.workId, workTitle: item.workTitle, authorName: item.authorName };
       if (item.type === 'quote') {
-        return { ...base, label: 'Quote', detail: item.quoteText, target: { kind: 'quote', quoteId: item.referenceId } };
+        return { ...base, label: 'Quote', detail: item.quoteText, target: { kind: 'quote', quoteId: item.referenceId, saved: { workId: item.workId, chapterId: item.chapterId, quoteText: item.quoteText } } };
       }
       if (item.type === 'chapter' && item.chapterId) {
         return { ...base, label: 'Chapter', detail: item.chapterTitle, target: { kind: 'chapter', workId: item.workId, chapterId: item.chapterId } };

@@ -37,6 +37,9 @@ test('each entry opens what was saved: the work, the chapter, or the quote', () 
   assert.deepEqual(shelf.entries.map(e => [e.label, e.detail, e.target]), [
     ['Work', undefined, { kind: 'work', workId: 'creanga/amintiri' }],
     ['Chapter', 'Partea a doua', { kind: 'chapter', workId: 'creanga/amintiri', chapterId: 'creanga/amintiri/partea_ii' }],
-    ['Quote', 'Stau câteodată și-mi aduc aminte…', { kind: 'quote', quoteId: 'quote-1' }]
+    // the item's own snapshot travels along: a legacy quote-1 lives only
+    // in the browser that saved it (see serverQuoteApi's savedQuoteAddress)
+    ['Quote', 'Stau câteodată și-mi aduc aminte…', { kind: 'quote', quoteId: 'quote-1',
+      saved: { workId: 'creanga/amintiri', chapterId: undefined, quoteText: 'Stau câteodată și-mi aduc aminte…' } }]
   ]);
 });
