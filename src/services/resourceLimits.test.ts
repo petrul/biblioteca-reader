@@ -4,8 +4,8 @@ import test from 'node:test';
 import express from 'express';
 import { crawlerPageRateLimit, type CrawlerLimitOptions } from './crawlerPageLimit';
 import { RESOURCE_LIMITS } from './resourceLimits';
-import { chatRateLimit } from './chatLimit';
-import { createVisitorCookies } from './visitorCookie';
+import { chatRateLimit, type ChatUser } from './chatLimit';
+import { currentInitiator } from './initiator';
 
 // What the reader limits, precisely, and when - the specification for
 // resourceLimits.ts, checked against the real middleware with its defaults:
@@ -16,10 +16,12 @@ import { createVisitorCookies } from './visitorCookie';
 //                                (out of any person's reach)                           oldest read leaves the hour
 //   distinct chapters read       clients without a valid cookie        150/h/address   same
 //   fresh visitor cookies        one address                           40/h            no cookie: counted as cookieless
-//   chat/ask/RAG search          clients without a valid cookie        refused         403 chat_requires_browser
-//   chat/ask/RAG search          a browser                             60/h, 300/day   429 chat_limit until the window
-//   chat/ask/RAG search          one address, all browsers together    240/h           429 chat_limit, scope address
-//   chat/ask/RAG search          an administrator                      never limited   -
+//   chat/ask/RAG search          anyone not signed in                  refused         401 chat_requires_sign_in
+//   chat/ask/RAG search          a signed-in user                      one at a time   409 chat_busy until answered
+//   chat/ask/RAG search          a signed-in user                      60/h, 400/day   429 chat_limit until the window
+//   chat/ask/RAG search          one address, all users together       240/h           429 chat_limit, scope address
+//   chat/ask/RAG search          an administrator                      one at a time,  -
+//                                                                      never counted
 //   cover generation             anyone                                not limited     - (async and cached)
 //
 // The per-request size caps (search results, TOC pages...) are the
@@ -45,8 +47,8 @@ test('the limits are these and no others', () => {
     browserChaptersPerHour: 3000,
     cookielessChaptersPerHour: 150,
     newVisitorCookiesPerHour: 40,
-    chatMessagesPerHourPerBrowser: 60,
-    chatMessagesPerDayPerBrowser: 300,
+    chatMessagesPerHourPerUser: 60,
+    chatMessagesPerDayPerUser: 400,
     chatMessagesPerHourPerAddress: 240,
     windowMs: 3_600_000,
     contact: 'petru@scriptorium.ro',
@@ -105,43 +107,82 @@ test('one address gets 40 fresh visitor cookies an hour, then none', async () =>
   });
 });
 
-// --- chat: the shared GPU is for people ----------------------------------
+// --- chat: the shared GPU is for signed-in people --------------------------
 
-async function withChat(options: { now?: () => number; isAdmin?: boolean }, run: (origin: string) => Promise<void>) {
-  const visitors = createVisitorCookies('test-secret');
+/** Test sessions: the Cookie "session=<username>" signs that user in; "admin" is an administrator. */
+const testUserOf = async (req: express.Request): Promise<ChatUser | null> => {
+  const username = /session=([^;]+)/.exec(req.headers.cookie || '')?.[1];
+  return username ? { username, isAdmin: username === 'admin' } : null;
+};
+
+async function withChat(options: { now?: () => number; answer?: (res: express.Response) => void }, run: (origin: string) => Promise<void>) {
   const app = express();
-  app.use(crawlerPageRateLimit({ visitors }));
-  app.post('/api/rag/chat', chatRateLimit({ visitors, now: options.now, isExempt: async () => Boolean(options.isAdmin) }),
-    (_req, res) => res.json({ answer: 'ok' }));
-  app.get('*', (_req, res) => res.type('html').send('<html>page</html>'));
+  app.post('/api/rag/chat', chatRateLimit({ userOf: testUserOf, now: options.now }),
+    (_req, res) => options.answer ? options.answer(res) : res.json({ answer: 'ok', as: currentInitiator() }));
   const server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Server did not bind a TCP port');
   try { await run(`http://127.0.0.1:${address.port}`); }
-  finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+  finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
 }
 
-/** A browser: loads a page, keeps its visitor cookie, then chats. */
-async function chatter(origin: string) {
-  const cookie = (await fetch(`${origin}/hugo`, { headers: PAGE })).headers.get('set-cookie')!.split(';')[0];
-  return () => fetch(`${origin}/api/rag/chat`, { method: 'POST', headers: { Cookie: cookie } });
-}
+/** A signed-in user who chats. */
+const chatter = (origin: string, username: string) =>
+  () => fetch(`${origin}/api/rag/chat`, { method: 'POST', headers: { Cookie: `session=${username}` } });
 
-test('a client that is not a browser - no valid visitor cookie - gets no chat at all', async () => {
+test('anyone not signed in - a guest, a script - gets no chat at all', async () => {
   await withChat({}, async origin => {
-    for (const headers of [{}, { Cookie: 'bib_v=forged.signature' }]) {
+    for (const headers of [{}, { Cookie: 'bib_guest=guest_formidable_dictator' }]) {
       const refused = await fetch(`${origin}/api/rag/chat`, { method: 'POST', headers });
-      assert.equal(refused.status, 403);
-      assert.equal((await refused.json()).error, 'chat_requires_browser');
+      assert.equal(refused.status, 401);
+      assert.equal((await refused.json()).error, 'chat_requires_sign_in');
     }
   });
 });
 
-test('a browser sends 60 chat messages an hour, then waits for the hour', async () => {
+test('a message is sent as its user, so that is who the chat service logs and records', async () => {
+  await withChat({}, async origin => {
+    assert.equal((await (await chatter(origin, 'petru@scriptorium.ro')()).json()).as, 'petru@scriptorium.ro');
+  });
+});
+
+test('a user asks one question at a time: the next waits for the answer', async () => {
+  const pending: express.Response[] = [];
+  await withChat({ answer: res => pending.push(res) }, async origin => {
+    const ask = chatter(origin, 'petru@scriptorium.ro');
+    const first = ask();
+    while (pending.length === 0) await new Promise(resolve => setTimeout(resolve, 5));
+    const second = await ask();
+    assert.equal(second.status, 409);
+    assert.equal((await second.json()).error, 'chat_busy');
+    const admin = chatter(origin, 'admin');
+    const adminFirst = admin();
+    while (pending.length < 2) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal((await admin()).status, 409, 'administrators too');
+    const someoneElse = chatter(origin, 'ana@scriptorium.ro')();
+    while (pending.length < 3) await new Promise(resolve => setTimeout(resolve, 5));
+    pending.shift()!.json({ answer: 'first' });
+    assert.equal((await first).status, 200);
+    pending.splice(0).forEach(res => res.json({ answer: 'ok' }));
+    assert.equal((await adminFirst).status, 200);
+    assert.equal((await someoneElse).status, 200, 'other users are not held up');
+    pending.length = 0;
+  });
+  await withChat({}, async origin => {
+    const ask = chatter(origin, 'petru@scriptorium.ro');
+    assert.equal((await ask()).status, 200);
+    assert.equal((await ask()).status, 200, 'once answered, the next message goes through');
+  });
+});
+
+test('a user sends 60 chat messages an hour, then waits for the hour', async () => {
   let timestamp = 1_000_000;
   await withChat({ now: () => timestamp }, async origin => {
-    const ask = await chatter(origin);
+    const ask = chatter(origin, 'petru@scriptorium.ro');
     for (let i = 0; i < 60; i++) {
       assert.equal((await ask()).status, 200, `message ${i}`);
       timestamp += 1000;
@@ -156,35 +197,37 @@ test('a browser sends 60 chat messages an hour, then waits for the hour', async 
   });
 });
 
-test('a browser sends 300 chat messages a day', async () => {
+test('a user sends 400 chat messages a day', async () => {
   let timestamp = 1_000_000;
   await withChat({ now: () => timestamp }, async origin => {
-    const ask = await chatter(origin);
-    for (let hour = 0; hour < 5; hour++) {
-      for (let i = 0; i < 60; i++) assert.equal((await ask()).status, 200, `hour ${hour} message ${i}`);
+    const ask = chatter(origin, 'petru@scriptorium.ro');
+    for (let hour = 0; hour < 7; hour++) {
+      for (let i = 0; i < 60 && hour * 60 + i < 400; i++) assert.equal((await ask()).status, 200, `hour ${hour} message ${i}`);
       timestamp += 3_600_000;
     }
     const limited = await ask();
-    assert.equal(limited.status, 429, 'a fresh hour, but 300 already today');
+    assert.equal(limited.status, 429, 'a fresh hour, but 400 already today');
     assert.equal((await limited.json()).scope, 'day');
   });
 });
 
-test('one address, all its browsers together, sends 240 chat messages an hour', async () => {
+test('one address, all its users together, sends 240 chat messages an hour', async () => {
   await withChat({}, async origin => {
-    const people = [await chatter(origin), await chatter(origin), await chatter(origin), await chatter(origin)];
-    for (const ask of people) for (let i = 0; i < 60; i++) assert.equal((await ask()).status, 200);
-    const fifth = await chatter(origin);
-    const limited = await fifth();
-    assert.equal(limited.status, 429, 'a fresh browser on an address that has used its 240');
+    for (const user of ['a', 'b', 'c', 'd']) {
+      const ask = chatter(origin, `${user}@scriptorium.ro`);
+      for (let i = 0; i < 60; i++) assert.equal((await ask()).status, 200);
+    }
+    const limited = await chatter(origin, 'e@scriptorium.ro')();
+    assert.equal(limited.status, 429, 'a fresh user on an address that has used its 240');
     assert.equal((await limited.json()).scope, 'address');
   });
 });
 
-test('an administrator is never limited', async () => {
-  await withChat({ isAdmin: true }, async origin => {
-    for (let i = 0; i < 400; i++) {
-      const status = (await fetch(`${origin}/api/rag/chat`, { method: 'POST' })).status;
+test('an administrator is never counted', async () => {
+  await withChat({}, async origin => {
+    const ask = chatter(origin, 'admin');
+    for (let i = 0; i < 500; i++) {
+      const status = (await ask()).status;
       if (status !== 200) assert.fail(`message ${i} answered ${status}`);
     }
   });

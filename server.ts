@@ -32,10 +32,10 @@ import { crawlerPageRateLimit } from './src/services/crawlerPageLimit';
 import { responseCompression } from './src/services/httpCompression';
 import { resourceLimitOverridesFromEnv } from './src/services/resourceLimits';
 import { createVisitorCookies } from './src/services/visitorCookie';
-import { chatRateLimit } from './src/services/chatLimit';
+import { chatRateLimit, type ChatUser } from './src/services/chatLimit';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
 import { renderServerErrorPage } from './src/httpErrorPage';
-import { GUEST_COOKIE, isGuestName, prefixProcessOutput, propagateInitiator, runAs } from './src/services/initiator';
+import { GUEST_COOKIE, INITIATOR_HEADER, isGuestName, isUserLabel, prefixProcessOutput, propagateInitiator, receivedLabel, runAs } from './src/services/initiator';
 import { createSessionInitiators, guestNameOf } from './src/services/readerInitiator';
 
 // Every line this process writes starts with its initiator - see initiator.ts.
@@ -1000,14 +1000,24 @@ async function relayRagPost(path: '/api/rag/search' | '/api/rag/ask' | '/api/rag
   }
 }
 
-// The chat limit (services/chatLimit.ts; limits in resourceLimits.ts): browsers
-// only - a client without the visitor cookie is refused - with a per-browser
-// and per-address budget; administrators are exempt.
-const ragRateLimit = chatRateLimit({
-  visitors,
-  isExempt: async req => Boolean(req.headers.cookie?.split(';').some(cookie => cookie.trim().startsWith('JSESSIONID=')))
-    && await isAdminSession(req),
-});
+// The chat limit (services/chatLimit.ts; limits in resourceLimits.ts): signed-in
+// users only, one message at a time, within a per-user and per-address budget;
+// administrators are exempt from the budget. biblioteca-server says who the
+// session belongs to, and its label for them is what the request then runs as.
+async function chatUserOf(req: Request): Promise<ChatUser | null> {
+  if (!req.headers.cookie?.split(';').some(cookie => cookie.trim().startsWith('JSESSIONID='))) return null;
+  try {
+    const whoRes = await fetch(`${BIBLIOTECA_SERVER_URL}/api/users/me`, { headers: forwardedHeaders(req) });
+    if (!whoRes.ok) return null;
+    const who = await whoRes.json() as { authenticated?: boolean; isAdmin?: boolean };
+    const label = receivedLabel(whoRes.headers.get(INITIATOR_HEADER));
+    return who.authenticated && label && isUserLabel(label) ? { username: label, isAdmin: Boolean(who.isAdmin) } : null;
+  } catch {
+    return null;
+  }
+}
+
+const ragRateLimit = chatRateLimit({ userOf: chatUserOf });
 
 app.post('/api/rag/search', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/search', req, res)));
 app.post('/api/rag/ask', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/ask', req, res)));

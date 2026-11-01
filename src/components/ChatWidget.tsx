@@ -136,6 +136,9 @@ const initialMessage = (): ChatMessage => ({
 
 type ChatPlacement = 'floating' | 'docked';
 
+/** The errors services/chatLimit.ts refuses a message with, each with a message to show. */
+const CHAT_REFUSALS = ['chat_limit', 'chat_requires_sign_in', 'chat_busy'];
+
 interface ChatWidgetProps {
   /** 'docked' hands the bubble over to a toolbar: the bottom nav's chat tab
       below lg, the navbar's chat button on lg+ - and the bubble hides. */
@@ -148,9 +151,13 @@ interface ChatWidgetProps {
   /** Lifted so the app can force the toolbars visible mid-drag, even where
       they auto-hid themselves on scroll. */
   onDragActiveChange?: (active: boolean, overTarget: boolean) => void;
+  /** The chat is for signed-in users only (services/chatLimit.ts): false
+      offers sign-in instead of the message box; null while not yet known. */
+  signedIn?: boolean | null;
+  onSignIn?: () => void;
 }
 
-export function ChatWidget({ placement = 'floating', open: openProp, onOpenChange, onDock, onDragActiveChange }: ChatWidgetProps = {}) {
+export function ChatWidget({ placement = 'floating', open: openProp, onOpenChange, onDock, onDragActiveChange, signedIn = null, onSignIn }: ChatWidgetProps = {}) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = openProp ?? internalOpen;
   const setOpen = (value: boolean) => {
@@ -231,8 +238,8 @@ export function ChatWidget({ placement = 'floating', open: openProp, onOpenChang
         body: JSON.stringify({ message: text, ...(continuedConversationId ? { conversationId: continuedConversationId } : {}), ...(scope ? { scope } : {}) }),
       });
       const payload = await response.json().catch(() => ({}));
-      // A chat limit (services/chatLimit.ts) explains itself; show its message.
-      if ((payload.error === 'chat_limit' || payload.error === 'chat_requires_browser') && typeof payload.message === 'string') {
+      // A chat refusal (services/chatLimit.ts) explains itself; show its message.
+      if (CHAT_REFUSALS.includes(payload.error) && typeof payload.message === 'string') {
         setMessages(previous => [...previous, { id: Date.now() + 1, role: 'assistant', text: payload.message }]);
         return;
       }
@@ -302,10 +309,17 @@ export function ChatWidget({ placement = 'floating', open: openProp, onOpenChang
             <div ref={endRef} />
           </div>
 
-          <form onSubmit={send} className="p-3 border-t border-white/10 bg-black/20 flex gap-2">
-            <input value={input} onChange={event => setInput(event.target.value)} placeholder="Scrie o întrebare…" className="min-w-0 flex-1 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs text-white placeholder:text-white/40 outline-none focus:border-white/40" />
-            <button type="submit" disabled={!input.trim() || loading} className="w-9 h-9 rounded-xl grid place-items-center disabled:opacity-40" style={{ background: currentTheme.accent, color: '#031411' }} aria-label="Trimite întrebarea"><Send className="w-4 h-4" /></button>
-          </form>
+          {signedIn === false ? (
+            <div className="p-3 border-t border-white/10 bg-black/20 flex items-center gap-2">
+              <p className="flex-1 text-xs text-white/70">Asistentul este disponibil doar utilizatorilor autentificați.</p>
+              <button type="button" onClick={onSignIn} className="rounded-xl px-3 py-2 text-xs font-semibold" style={{ background: currentTheme.accent, color: '#031411' }}>Autentificare</button>
+            </div>
+          ) : (
+            <form onSubmit={send} className="p-3 border-t border-white/10 bg-black/20 flex gap-2">
+              <input value={input} onChange={event => setInput(event.target.value)} placeholder="Scrie o întrebare…" className="min-w-0 flex-1 rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-xs text-white placeholder:text-white/40 outline-none focus:border-white/40" />
+              <button type="submit" disabled={!input.trim() || loading} className="w-9 h-9 rounded-xl grid place-items-center disabled:opacity-40" style={{ background: currentTheme.accent, color: '#031411' }} aria-label="Trimite întrebarea"><Send className="w-4 h-4" /></button>
+            </form>
+          )}
         </section>
       )}
 

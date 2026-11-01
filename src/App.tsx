@@ -806,6 +806,8 @@ export default function App() {
         onOpenChange={setChatOpen}
         onDock={() => setChatPlacement('docked')}
         onDragActiveChange={(active, overTarget) => setChatDrag({ active, overNav: overTarget })}
+        signedIn={reallySignedIn}
+        onSignIn={() => setIsAuthModalOpen(true)}
       />
     </div>
   );
