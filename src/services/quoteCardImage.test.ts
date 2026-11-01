@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { fragmentCardImagePath } from './fragmentGateway';
-import { QUOTE_CARD_HEIGHT, QUOTE_CARD_WIDTH, cachedQuoteCard, fittedQuote, quoteCardLayout, quoteCardText, renderQuoteCard, type Node } from './quoteCardImage';
+import { QUOTE_CARD_HEIGHT, QUOTE_CARD_MAX_CHARS, QUOTE_CARD_WIDTH, cachedQuoteCard, fittedQuote, quoteCardLayout, quoteCardText, quoteShareTitle, renderQuoteCard, type Node } from './quoteCardImage';
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const size = (png: Buffer) => [png.readUInt32BE(16), png.readUInt32BE(20)];
@@ -14,11 +14,25 @@ test('a quote card is a 1200x630 PNG, whatever the script', async () => {
   }
 });
 
-test('a short quote is set large; a long one smaller, cut at a word with an ellipsis', () => {
-  assert.deepEqual(fittedQuote('  Vin   ploile.\n'), { text: 'Vin ploile.', fontSize: 50 });
+test('the quote stays readable as a ~200px thumbnail: large type, opening words only', () => {
+  // LinkedIn shows a shared link's image about 190px wide - a sixth of the
+  // card - so even the smallest quote type is 62px (about 10px there)
+  assert.deepEqual(fittedQuote('  Vin   ploile.\n'), { text: 'Vin ploile.', fontSize: 84 });
+  for (const length of [10, 80, 120, 300, 5000]) {
+    const fitted = fittedQuote('cuvânt '.repeat(Math.ceil(length / 7)).slice(0, length));
+    assert.ok(fitted.fontSize >= 62, `${length} chars: ${fitted.fontSize}px`);
+    assert.ok(fitted.text.length <= QUOTE_CARD_MAX_CHARS + 1, `${length} chars: ${fitted.text.length} drawn`);
+  }
   const long = fittedQuote('cuvânt '.repeat(200));
-  assert.equal(long.fontSize, 30);
-  assert.ok(long.text.length <= 401 && long.text.endsWith('cuvânt…'), long.text);
+  assert.ok(long.text.endsWith('cuvânt…'), long.text);
+});
+
+test("a shared quote's title opens with its words, then author and work", () => {
+  const byron = { text: 'And thus the heart will break, yet brokenly live on: even as a broken mirror, which the glass in every fragment multiplies', authorName: 'George Byron', workTitle: 'Poetry. Vol. VI.' };
+  assert.equal(quoteShareTitle(byron), '«And thus the heart will break, yet brokenly live on: even as a broken…» — George Byron, Poetry. Vol. VI.');
+  assert.equal(quoteShareTitle({ ...byron, text: 'Vin ploile.' }), '«Vin ploile.» — George Byron, Poetry. Vol. VI.');
+  assert.equal(quoteShareTitle({ html: 'Maniak<span class="note"> [nota]</span> şi alţi', text: 'unused', authorName: 'Ana Comnena', workTitle: 'Alexiada' }),
+    '«Maniak şi alţi» — Ana Comnena, Alexiada', 'no footnotes in the title either');
 });
 
 test('letters spelled with a combining mark are composed, so the fonts can draw them', () => {

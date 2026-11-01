@@ -7,7 +7,7 @@ import { anonymousPreviewAllowed, readDiv, negotiatePage, boundedFetch, rewriteT
 import { escapeHtml, type PageSeo } from '../seo';
 import { PARAGRAPHS, parseParagraphRange } from './paragraphLinks';
 import { load } from 'cheerio';
-import { cachedQuoteCard, quoteCardText } from './quoteCardImage';
+import { cachedQuoteCard, quoteCardText, quoteShareTitle } from './quoteCardImage';
 
 export function legacyParagraphFragment(html: string, token: string, sourcePath: string): FragmentLocation {
   const range = parseParagraphRange(token);
@@ -28,15 +28,15 @@ export function fragmentCardImagePath(fragment: { sourcePath: string; selector: 
 
 /** og:image fields for a fragment: its quote card. */
 export function fragmentCardImage(fragment: ResolvedFragment, origin: string): Pick<PageSeo, 'image' | 'imageType' | 'imageAlt'> {
-  const text = fragment.text.trim().replace(/\s+/g, ' ');
+  const text = quoteCardText(fragment.html, fragment.text).normalize('NFC');
   return { image: origin + fragmentCardImagePath(fragment), imageType: 'image/png',
     imageAlt: `«${text.length > 300 ? text.slice(0, 299) + '…' : text}» — ${fragment.authorName}, ${fragment.workTitle}` };
 }
 
 export function fragmentSeo(seo: PageSeo, data: ResolvedFragment, origin: string): PageSeo {
   const canonicalUrl = origin + data.canonicalPath;
-  return { ...seo, language: data.language || 'und', title: `${data.workTitle} — ${data.authorName}`,
-    description: data.text.trim().replace(/\s+/g, ' ').slice(0, 200), canonicalUrl, sharedUrl: canonicalUrl,
+  return { ...seo, language: data.language || 'und', title: quoteShareTitle(data),
+    description: quoteCardText(data.html, data.text).normalize('NFC').slice(0, 200), canonicalUrl, sharedUrl: canonicalUrl,
     ...fragmentCardImage(data, origin), jsonLd: null,
     noscriptHtml: `<article style="max-width:48rem;margin:2rem auto;padding:2rem;background:#fffdf8;color:#262019;font:1.2rem Georgia,serif"><blockquote>${data.html}</blockquote><p>${escapeHtml(data.authorName)} — ${escapeHtml(data.workTitle)}</p><a href="${escapeHtml(data.contextPath + '&view=text')}">Read in full chapter context</a></article>` };
 }
@@ -163,7 +163,7 @@ export function registerFragmentGateway(app: Express, opts: { serverUrl: string;
         });
         contents = $('body').html() || '';
       }
-      const title = `${data.workTitle} — ${data.authorName}`;
+      const title = quoteShareTitle(data);
       res.type('html').send(`<!doctype html><html lang="${escapeHtml(data.language || 'und')}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(title)}</title><link rel="canonical" href="${escapeHtml(publicUrl)}"><meta property="og:url" content="${escapeHtml(publicUrl)}"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(data.text.trim().slice(0, 200))}"><meta property="og:image" content="${escapeHtml(fragmentCardImage(data, opts.originFor(req)).image)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><style>body{background:#eef1f2;color:#262019;font:1.15rem Georgia,serif;margin:0;padding:2rem 1rem}.quote-card{max-width:48rem;margin:auto;background:#fffdf8;padding:2rem;border:1px solid #e2dccd;border-radius:1rem;box-shadow:0 8px 30px #0001}blockquote{margin:0;border-left:3px solid #d99c24;padding-left:1.5rem;line-height:1.6}.lg{margin:1em 0}.l{margin:0}table{border-collapse:collapse}td{border:1px solid #ccb;padding:.4em}footer{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #ddd}a{color:#075979}mark{background:#f8d981}nav{display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem}</style></head><body><main class="quote-card"><blockquote class="quote-text">${contents}</blockquote><footer>${escapeHtml(data.authorName)} — ${escapeHtml(data.workTitle)} · ${escapeHtml(data.chapterTitle)}<nav><a href="${escapeHtml(data.contextPath)}">Read in full chapter context</a><a href="${escapeHtml(data.canonicalPath)}">Fragment card</a></nav></footer></main></body></html>`);
     } catch (error) { res.status(status(error)).set('X-Robots-Tag', 'noindex').type('text/plain').send((error as Error).message); }
   });

@@ -9,6 +9,7 @@ import { load } from 'cheerio';
 import { anonymousPreviewAllowed, boundedFetch, negotiatePage, readDiv, rewriteTwinLink } from './textTwin';
 import { escapeHtml } from '../seo';
 import { fragmentCardImage } from './fragmentGateway';
+import { quoteShareTitle } from './quoteCardImage';
 import type { ResolvedFragment } from './fragmentApi';
 
 export interface ServerQuote {
@@ -55,7 +56,7 @@ async function resolve(base: string, raw: string, params: URLSearchParams, origi
   const data: ServerQuote = { workId, chapterId: source.path, workTitle: work.head || workId, chapterTitle: chapter.head || source.path, authorName: work.author?.displayName || 'Anonymous', language: chapter.language || work.language, text: paragraphs.join('\n\n'), paragraphs, canonicalUrl: origin + fragment.canonicalPath };
   $('head title, head meta[property^="og:"], head meta[name^="twitter:"], head link[rel="canonical"]').remove();
   const image = fragmentCardImage(fragment as ResolvedFragment, origin).image;
-  const title = `${data.workTitle} — ${data.authorName}`;
+  const title = quoteShareTitle({ html: fragment.html, text: data.text, authorName: data.authorName, workTitle: data.workTitle });
   $('head').append(`<title>${escapeHtml(title)}</title><link rel="canonical" href="${escapeHtml(data.canonicalUrl)}"><meta property="og:url" content="${escapeHtml(data.canonicalUrl)}"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(data.text.slice(0, 200))}"><meta property="og:image" content="${escapeHtml(image)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(data.text.slice(0, 200))}"><meta name="twitter:image" content="${escapeHtml(image)}">`);
   return { data, html: $.html(), fragment: fragment as ResolvedFragment };
 }
@@ -120,7 +121,7 @@ export async function enrichQuoteSeo(seo: PageSeo, quoteId: string | undefined, 
   try {
     const [path, query] = quoteId.slice(7).split('?');
     const { data, fragment } = await resolve(base, path, new URLSearchParams(query), origin);
-    return { ...seo, title: `${data.workTitle} — ${data.authorName}`, description: data.text.slice(0, 200),
+    return { ...seo, title: quoteShareTitle({ html: fragment.html, text: data.text, authorName: data.authorName, workTitle: data.workTitle }), description: data.text.slice(0, 200),
       ...fragmentCardImage(fragment, origin),
       canonicalUrl: data.canonicalUrl, sharedUrl: data.canonicalUrl, robots: 'index, follow', language: data.language || 'und' };
   } catch { return { ...seo, robots: 'noindex, follow' }; }

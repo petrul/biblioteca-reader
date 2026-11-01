@@ -81,14 +81,37 @@ export function quoteCardText(html: string | null | undefined, text: string): st
   return words || text;
 }
 
-/** The quotation as it fits the card: whole words, an ellipsis when cut. */
+/**
+ * The quotation as it fits the card - in type big enough to read when the
+ * card is shown as a thumbnail (LinkedIn shows shared links about 190px wide,
+ * a sixth of the card): short quotes whole, longer ones cut at a word after
+ * at most QUOTE_CARD_MAX_CHARS characters, with an ellipsis.
+ */
 export function fittedQuote(text: string): { text: string; fontSize: number } {
   const plain = drawable(text).replace(/\s+/g, ' ').trim();
-  const sizes: Array<[number, number]> = [[110, 50], [190, 42], [300, 35], [420, 30]];
+  const sizes: Array<[number, number]> = [[60, 84], [100, 72], [QUOTE_CARD_MAX_CHARS, 62]];
   for (const [chars, fontSize] of sizes) if (plain.length <= chars) return { text: plain, fontSize };
-  const cut = plain.slice(0, 400);
+  const cut = plain.slice(0, QUOTE_CARD_MAX_CHARS);
   const lastSpace = cut.lastIndexOf(' ');
-  return { text: `${(lastSpace > 300 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.—-]+$/u, '')}…`, fontSize: 30 };
+  return { text: `${(lastSpace > QUOTE_CARD_MAX_CHARS * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.—-]+$/u, '')}…`, fontSize: 62 };
+}
+
+export const QUOTE_CARD_MAX_CHARS = 130;
+
+/**
+ * A shared quote's title (og:title, <title>): its opening words, then who and
+ * where - «And thus the heart will break…» — George Byron, Poetry. Vol. VI.
+ * Where a site shows the card as a thumbnail, the title says what is quoted.
+ */
+export function quoteShareTitle(quote: { html?: string | null; text: string; authorName: string; workTitle: string }, maxChars = 70): string {
+  const words = drawable(quoteCardText(quote.html, quote.text)).replace(/\s+/g, ' ').trim();
+  let opening = words;
+  if (words.length > maxChars) {
+    const cut = words.slice(0, maxChars);
+    const lastSpace = cut.lastIndexOf(' ');
+    opening = `${(lastSpace > maxChars * 0.5 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.—-]+$/u, '')}…`;
+  }
+  return `«${opening}» — ${drawable(quote.authorName)}, ${drawable(quote.workTitle)}`;
 }
 
 const clip = (value: string, max: number) => {
@@ -103,38 +126,38 @@ const h = (type: string, style: Record<string, unknown>, ...children: unknown[])
 /** The card's layout tree, for satori. */
 export function quoteCardLayout(content: QuoteCardContent): Node {
   const quote = fittedQuote(content.text);
+  const byline = [clip(content.authorName, 50), clip(content.workTitle, 60)].filter(Boolean);
   return h('div', {
-    width: '100%', height: '100%', display: 'flex', padding: 36,
+    width: '100%', height: '100%', display: 'flex', padding: 20,
     background: 'linear-gradient(90deg, #024063 0%, #3ca83f 22%, #044a6f 100%)',
   },
   h('div', {
-    position: 'relative', width: QUOTE_CARD_WIDTH - 72, height: QUOTE_CARD_HEIGHT - 72,
+    position: 'relative', width: QUOTE_CARD_WIDTH - 40, height: QUOTE_CARD_HEIGHT - 40,
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
-    background: '#061d28', border: '2px solid rgba(255,255,255,0.2)', borderRadius: 36, color: '#ffffff',
+    background: '#061d28', border: '2px solid rgba(255,255,255,0.2)', borderRadius: 32, color: '#ffffff',
   },
-  h('div', { position: 'absolute', top: -40, right: 40, fontFamily: SERIF, fontSize: 360, lineHeight: 1, color: 'rgba(252,211,77,0.07)' }, '”'),
+  h('div', { position: 'absolute', top: -60, right: 30, fontFamily: SERIF, fontSize: 420, lineHeight: 1, color: 'rgba(252,211,77,0.08)' }, '”'),
   h('div', {
-    display: 'flex', alignItems: 'center',
-    padding: '22px 48px', borderBottom: '1px solid rgba(255,255,255,0.15)',
+    display: 'flex', alignItems: 'center', flexShrink: 0,
+    padding: '18px 48px', borderBottom: '1px solid rgba(255,255,255,0.15)',
   },
-  h('div', { display: 'flex', fontFamily: DISPLAY, fontWeight: 600, fontSize: 24, color: '#fcd34d', letterSpacing: 3 }, 'BIBLIOTECA'),
+  h('div', { display: 'flex', fontFamily: DISPLAY, fontWeight: 600, fontSize: 30, color: '#fcd34d', letterSpacing: 3 }, 'BIBLIOTECA'),
   // the diamond is drawn, not a glyph: no font of the card need have one
-  h('div', { display: 'flex', width: 9, height: 9, margin: '0 18px', background: '#f59e0b', transform: 'rotate(45deg)' }),
-  h('div', { display: 'flex', fontFamily: SANS, fontSize: 21, color: 'rgba(255,255,255,0.7)' }, clip(content.site || DEFAULT_SITE, 60))),
-  h('div', { flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', overflow: 'hidden', padding: '20px 56px 12px' },
+  h('div', { display: 'flex', width: 11, height: 11, margin: '0 20px', background: '#f59e0b', transform: 'rotate(45deg)' }),
+  h('div', { display: 'flex', fontFamily: SANS, fontSize: 26, color: 'rgba(255,255,255,0.75)' }, clip(content.site || DEFAULT_SITE, 50))),
+  h('div', { flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', overflow: 'hidden', padding: '16px 48px' },
     h('div', {
-      display: 'flex', width: '100%', borderLeft: '6px solid #f59e0b', paddingLeft: 30,
-      fontFamily: SERIF, fontSize: quote.fontSize, lineHeight: 1.35, color: '#ffffff',
+      display: 'flex', width: '100%', borderLeft: '8px solid #f59e0b', paddingLeft: 32,
+      fontFamily: SERIF, fontSize: quote.fontSize, lineHeight: 1.22, color: '#ffffff',
     }, `«${quote.text}»`)),
+  // author and work on one line, as large as the room allows; the chapter
+  // would be unreadable in a thumbnail, and the link leads to it
   h('div', {
-    display: 'flex', flexDirection: 'column', flexShrink: 0, gap: 4, margin: '0 56px', padding: '16px 0 26px',
-    borderTop: '1px solid rgba(255,255,255,0.15)',
+    display: 'flex', alignItems: 'baseline', flexShrink: 0, margin: '0 48px', padding: '16px 0 24px',
+    borderTop: '1px solid rgba(255,255,255,0.15)', overflow: 'hidden',
   },
-  h('div', { display: 'flex', fontFamily: DISPLAY, fontWeight: 600, fontSize: 30 }, clip(content.authorName, 60)),
-  h('div', { display: 'flex', fontFamily: SERIF, fontStyle: 'italic', fontSize: 28, color: '#fcd34d' }, clip(content.workTitle, 80)),
-  ...(content.chapterTitle && content.chapterTitle !== content.workTitle
-    ? [h('div', { display: 'flex', fontFamily: SANS, fontSize: 20, color: 'rgba(255,255,255,0.6)' }, clip(content.chapterTitle, 100))]
-    : []))));
+  h('div', { display: 'flex', flexShrink: 0, fontFamily: DISPLAY, fontWeight: 600, fontSize: 38 }, byline[0]),
+  h('div', { display: 'flex', fontFamily: SERIF, fontStyle: 'italic', fontSize: 36, color: '#fcd34d', marginLeft: 24 }, byline[1] ?? ''))));
 }
 
 /** The quote card as a PNG. */
