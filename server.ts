@@ -35,8 +35,8 @@ import { createVisitorCookies } from './src/services/visitorCookie';
 import { chatRateLimit } from './src/services/chatLimit';
 import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderIndexHtml } from './src/seo';
 import { renderServerErrorPage } from './src/httpErrorPage';
-import { prefixProcessOutput, propagateInitiator, runAs } from './src/services/initiator';
-import { createSessionInitiators } from './src/services/readerInitiator';
+import { GUEST_COOKIE, isGuestName, prefixProcessOutput, propagateInitiator, runAs } from './src/services/initiator';
+import { createSessionInitiators, guestNameOf } from './src/services/readerInitiator';
 
 // Every line this process writes starts with its initiator - see initiator.ts.
 prefixProcessOutput();
@@ -62,9 +62,9 @@ app.use(express.json());
 // Automated-access limit - limits in src/services/resourceLimits.ts.
 // One set of visitor cookies for every limit that tells browsers from bots.
 const visitors = createVisitorCookies();
-// Each request runs - and logs - as its reader: the signed-in user, or a guest.
-app.use((req: Request, _res: Response, next: NextFunction) => runAs(sessionInitiators.labelFor(
-  req.headers.cookie, visitors.identify(req) ?? `${req.ip}|${req.get('user-agent') ?? ''}`), next));
+// Each request runs - and logs - as its reader: the signed-in user, the
+// browser's guest name, or anonymous.
+app.use((req: Request, _res: Response, next: NextFunction) => runAs(sessionInitiators.labelFor(req.headers.cookie), next));
 app.use(crawlerPageRateLimit({ ...resourceLimitOverridesFromEnv(), visitors }));
 
 // Client log relay: the reader is an SPA, so its logging (page
@@ -394,6 +394,27 @@ function unlessReadOnly(handler: RouteHandler): RouteHandler {
 // this proxy is registered first and therefore owns the public routes.
 registerReaderThumbnails(app, { coversUrl: COVERS_API_URL, apiDocument: openApiPublicDoc });
 new BibliotecaServerProxy(BIBLIOTECA_SERVER_URL, READ_ONLY ? rejectReadOnly : null).register(app);
+
+// Guest names (see initiator.ts and src/services/guestName.ts): the browser
+// asks once, while it has no bib_guest cookie; biblioteca-server picks the
+// name and the cookie keeps it for a year.
+app.post('/api/guests', asyncRoute(async (req: Request, res: Response) => {
+  const kept = guestNameOf(req.headers.cookie);
+  if (kept) {
+    res.json({ name: kept });
+    return;
+  }
+  const upstream = await fetch(`${BIBLIOTECA_SERVER_URL}/api/guests`, {
+    method: 'POST', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(5000),
+  });
+  const { name } = (upstream.ok ? await upstream.json() : {}) as { name?: string };
+  if (!name || !isGuestName(name)) {
+    res.status(502).json({ error: `biblioteca-server gave no guest name (status ${upstream.status})` });
+    return;
+  }
+  res.cookie(GUEST_COOKIE, name, { sameSite: 'lax', secure: req.secure, path: '/', maxAge: 365 * 24 * 3600 * 1000 });
+  res.json({ name });
+}));
 const COVER_LAYOUTS = ['archival_monograph', 'folio_heritage', 'criterion_minimal', 'faber_poetry'] as const;
 const COVER_PALETTES = [
   'archival_alabaster', 'oxford_blue', 'imperial_crimson', 'forest_emerald',

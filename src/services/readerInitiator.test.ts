@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { guestLabel, INITIATOR_HEADER } from './initiator';
-import { createSessionInitiators } from './readerInitiator';
+import { INITIATOR_HEADER } from './initiator';
+import { createSessionInitiators, guestNameOf } from './readerInitiator';
 
 const answer = (label: string, setCookie?: string) => {
   const headers = new Headers({ [INITIATOR_HEADER]: label });
@@ -9,37 +9,49 @@ const answer = (label: string, setCookie?: string) => {
   return new Response(null, { headers });
 };
 
-test('an unknown session is the guest of its seed', () => {
+test('an unknown session is its browser\'s guest - else anonymous', () => {
   const sessions = createSessionInitiators();
-  assert.equal(sessions.labelFor('JSESSIONID=abc; bib_v=x', 'visitor-1'), guestLabel('visitor-1'));
-  assert.equal(sessions.labelFor(undefined, 'visitor-1'), guestLabel('visitor-1'));
+  assert.equal(sessions.labelFor('JSESSIONID=abc; bib_guest=guest_formidable_dictator'), 'guest_formidable_dictator');
+  assert.equal(sessions.labelFor('JSESSIONID=abc'), 'anonymous');
+  assert.equal(sessions.labelFor('bib_guest=petru@scriptorium.ro'), 'anonymous', 'a cookie cannot claim an account');
+  assert.equal(sessions.labelFor(undefined), 'anonymous');
 });
 
 test('a session is its user once biblioteca-server has said so', () => {
   const sessions = createSessionInitiators();
-  sessions.learn('JSESSIONID=abc; bib_v=x', answer('petru@scriptorium.ro'));
-  assert.equal(sessions.labelFor('bib_v=x; JSESSIONID=abc', 'visitor-1'), 'petru@scriptorium.ro');
+  sessions.learn('JSESSIONID=abc; bib_guest=guest_formidable_dictator', answer('petru@scriptorium.ro'));
+  assert.equal(sessions.labelFor('bib_guest=guest_formidable_dictator; JSESSIONID=abc'), 'petru@scriptorium.ro');
 });
 
 test('a sign-in labels the session it starts, not the guest one it replaces', () => {
   const sessions = createSessionInitiators();
   sessions.learn('JSESSIONID=guest-session', answer('petru@scriptorium.ro', 'JSESSIONID=new-session; Path=/; HttpOnly'));
-  assert.equal(sessions.labelFor('JSESSIONID=new-session', 'visitor-1'), 'petru@scriptorium.ro');
-  assert.equal(sessions.labelFor('JSESSIONID=guest-session', 'visitor-1'), guestLabel('visitor-1'));
+  assert.equal(sessions.labelFor('JSESSIONID=new-session'), 'petru@scriptorium.ro');
+  assert.equal(sessions.labelFor('JSESSIONID=guest-session; bib_guest=guest_formidable_dictator'), 'guest_formidable_dictator');
 });
 
-test('a signed-out session is a guest again; a forged answer changes nothing', () => {
+test('a signed-out session is its guest again; a forged answer changes nothing', () => {
   const sessions = createSessionInitiators();
-  sessions.learn('JSESSIONID=abc', answer('petru@scriptorium.ro'));
-  sessions.learn('JSESSIONID=abc', answer('petru) (admin'));
-  assert.equal(sessions.labelFor('JSESSIONID=abc', 'visitor-1'), 'petru@scriptorium.ro');
-  sessions.learn('JSESSIONID=abc', answer('guest-amber-otter-3f2a'));
-  assert.equal(sessions.labelFor('JSESSIONID=abc', 'visitor-1'), guestLabel('visitor-1'));
+  const cookies = 'JSESSIONID=abc; bib_guest=guest_formidable_dictator';
+  sessions.learn(cookies, answer('petru@scriptorium.ro'));
+  sessions.learn(cookies, answer('petru) (admin'));
+  assert.equal(sessions.labelFor(cookies), 'petru@scriptorium.ro');
+  sessions.learn(cookies, answer('guest_formidable_dictator'));
+  assert.equal(sessions.labelFor(cookies), 'guest_formidable_dictator');
+  sessions.learn(cookies, answer('petru@scriptorium.ro'));
+  sessions.learn(cookies, answer('anonymous'));
+  assert.equal(sessions.labelFor(cookies), 'guest_formidable_dictator');
 });
 
 test('the oldest sessions are forgotten past the limit', () => {
   const sessions = createSessionInitiators(2);
   for (const id of ['a', 'b', 'c']) sessions.learn(`JSESSIONID=${id}`, answer(`${id}@scriptorium.ro`));
-  assert.equal(sessions.labelFor('JSESSIONID=a', 'visitor-1'), guestLabel('visitor-1'));
-  assert.equal(sessions.labelFor('JSESSIONID=c', 'visitor-1'), 'c@scriptorium.ro');
+  assert.equal(sessions.labelFor('JSESSIONID=a'), 'anonymous');
+  assert.equal(sessions.labelFor('JSESSIONID=c'), 'c@scriptorium.ro');
+});
+
+test('only a guest-shaped bib_guest cookie is a guest name', () => {
+  assert.equal(guestNameOf('a=1; bib_guest=guest_formidable_dictator'), 'guest_formidable_dictator');
+  assert.equal(guestNameOf('bib_guest=formidable_dictator'), undefined);
+  assert.equal(guestNameOf(undefined), undefined);
 });

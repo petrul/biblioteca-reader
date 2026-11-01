@@ -2,26 +2,32 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Writable } from 'node:stream';
 import {
-  currentInitiator, guestLabel, INITIATOR_HEADER, prefixLines, propagateInitiator, receivedLabel, requestInitiator, runAs,
+  currentInitiator, INITIATOR_HEADER, isGuestName, isUserLabel, prefixLines, propagateInitiator, receivedLabel,
+  requestInitiator, runAs,
 } from './initiator';
 
-test('a guest label is human-readable and stable for its seed', () => {
-  const label = guestLabel('visitor-1');
-  assert.match(label, /^guest-[a-z]+-[a-z]+-[0-9a-f]{4}$/);
-  assert.equal(guestLabel('visitor-1'), label);
-  assert.notEqual(guestLabel('visitor-2'), label);
-  // biblioteca-server's Initiator.java derives the same label from the same seed
-  assert.equal(guestLabel('visitor-1'), 'guest-witty-owl-38c6');
+test('a guest name is guest_ and two lowercase words - biblioteca-server picks them', () => {
+  assert.equal(isGuestName('guest_formidable_dictator'), true);
+  for (const other of ['formidable_dictator', 'guest_Formidable_dictator', 'guest_a_b_c', 'petru@scriptorium.ro', '', undefined]) {
+    assert.equal(isGuestName(other), false, String(other));
+  }
 });
 
-test('only a guest label or a user name passes as a received label', () => {
+test('only label-shaped values pass as a received label', () => {
   assert.equal(receivedLabel('petru@scriptorium.ro'), 'petru@scriptorium.ro');
-  assert.equal(receivedLabel('guest-amber-otter-3f2a'), 'guest-amber-otter-3f2a');
-  assert.equal(receivedLabel(['guest-amber-otter-3f2a']), 'guest-amber-otter-3f2a');
+  assert.equal(receivedLabel('guest_formidable_dictator'), 'guest_formidable_dictator');
+  assert.equal(receivedLabel(['guest_formidable_dictator']), 'guest_formidable_dictator');
   assert.equal(receivedLabel('petru'), 'petru', 'the seeded admin has a plain name');
-  for (const forged of ['system', 'petru@scriptorium.ro) (admin', 'a\nFAKE LINE', '', undefined, null]) {
+  assert.equal(receivedLabel('system'), 'system');
+  assert.equal(receivedLabel('anonymous'), 'anonymous');
+  for (const forged of ['petru@scriptorium.ro) (admin', 'a\nFAKE LINE', '', undefined, null]) {
     assert.equal(receivedLabel(forged), undefined, String(forged));
   }
+});
+
+test('a user label is none of guest, anonymous or system', () => {
+  assert.equal(isUserLabel('petru@scriptorium.ro'), true);
+  for (const other of ['guest_formidable_dictator', 'anonymous', 'system']) assert.equal(isUserLabel(other), false, other);
 });
 
 test('work outside a request is the system\'s; inside, its initiator\'s - across awaits', async () => {
@@ -70,7 +76,7 @@ test('calls to Biblioteca services carry the initiator - system outside a reques
   try {
     propagateInitiator(['http://server.test:8080'], (_request, response) => answered.push(response.headers.get(INITIATOR_HEADER)!));
     await fetch('http://server.test:8080/api/info');
-    await runAs('guest-amber-otter-3f2a', async () => {
+    await runAs('guest_amber_otter', async () => {
       await fetch('http://server.test:8080/api/works', { headers: { Accept: 'application/json' } });
       await fetch('https://accounts.example.com/token');
     });
@@ -79,15 +85,16 @@ test('calls to Biblioteca services carry the initiator - system outside a reques
   }
   assert.deepEqual(seen, [
     ['http://server.test:8080/api/info', 'system'],
-    ['http://server.test:8080/api/works', 'guest-amber-otter-3f2a'],
+    ['http://server.test:8080/api/works', 'guest_amber_otter'],
     ['https://accounts.example.com/token', null],
   ]);
   assert.deepEqual(answered, ['petru@scriptorium.ro', 'petru@scriptorium.ro'], 'both service answers, none from the other host');
 });
 
-test('an internal service runs a request as its caller says - its own background work as system', () => {
-  assert.equal(requestInitiator('petru@scriptorium.ro', 'seed'), 'petru@scriptorium.ro');
-  assert.equal(requestInitiator('system', 'seed'), 'system');
-  assert.equal(requestInitiator(undefined, '10.0.0.1|curl'), guestLabel('10.0.0.1|curl'));
-  assert.equal(requestInitiator('a\nFAKE LINE', '10.0.0.1|curl'), guestLabel('10.0.0.1|curl'));
+test('an internal service runs a request as its caller says - else anonymous', () => {
+  assert.equal(requestInitiator('petru@scriptorium.ro'), 'petru@scriptorium.ro');
+  assert.equal(requestInitiator('guest_formidable_dictator'), 'guest_formidable_dictator');
+  assert.equal(requestInitiator('system'), 'system');
+  assert.equal(requestInitiator(undefined), 'anonymous');
+  assert.equal(requestInitiator('a\nFAKE LINE'), 'anonymous');
 });

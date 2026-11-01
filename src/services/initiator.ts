@@ -1,65 +1,53 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { createHash } from 'node:crypto';
 
 // Who a log line is for. Every line a Biblioteca service writes starts with
-// its initiator: "(petru@scriptorium.ro) ...", "(guest-amber-otter-3f2a) ..."
-// for a reader who is not signed in, or "(system) ..." for work no request
-// started (startup, Kafka consumers, schedulers). The label travels between
-// services in the X-Biblioteca-Initiator header.
+// its initiator: "(petru@scriptorium.ro) ...", "(guest_formidable_dictator)
+// ..." for a reader who is not signed in but has a guest name (biblioteca-
+// server hands them out at POST /api/guests; the reader's browser keeps its
+// own in the bib_guest cookie), "(anonymous) ..." for a request without one,
+// or "(system) ..." for work no request started (startup, Kafka consumers,
+// schedulers). The label travels between services in the
+// X-Biblioteca-Initiator header.
 //
 // Kept identical in biblioteca-reader (src/services/initiator.ts),
 // biblioteca-nestjs (src/initiator.ts) and biblioteca-covers
-// (src/server/initiator.ts); biblioteca-server derives guest labels the same
-// way in its Initiator.java.
+// (src/server/initiator.ts); biblioteca-server's Initiator.java holds the
+// same rules.
 
 export const INITIATOR_HEADER = 'x-biblioteca-initiator';
+export const GUEST_COOKIE = 'bib_guest';
 export const SYSTEM_INITIATOR = 'system';
+export const ANONYMOUS_INITIATOR = 'anonymous';
 
-const ADJECTIVES = [
-  'amber', 'azure', 'bold', 'brave', 'bright', 'calm', 'clever', 'coral',
-  'crimson', 'dusky', 'eager', 'gentle', 'golden', 'hidden', 'ivory', 'jolly',
-  'keen', 'lively', 'lucky', 'merry', 'misty', 'noble', 'olive', 'quiet',
-  'rapid', 'rosy', 'silver', 'steady', 'sunny', 'swift', 'velvet', 'witty',
-];
-const NOUNS = [
-  'amphora', 'badger', 'basilica', 'beacon', 'comet', 'discus', 'falcon', 'fox',
-  'heron', 'lantern', 'lark', 'lynx', 'meadow', 'otter', 'owl', 'panther',
-  'pebble', 'quill', 'raven', 'river', 'robin', 'scroll', 'sparrow', 'stag',
-  'stylus', 'swan', 'temple', 'thistle', 'tiger', 'vellum', 'willow', 'wren',
-];
-
-/** A stable, human-readable label for a reader who is not signed in. */
-export function guestLabel(seed: string): string {
-  const hash = createHash('sha256').update(seed).digest();
-  return `guest-${ADJECTIVES[hash[0] % ADJECTIVES.length]}-${NOUNS[hash[1] % NOUNS.length]}-${hash.subarray(2, 4).toString('hex')}`;
-}
-
-const GUEST_RE = /^guest-[a-z]+-[a-z]+-[0-9a-f]{4}$/;
+const GUEST_RE = /^guest_[a-z]{1,40}_[a-z]{1,40}$/;
 // a user name: an email, or a plain name like the seeded admin's
 const USER_RE = /^[A-Za-z0-9._%+@-]{1,254}$/;
 
-export function isGuestLabel(value: string): boolean {
-  return GUEST_RE.test(value);
+export function isGuestName(value: string | null | undefined): boolean {
+  return GUEST_RE.test(value ?? '');
+}
+
+/** A signed-in user's label - not a guest, anonymous or system. */
+export function isUserLabel(value: string): boolean {
+  return !isGuestName(value) && value !== ANONYMOUS_INITIATOR && value !== SYSTEM_INITIATOR && USER_RE.test(value);
 }
 
 /**
  * A label received from another service, or undefined when it is not one.
- * Only these two shapes pass, so a header can never inject text into a log.
+ * Only these shapes pass, so a header can never inject text into a log.
  */
 export function receivedLabel(value: string | string[] | undefined | null): string | undefined {
   const label = Array.isArray(value) ? value[0] : value;
   if (!label) return undefined;
-  return label !== SYSTEM_INITIATOR && USER_RE.test(label) ? label : undefined;
+  return label === SYSTEM_INITIATOR || label === ANONYMOUS_INITIATOR || USER_RE.test(label) ? label : undefined;
 }
 
 /**
  * The initiator of a request to an internal service: the label its caller
- * sent - "system" for the caller's own background work - or the guest of
- * guestSeed when it sent none.
+ * sent - "system" for the caller's own background work - else "anonymous".
  */
-export function requestInitiator(header: string | string[] | undefined, guestSeed: string): string {
-  const sent = Array.isArray(header) ? header[0] : header;
-  return sent === SYSTEM_INITIATOR ? SYSTEM_INITIATOR : receivedLabel(sent) ?? guestLabel(guestSeed);
+export function requestInitiator(header: string | string[] | undefined): string {
+  return receivedLabel(header) ?? ANONYMOUS_INITIATOR;
 }
 
 const storage = new AsyncLocalStorage<string>();
