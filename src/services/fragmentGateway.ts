@@ -7,7 +7,7 @@ import { anonymousPreviewAllowed, readDiv, negotiatePage, boundedFetch, rewriteT
 import { escapeHtml, type PageSeo } from '../seo';
 import { PARAGRAPHS, parseParagraphRange } from './paragraphLinks';
 import { load } from 'cheerio';
-import { cachedQuoteCard } from './quoteCardImage';
+import { cachedQuoteCard, quoteCardText } from './quoteCardImage';
 
 export function legacyParagraphFragment(html: string, token: string, sourcePath: string): FragmentLocation {
   const range = parseParagraphRange(token);
@@ -79,7 +79,7 @@ export function registerFragmentGateway(app: Express, opts: { serverUrl: string;
       const site = opts.originFor(req);
       const png = await cachedQuoteCard(JSON.stringify({ ...location, site }), async () => {
         const data = await resolve(location);
-        return { text: data.text, authorName: data.authorName, workTitle: data.workTitle, chapterTitle: data.chapterTitle, site };
+        return { text: quoteCardText(data.html, data.text), authorName: data.authorName, workTitle: data.workTitle, chapterTitle: data.chapterTitle, site };
       });
       res.set('Cache-Control', `public, max-age=${location.revision ? 604800 : 3600}`).type('image/png').send(png);
     } catch (error) { res.status(status(error)).json({ error: (error as Error).message }); }

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import satoriModule from 'satori';
+import { load } from 'cheerio';
 
 // The picture a shared quote link shows in a chat or a feed (og:image): the
 // reader's quote card - FragmentCard.tsx - drawn as a 1200x630 PNG. The same
@@ -65,6 +66,21 @@ const SERIF = stack('Newsreader'), DISPLAY = stack('Cinzel'), SANS = stack('Plus
  */
 const drawable = (text: string) => text.normalize('NFC');
 
+/**
+ * The words of a fragment the card shows: its HTML without footnotes (the
+ * server renders a TEI note as <span class="note"> [...]</span>, inline in
+ * the text), else its plain text. Line breaks become spaces.
+ */
+export function quoteCardText(html: string | null | undefined, text: string): string {
+  if (!html) return text;
+  const $ = load(`<div id="quote">${html}</div>`);
+  $('.note, sup, script, style').remove();
+  $('br').replaceWith(' ');
+  $('p, div, .l, .lg').append(' ');
+  const words = $('#quote').text().replace(/\s+/g, ' ').trim();
+  return words || text;
+}
+
 /** The quotation as it fits the card: whole words, an ellipsis when cut. */
 export function fittedQuote(text: string): { text: string; fontSize: number } {
   const plain = drawable(text).replace(/\s+/g, ' ').trim();
@@ -80,11 +96,12 @@ const clip = (value: string, max: number) => {
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 };
 
-type Node = { type: string; props: { style?: Record<string, unknown>; children?: unknown } };
+export type Node = { type: string; props: { style?: Record<string, unknown>; children?: unknown } };
 const h = (type: string, style: Record<string, unknown>, ...children: unknown[]): Node =>
   ({ type, props: { style, children: children.length === 1 ? children[0] : children } });
 
-function card(content: QuoteCardContent): Node {
+/** The card's layout tree, for satori. */
+export function quoteCardLayout(content: QuoteCardContent): Node {
   const quote = fittedQuote(content.text);
   return h('div', {
     width: '100%', height: '100%', display: 'flex', padding: 36,
@@ -122,7 +139,7 @@ function card(content: QuoteCardContent): Node {
 
 /** The quote card as a PNG. */
 export async function renderQuoteCard(content: QuoteCardContent): Promise<Buffer> {
-  const svg = await satori(card(content) as never, { width: QUOTE_CARD_WIDTH, height: QUOTE_CARD_HEIGHT, fonts: loadFonts() });
+  const svg = await satori(quoteCardLayout(content) as never, { width: QUOTE_CARD_WIDTH, height: QUOTE_CARD_HEIGHT, fonts: loadFonts() });
   return new Resvg(svg, { fitTo: { mode: 'width', value: QUOTE_CARD_WIDTH } }).render().asPng();
 }
 
