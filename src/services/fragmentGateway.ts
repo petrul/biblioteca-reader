@@ -7,6 +7,7 @@ import { anonymousPreviewAllowed, readDiv, negotiatePage, boundedFetch, rewriteT
 import { escapeHtml, type PageSeo } from '../seo';
 import { PARAGRAPHS, parseParagraphRange } from './paragraphLinks';
 import { load } from 'cheerio';
+import { cachedQuoteCard } from './quoteCardImage';
 
 export function legacyParagraphFragment(html: string, token: string, sourcePath: string): FragmentLocation {
   const range = parseParagraphRange(token);
@@ -18,11 +19,25 @@ export function legacyParagraphFragment(html: string, token: string, sourcePath:
   return { sourcePath, selector: '_' + start + (start === end ? '' : '..' + end) };
 }
 
+/** The fragment's quote card as a PNG (quoteCardImage.ts) - its og:image. */
+export function fragmentCardImagePath(fragment: { sourcePath: string; selector: string; sourceVersion?: string | null }): string {
+  const params = new URLSearchParams({ path: fragment.sourcePath, selector: fragment.selector });
+  if (fragment.sourceVersion) params.set('rev', fragment.sourceVersion);
+  return `/api/fragments/card.png?${params}`;
+}
+
+/** og:image fields for a fragment: its quote card. */
+export function fragmentCardImage(fragment: ResolvedFragment, origin: string): Pick<PageSeo, 'image' | 'imageType' | 'imageAlt'> {
+  const text = fragment.text.trim().replace(/\s+/g, ' ');
+  return { image: origin + fragmentCardImagePath(fragment), imageType: 'image/png',
+    imageAlt: `«${text.length > 300 ? text.slice(0, 299) + '…' : text}» — ${fragment.authorName}, ${fragment.workTitle}` };
+}
+
 export function fragmentSeo(seo: PageSeo, data: ResolvedFragment, origin: string): PageSeo {
   const canonicalUrl = origin + data.canonicalPath;
   return { ...seo, language: data.language || 'und', title: `${data.workTitle} — ${data.authorName}`,
     description: data.text.trim().replace(/\s+/g, ' ').slice(0, 200), canonicalUrl, sharedUrl: canonicalUrl,
-    image: origin + '/api/covers/work/' + data.workId, jsonLd: null,
+    ...fragmentCardImage(data, origin), jsonLd: null,
     noscriptHtml: `<article style="max-width:48rem;margin:2rem auto;padding:2rem;background:#fffdf8;color:#262019;font:1.2rem Georgia,serif"><blockquote>${data.html}</blockquote><p>${escapeHtml(data.authorName)} — ${escapeHtml(data.workTitle)}</p><a href="${escapeHtml(data.contextPath + '&view=text')}">Read in full chapter context</a></article>` };
 }
 
@@ -51,6 +66,21 @@ export function registerFragmentGateway(app: Express, opts: { serverUrl: string;
       for (const key of ['path', 'selector', 'rev']) if (p.getAll(key).length > 1) throw Object.assign(new Error('Repeated fragment parameter'), { status: 400 });
       const data = await resolve({ sourcePath: p.get('path') || '', selector: p.get('selector') || '', revision: p.get('rev') || undefined });
       res.set('Cache-Control', 'private, no-cache').json(data);
+    } catch (error) { res.status(status(error)).json({ error: (error as Error).message }); }
+  });
+  // The quote card a shared fragment link shows in chats and feeds (its
+  // og:image). The same access checks as the fragment itself; a revision
+  // pins the text, so a card with one is cached for a week.
+  app.get('/api/fragments/card.png', async (req, res) => {
+    try {
+      const p = new URLSearchParams(req.originalUrl.split('?')[1]);
+      for (const key of ['path', 'selector', 'rev']) if (p.getAll(key).length > 1) throw Object.assign(new Error('Repeated fragment parameter'), { status: 400 });
+      const location = { sourcePath: p.get('path') || '', selector: p.get('selector') || '', revision: p.get('rev') || undefined };
+      const png = await cachedQuoteCard(JSON.stringify(location), async () => {
+        const data = await resolve(location);
+        return { text: data.text, authorName: data.authorName, workTitle: data.workTitle, chapterTitle: data.chapterTitle };
+      });
+      res.set('Cache-Control', `public, max-age=${location.revision ? 604800 : 3600}`).type('image/png').send(png);
     } catch (error) { res.status(status(error)).json({ error: (error as Error).message }); }
   });
   app.post('/api/fragments/resolve', async (req, res) => {
@@ -133,7 +163,7 @@ export function registerFragmentGateway(app: Express, opts: { serverUrl: string;
         contents = $('body').html() || '';
       }
       const title = `${data.workTitle} — ${data.authorName}`;
-      res.type('html').send(`<!doctype html><html lang="${escapeHtml(data.language || 'und')}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(title)}</title><link rel="canonical" href="${escapeHtml(publicUrl)}"><meta property="og:url" content="${escapeHtml(publicUrl)}"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(data.text.trim().slice(0, 200))}"><meta property="og:image" content="${escapeHtml(opts.originFor(req) + '/api/covers/work/' + data.workId)}"><style>body{background:#eef1f2;color:#262019;font:1.15rem Georgia,serif;margin:0;padding:2rem 1rem}.quote-card{max-width:48rem;margin:auto;background:#fffdf8;padding:2rem;border:1px solid #e2dccd;border-radius:1rem;box-shadow:0 8px 30px #0001}blockquote{margin:0;border-left:3px solid #d99c24;padding-left:1.5rem;line-height:1.6}.lg{margin:1em 0}.l{margin:0}table{border-collapse:collapse}td{border:1px solid #ccb;padding:.4em}footer{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #ddd}a{color:#075979}mark{background:#f8d981}nav{display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem}</style></head><body><main class="quote-card"><blockquote class="quote-text">${contents}</blockquote><footer>${escapeHtml(data.authorName)} — ${escapeHtml(data.workTitle)} · ${escapeHtml(data.chapterTitle)}<nav><a href="${escapeHtml(data.contextPath)}">Read in full chapter context</a><a href="${escapeHtml(data.canonicalPath)}">Fragment card</a></nav></footer></main></body></html>`);
+      res.type('html').send(`<!doctype html><html lang="${escapeHtml(data.language || 'und')}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(title)}</title><link rel="canonical" href="${escapeHtml(publicUrl)}"><meta property="og:url" content="${escapeHtml(publicUrl)}"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(data.text.trim().slice(0, 200))}"><meta property="og:image" content="${escapeHtml(fragmentCardImage(data, opts.originFor(req)).image)}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><style>body{background:#eef1f2;color:#262019;font:1.15rem Georgia,serif;margin:0;padding:2rem 1rem}.quote-card{max-width:48rem;margin:auto;background:#fffdf8;padding:2rem;border:1px solid #e2dccd;border-radius:1rem;box-shadow:0 8px 30px #0001}blockquote{margin:0;border-left:3px solid #d99c24;padding-left:1.5rem;line-height:1.6}.lg{margin:1em 0}.l{margin:0}table{border-collapse:collapse}td{border:1px solid #ccb;padding:.4em}footer{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #ddd}a{color:#075979}mark{background:#f8d981}nav{display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem}</style></head><body><main class="quote-card"><blockquote class="quote-text">${contents}</blockquote><footer>${escapeHtml(data.authorName)} — ${escapeHtml(data.workTitle)} · ${escapeHtml(data.chapterTitle)}<nav><a href="${escapeHtml(data.contextPath)}">Read in full chapter context</a><a href="${escapeHtml(data.canonicalPath)}">Fragment card</a></nav></footer></main></body></html>`);
     } catch (error) { res.status(status(error)).set('X-Robots-Tag', 'noindex').type('text/plain').send((error as Error).message); }
   });
 }

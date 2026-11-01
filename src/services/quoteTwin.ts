@@ -8,6 +8,8 @@ import type { Express, Request } from 'express';
 import { load } from 'cheerio';
 import { anonymousPreviewAllowed, boundedFetch, negotiatePage, readDiv, rewriteTwinLink } from './textTwin';
 import { escapeHtml } from '../seo';
+import { fragmentCardImage } from './fragmentGateway';
+import type { ResolvedFragment } from './fragmentApi';
 
 export interface ServerQuote {
   workId: string; chapterId: string; workTitle: string; chapterTitle: string;
@@ -52,10 +54,10 @@ async function resolve(base: string, raw: string, params: URLSearchParams, origi
   if (!paragraphs.length) throw new Error('Quote renderer returned no quoted text');
   const data: ServerQuote = { workId, chapterId: source.path, workTitle: work.head || workId, chapterTitle: chapter.head || source.path, authorName: work.author?.displayName || 'Anonymous', language: chapter.language || work.language, text: paragraphs.join('\n\n'), paragraphs, canonicalUrl: origin + fragment.canonicalPath };
   $('head title, head meta[property^="og:"], head meta[name^="twitter:"], head link[rel="canonical"]').remove();
-  const image = `${origin}/api/covers/work/${workId}`;
+  const image = fragmentCardImage(fragment as ResolvedFragment, origin).image;
   const title = `${data.workTitle} — ${data.authorName}`;
   $('head').append(`<title>${escapeHtml(title)}</title><link rel="canonical" href="${escapeHtml(data.canonicalUrl)}"><meta property="og:url" content="${escapeHtml(data.canonicalUrl)}"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(data.text.slice(0, 200))}"><meta property="og:image" content="${escapeHtml(image)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${escapeHtml(title)}"><meta name="twitter:description" content="${escapeHtml(data.text.slice(0, 200))}"><meta name="twitter:image" content="${escapeHtml(image)}">`);
-  return { data, html: $.html() };
+  return { data, html: $.html(), fragment: fragment as ResolvedFragment };
 }
 export function registerQuoteTwins(app: Express, opts: { serverUrl: string; originFor: (req: Request) => string; apiDocument?: { paths?: Record<string, unknown> } }) {
   if (opts.apiDocument) {
@@ -117,9 +119,9 @@ export async function enrichQuoteSeo(seo: PageSeo, quoteId: string | undefined, 
   if (!quoteId?.startsWith('server:')) return seo;
   try {
     const [path, query] = quoteId.slice(7).split('?');
-    const { data } = await resolve(base, path, new URLSearchParams(query), origin);
+    const { data, fragment } = await resolve(base, path, new URLSearchParams(query), origin);
     return { ...seo, title: `${data.workTitle} — ${data.authorName}`, description: data.text.slice(0, 200),
-      image: `${origin}/api/covers/work/${data.workId}`, imageType: 'image/png',
+      ...fragmentCardImage(fragment, origin),
       canonicalUrl: data.canonicalUrl, sharedUrl: data.canonicalUrl, robots: 'index, follow', language: data.language || 'und' };
   } catch { return { ...seo, robots: 'noindex, follow' }; }
 }
