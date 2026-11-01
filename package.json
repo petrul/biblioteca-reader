@@ -2,7 +2,7 @@
   "name": "biblioteca-reader",
   "private": true,
   "version": "0.1.18-SNAPSHOT",
-  "releaseName": "Ethereal Exedra",
+  "releaseName": "Fathomless Fountain",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
