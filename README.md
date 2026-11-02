@@ -1150,3 +1150,7 @@ Most important are:
 - the capacity of manipulating the collections easily searching through them opening them, editing removing, bookmarking. 
 
 </details>
+
+## License
+
+Copyright 2026 Editii Scriptorium srl. Licensed under the [Apache License, Version 2.0](LICENSE); see also [NOTICE](NOTICE).

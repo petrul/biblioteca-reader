@@ -2,6 +2,7 @@
   "name": "biblioteca-reader",
   "private": true,
   "version": "0.1.18-SNAPSHOT",
+  "license": "Apache-2.0",
   "releaseName": "Fathomless Fountain",
   "type": "module",
   "scripts": {
