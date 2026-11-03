@@ -1029,7 +1029,7 @@ app.post('/api/rag/ask/stream', ragRateLimit, asyncRoute(async (req: Request, re
   try {
     const upstreamRes = await fetch(`${NESTJS_URL}/api/rag/ask/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson', ...(BIBLIOTECA_INTERNAL_API_TOKEN ? { Authorization: `Bearer ${BIBLIOTECA_INTERNAL_API_TOKEN}` } : {}) },
       body: JSON.stringify(req.body ?? {}),
       signal: AbortSignal.timeout(120_000),
     });
