@@ -54,6 +54,15 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
+                /** @description The remote cover art (coverArtUrl) could not be loaded; `error` says why (e.g. the host answered 403, or with a web page instead of the image, or resolves to a private address). Nothing is rendered. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
                 /** @description Rendering failed (e.g. no Chrome/Chromium executable found). */
                 500: {
                     headers: {
@@ -167,7 +176,7 @@ export interface paths {
         };
         /**
          * Proxy a remote image to avoid CORS / canvas tainting
-         * @description Fetches a remote image server-side and streams it back with permissive CORS headers. Used internally by PortraitCanvas for remote cover art URLs; usable directly to obtain CORS-safe image bytes.
+         * @description Fetches a remote image server-side and streams it back with permissive CORS headers. Used internally by PortraitCanvas for remote cover art URLs; usable directly to obtain CORS-safe image bytes. Any public http(s) image host; never a private or LAN address (checked at every redirect); raster images up to 10 MiB.
          */
         get: {
             parameters: {
@@ -190,15 +199,29 @@ export interface paths {
                         "image/*": string;
                     };
                 };
-                /** @description Missing url parameter. */
+                /** @description Missing or unusable url: not http(s), carries credentials, or resolves to a private address. */
                 400: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description Failed to fetch image. */
-                500: {
+                /** @description The image is larger than 10 MiB. */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The source answered with something other than an image (e.g. a web page). */
+                415: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The source could not be reached or answered with an error (the reason is in the body). */
+                502: {
                     headers: {
                         [name: string]: unknown;
                     };

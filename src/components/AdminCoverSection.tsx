@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Check, Copy, ImagePlus, Loader2, Shuffle } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, Copy, ImagePlus, Loader2, Shuffle, Upload } from 'lucide-react';
+import { coverArtDataUrl, withCoverArt } from '../services/coverArtUpload';
 import { trackedFetch } from '../services/serversideApi';
 import { coverThumbnailUrl } from '../services/coverThumbnail';
 import { copyToClipboard } from '../services/clipboard';
@@ -13,6 +14,9 @@ type CoverWork = { coverUrl?: string; request: Record<string, unknown> | null };
  * JSON without rendering ("New random JSON"), and renders a new cover
  * synchronously (POST /api/admin/covers/work - same-origin, gated
  * server-side to administrators, proxied to biblioteca-nestjs).
+ * "Upload image" puts an image from this computer in the JSON as its
+ * coverArtUrl (scaled, as a data: URL) - for pictures a site only serves
+ * to browsers, which the renderer cannot fetch.
  */
 export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
   workId: string;
@@ -28,6 +32,8 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
   const [rolling, setRolling] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +95,20 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
     }
   };
 
+  const uploadImage = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    setError('');
+    try {
+      setJsonText(withCoverArt(jsonText, await coverArtDataUrl(file)));
+    } catch (e: any) {
+      setError(`Could not use the image: ${e.message}`);
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = ''; // the same file can be chosen again
+    }
+  };
+
   const copy = async () => {
     if (await copyToClipboard(jsonText)) {
       setCopied(true);
@@ -96,7 +116,7 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
     }
   };
 
-  const busy = rendering || rolling;
+  const busy = rendering || rolling || uploading;
 
   return (
     <section data-testid="admin-cover-section" aria-label="Cover (administrators)"
@@ -113,6 +133,19 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
           >
             {rolling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shuffle className="w-3.5 h-3.5" />}
             {rolling ? 'Rolling…' : 'New random JSON'}
+          </button>
+          <input ref={fileInput} type="file" accept="image/*" hidden data-testid="admin-cover-upload-input"
+            onChange={e => void uploadImage(e.target.files?.[0])} />
+          <button
+            id="btn-admin-upload-cover-art"
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            disabled={busy || !jsonText.trim()}
+            title={jsonText.trim() ? 'Use an image from this computer as the cover art' : 'Roll a random JSON first'}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0f3d30] hover:bg-emerald-700/50 disabled:opacity-60 text-emerald-100 text-xs font-bold border border-emerald-500/30 cursor-pointer disabled:cursor-wait"
+          >
+            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+            {uploading ? 'Reading…' : 'Upload image'}
           </button>
           <button
             id="btn-admin-generate-cover"

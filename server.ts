@@ -58,8 +58,13 @@ function asyncRoute(handler: (req: Request, res: Response, next: NextFunction) =
 
 // Compression by the reader itself, for every client - see httpCompression.ts.
 app.use(responseCompression());
-// Body parsing middleware
-app.use(express.json());
+// Body parsing middleware. The admin cover editor's JSON may carry an
+// uploaded image (a data URL, several MB): that one route parses its own
+// body, with a larger limit, after its admin gate (below) - everything else
+// keeps express's 100 KB default.
+const ADMIN_COVER_WORK_PATH = '/api/admin/covers/work';
+const defaultJsonBody = express.json();
+app.use((req, res, next) => (req.path === ADMIN_COVER_WORK_PATH && req.method === 'POST' ? next() : defaultJsonBody(req, res, next)));
 // Automated-access limit - limits in src/services/resourceLimits.ts.
 // One set of visitor cookies for every limit that tells browsers from bots.
 const visitors = createVisitorCookies();
@@ -897,7 +902,7 @@ const nestjsApi = createClient<NestjsPaths>({
 // from; without it nestjs picks a random request as before.
 // Renders, stores and assigns a cover upstream - write traffic, 403 in
 // read-only deployments.
-app.post('/api/admin/covers/work', unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
+app.post(ADMIN_COVER_WORK_PATH, requireAdmin(isAdminSession), express.json({ limit: '12mb' }), unlessReadOnly(asyncRoute(async (req: Request, res: Response) => {
   const path = req.body?.path;
   if (typeof path !== 'string' || !WORK_PATH.test(path)) {
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
