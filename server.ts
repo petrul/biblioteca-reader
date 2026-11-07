@@ -25,6 +25,7 @@ import readerConfig from './reader.config.json';
 import packageInfo from './package.json';
 import { BibliotecaServerProxy, isSafeServerContentPath } from './src/services/BibliotecaServerProxy';
 import { registerReaderThumbnails } from './src/services/coverThumbnailProxy';
+import { requireAdmin } from './src/services/adminGate';
 import createClient from 'openapi-fetch';
 import type { paths as NestjsPaths } from './src/generated/biblioteca-nestjs-api';
 import { registerTextTwins, canonicalReaderPath, textAlternates } from './src/services/textTwin';
@@ -702,7 +703,9 @@ app.get('/api/server-info', asyncRoute(async (req: Request, res: Response) => {
 // same-origin gateway rather than a generic proxy: callers provide stable
 // work metadata, while the theme is selected here and arbitrary upstream
 // paths cannot be reached through the reader.
-app.post('/api/covers/work', asyncRoute(async (req: Request, res: Response) => {
+// Administrators only: it makes the cover renderer fetch any coverArtUrl,
+// and it writes the work's cached cover - neither is for anonymous callers.
+app.post('/api/covers/work', requireAdmin(isAdminSession), asyncRoute(async (req: Request, res: Response) => {
   const { workId, title, author, subtitle, date, coverArtUrl } = req.body ?? {};
   if (typeof title !== 'string' || !title.trim() || typeof author !== 'string' || !author.trim()) {
     res.status(400).json({ error: 'title and author are required' });
