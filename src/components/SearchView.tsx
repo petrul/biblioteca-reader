@@ -20,24 +20,29 @@ import {
   ToggleRight,
   Info,
   X,
-  CornerDownLeft
+  CornerDownLeft,
+  Trash2
 } from 'lucide-react';
 import { SearchMode, SearchResult, LanguageCode, PersonalCollection } from '../types/textbase';
 import { languageName } from '../services/languageNames';
 import { readerService, ANONYMOUS_USER_ID } from '../services/readerService';
 import { saveSearch } from '../services/savedSearches';
 import { getSavedSearches, subscribeSavedSearches } from '../services/savedSearches';
-import { persistWorkspaceState, setLastSearch } from '../services/workspaceStore';
+import { getLastSearch, persistWorkspaceState, setLastSearch, type ReaderLastSearch } from '../services/workspaceStore';
+import { clearSearchHistory, getSearchHistory, recordSearch, removeSearch, subscribeSearchHistory, type SearchHistoryEntry } from '../services/searchHistory';
 
 interface SearchViewProps {
   initialMode?: SearchMode;
   initialQuery?: string;
   initialWorkSeed?: string;
   initialScopeWorkId?: string;
+  initialPage?: number;
+  restoredSearch?: ReaderLastSearch | null;
   savedSearchId?: string;
   onSelectWork: (workId: string) => void;
   onSelectChapter: (workId: string, chapterId: string) => void;
   onSelectAuthor: (authorId: string) => void;
+  onRestoreSearch?: (entry: SearchHistoryEntry) => void;
   /** Whose collections decide which results show as saved. */
   currentUserId?: string;
   onOpenAddToCollection: (item: { type: 'work' | 'chapter' | 'quote'; referenceId: string; workId: string; workTitle: string; authorName: string; chapterId?: string; chapterTitle?: string; quoteText?: string }) => void;
@@ -115,10 +120,13 @@ export const SearchView: React.FC<SearchViewProps> = ({
   initialQuery = '',
   initialWorkSeed,
   initialScopeWorkId,
+  initialPage = 1,
+  restoredSearch,
   savedSearchId,
   onSelectWork,
   onSelectChapter,
   onSelectAuthor,
+  onRestoreSearch,
   currentUserId = ANONYMOUS_USER_ID,
   onOpenAddToCollection
 }) => {
@@ -166,7 +174,10 @@ export const SearchView: React.FC<SearchViewProps> = ({
   // the effect makes it unconditional regardless of mount order.
   const queryInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { queryInputRef.current?.focus(); }, []);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryEntry[]>(() => getSearchHistory());
+  const [historyCursor, setHistoryCursor] = useState(-1);
+  useEffect(() => subscribeSearchHistory(() => setSearchHistory(getSearchHistory())), []);
   // Saving applies to the query/results shown - any change of query or mode makes it saveable again.
   const [searchSaveState, setSearchSaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   useEffect(() => setSearchSaveState('idle'), [query, activeMode, combinedMode]);
@@ -185,10 +196,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
   // Language filter
   const [langFilter, setLangFilter] = useState<LanguageCode | 'all'>('all');
-  const [searchResponse, setSearchResponse] = useState(() => readerService.search(activeMode, query, {
-    page: 1,
-    pageSize: 6
-  }));
+  const [searchResponse, setSearchResponse] = useState(() => restoredSearch?.query === initialQuery && restoredSearch?.results?.length
+    ? { results: restoredSearch.results.slice((initialPage - 1) * 6, initialPage * 6), total: restoredSearch.results.length, totalPages: Math.max(1, Math.ceil(restoredSearch.results.length / 6)), mode: activeMode, tookMs: 0 }
+    : readerService.search(activeMode, query, { page: initialPage, pageSize: 6 }));
 
   // Page through result sets with the horizontal arrow keys. Keep the keys
   // available for normal cursor movement while the query field is focused.
@@ -259,7 +269,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       // bounded - see searchCombined) - results from fast modes populate
       // the page immediately instead of the whole search waiting on the
       // slowest one (e.g. vector search behind a contended Ollama).
-      void readerService.searchCombined(debouncedQuery, perModeLimit, applyResults, scope === 'work' ? initialScopeWorkId : undefined).then(applyResults);
+      void readerService.searchCombined(debouncedQuery, perModeLimit, applyResults, scope === 'work' ? initialScopeWorkId : undefined, scope === 'work' && initialScopeWorkId ? [initialScopeWorkId] : []).then(applyResults);
       return () => { current = false; };
     }
     void readerService.searchConnected(activeMode, debouncedQuery, {
@@ -269,15 +279,15 @@ export const SearchView: React.FC<SearchViewProps> = ({
       caseSensitive,
       useRegex,
       fuzzy: fuzzySearch,
-      workIdSeed: scope === 'work' ? (initialScopeWorkId || initialWorkSeed) : undefined
+      workIdSeed: scope === 'work' ? (initialScopeWorkId || initialWorkSeed) : undefined,
+      scope: scope === 'work' && (initialScopeWorkId || initialWorkSeed) ? [initialScopeWorkId || initialWorkSeed!] : []
     }).then(response => { if (current) setSearchResponse(response); });
     return () => { current = false; };
   }, [combinedMode, activeMode, debouncedQuery, searchRun, page, langFilter, caseSensitive, useRegex, fuzzySearch, initialWorkSeed, initialScopeWorkId, scope]);
 
-  // Keep the last search as a compact, account-synchronizable workspace
-  // document. Results are deliberately rerunnable rather than copied into
-  // the account blob; the page/cursor and scope are what make reopening
-  // deterministic without storing a large result payload.
+  // Keep the last search as an account-synchronizable workspace document.
+  // The bounded result snapshot makes `/` restoration immediate while the
+  // server request below still refreshes it when the reader is online.
   useEffect(() => {
     if (!query.trim()) return;
     const timer = setTimeout(() => {
@@ -291,13 +301,34 @@ export const SearchView: React.FC<SearchViewProps> = ({
         page,
         pageSize: 6,
         fetchedPages: [page],
+        results: searchResponse.results.slice(0, 100),
+        activeResultId: getLastSearch()?.activeResultId,
         savedSearchId,
         updatedAt: new Date().toISOString(),
       });
       void persistWorkspaceState().catch(error => console.warn('[workspace] last search save failed', error));
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, combinedMode, activeMode, scope, initialScopeWorkId, initialWorkSeed, caseSensitive, useRegex, fuzzySearch, langFilter, page, savedSearchId]);
+  }, [query, combinedMode, activeMode, scope, initialScopeWorkId, initialWorkSeed, caseSensitive, useRegex, fuzzySearch, langFilter, page, savedSearchId, searchResponse.results]);
+
+  const rememberSearch = () => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    recordSearch({
+      query: trimmed,
+      mode: combinedMode ? 'all' : activeMode,
+      scope,
+      workId: scope === 'work' ? (initialScopeWorkId || initialWorkSeed) : undefined,
+      options: { caseSensitive, useRegex, fuzzy: fuzzySearch, language: langFilter }
+    });
+  };
+
+  const markActiveResult = (item: SearchResult) => {
+    const last = getLastSearch();
+    if (!last || last.query !== query) return;
+    setLastSearch({ ...last, activeResultId: item.id, updatedAt: new Date().toISOString() });
+    void persistWorkspaceState().catch(error => console.warn('[workspace] active search result save failed', error));
+  };
 
   const adminStatus = readerService.getAdminStatus();
   const vectorAvailable = adminStatus.vectorSearchStatus.available;
@@ -432,6 +463,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
           className="relative flex items-center"
           onSubmit={(event) => {
             event.preventDefault();
+            rememberSearch();
             setPage(1);
             setDebouncedQuery(query);
             setSearchRun(run => run + 1);
@@ -451,6 +483,23 @@ export const SearchView: React.FC<SearchViewProps> = ({
             autoFocus
             ref={queryInputRef}
             value={query}
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+              if (!searchHistory.length) return;
+              event.preventDefault();
+              const next = event.key === 'ArrowUp'
+                ? Math.min(searchHistory.length - 1, historyCursor + 1)
+                : Math.max(-1, historyCursor - 1);
+              setHistoryCursor(next);
+              const entry = searchHistory[next];
+              if (entry) {
+                setQuery(entry.query);
+                setActiveMode(entry.mode === 'all' ? 'lucene' : entry.mode);
+                setCombinedMode(entry.mode === 'all');
+                setScope(entry.scope);
+                setPage(1);
+              }
+            }}
             onChange={(e) => {
               setQuery(e.target.value);
               setPage(1);
@@ -608,11 +657,30 @@ export const SearchView: React.FC<SearchViewProps> = ({
         </div>
       ) : searchResponse.results.length === 0 ? (
         /* Case 2: Zero actual matches */
-        <div className="bg-[#0b2921]/80 rounded-2xl border border-emerald-500/20 p-12 text-center space-y-3">
-          <p className="text-emerald-200/80 text-sm">
-            No matches found for "{query}"{combinedMode ? ' across all search modes' : ` under ${activeMode.toUpperCase()} search mode`}.
-          </p>
-          <p className="text-xs text-emerald-300/60">Try broadening your query, checking spelling, or switching search modes above.</p>
+        <div className="space-y-4">
+          <div className="bg-[#0b2921]/80 rounded-2xl border border-emerald-500/20 p-12 text-center space-y-3">
+            <p className="text-emerald-200/80 text-sm">
+              No matches found for "{query}"{combinedMode ? ' across all search modes' : ` under ${activeMode.toUpperCase()} search mode`}.
+            </p>
+            <p className="text-xs text-emerald-300/60">Try broadening your query, checking spelling, or switching search modes above.</p>
+          </div>
+          {!query.trim() && searchHistory.length > 0 && (
+            <div className="bg-[#0b2921]/80 rounded-2xl border border-emerald-500/20 p-5 text-left">
+              <h3 className="text-sm font-semibold text-white mb-3">Recent searches</h3>
+              <div className="space-y-2">
+                {searchHistory.map(entry => (
+                  <div key={entry.id} className="flex items-center gap-2">
+                    <button type="button" onClick={() => onRestoreSearch?.(entry)} className="min-w-0 flex-1 flex items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2 text-left text-sm text-emerald-100 hover:bg-white/10 cursor-pointer">
+                      <span className="truncate">{entry.query}</span>
+                      <span className="shrink-0 text-[10px] uppercase text-amber-300">{entry.mode} · {entry.scope}</span>
+                    </button>
+                    <button type="button" aria-label={`Delete search ${entry.query}`} title="Delete search" onClick={() => removeSearch(entry.id)} className="rounded-lg p-2 text-white/50 hover:text-rose-200 hover:bg-rose-500/10 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={() => clearSearchHistory()} className="mt-3 text-[11px] uppercase tracking-wider text-white/50 hover:text-white cursor-pointer">Clear history</button>
+            </div>
+          )}
         </div>
       ) : (
         /* Case 3: Display Search Results */
@@ -671,6 +739,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
                   <h3 
                     onClick={() => {
+                      markActiveResult(item);
                       if (item.type === 'author') {
                         // An author hit opens the author's page - never a
                         // work route with a bogus id.
@@ -728,6 +797,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
                   <button
                     onClick={() => {
+                      markActiveResult(item);
                       if (item.type === 'author') {
                         // An author hit opens the author's page - never a
                         // work route with a bogus id.

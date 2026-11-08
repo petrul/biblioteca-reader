@@ -2605,6 +2605,8 @@ export interface operations {
             query: {
                 q: string;
                 limit?: number;
+                /** @description Canonical author/opus prefixes to search within; repeat for multiple scopes. */
+                scope?: string[];
             };
             header?: never;
             path?: never;
@@ -2628,6 +2630,8 @@ export interface operations {
             query: {
                 q: string;
                 limit?: number;
+                /** @description Canonical author/opus prefixes to search within; repeat for multiple scopes. */
+                scope?: string[];
             };
             header?: never;
             path?: never;
@@ -2651,6 +2655,8 @@ export interface operations {
             query: {
                 q: string;
                 limit?: number;
+                /** @description Canonical author/opus prefixes to search within; repeat for multiple scopes. */
+                scope?: string[];
             };
             header?: never;
             path?: never;
@@ -2674,6 +2680,8 @@ export interface operations {
             query: {
                 q: string;
                 limit?: number;
+                /** @description Canonical author/opus prefixes to search within; repeat for multiple scopes. */
+                scope?: string[];
             };
             header?: never;
             path?: never;
@@ -2697,6 +2705,8 @@ export interface operations {
             query: {
                 q: string;
                 limit?: number;
+                /** @description Canonical author/opus prefixes to search within; repeat for multiple scopes. */
+                scope?: string[];
             };
             header?: never;
             path?: never;

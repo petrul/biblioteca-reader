@@ -66,6 +66,21 @@ for (const [publicPath, entry] of Object.entries(BIBLIOTECA_PATHS)) {
             throw new Error(`biblioteca-server's ${upstreamPath} has no ${method} - update BIBLIOTECA_PATHS in this script`);
         }
         filtered[method] = upstreamOp[method];
+        if (method === 'get' && publicPath.startsWith('/api/search/')) {
+            filtered[method] = {
+                ...filtered[method],
+                parameters: [
+                    ...(filtered[method].parameters || []),
+                    {
+                        name: 'scope',
+                        in: 'query',
+                        required: false,
+                        schema: { type: 'array', items: { type: 'string' } },
+                        description: 'Canonical author/opus prefixes to search within; repeat for multiple scopes.',
+                    },
+                ].filter((parameter, index, all) => all.findIndex(candidate => candidate.name === parameter.name) === index),
+            };
+        }
     }
     biblioPaths[publicPath] = filtered;
 }

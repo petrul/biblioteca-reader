@@ -2951,6 +2951,18 @@
               "format": "int32",
               "default": 10
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Canonical author/opus prefixes to search within; repeat for multiple scopes."
           }
         ],
         "responses": {
@@ -2996,6 +3008,18 @@
               "format": "int32",
               "default": 10
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Canonical author/opus prefixes to search within; repeat for multiple scopes."
           }
         ],
         "responses": {
@@ -3041,6 +3065,18 @@
               "format": "int32",
               "default": 10
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Canonical author/opus prefixes to search within; repeat for multiple scopes."
           }
         ],
         "responses": {
@@ -3086,6 +3122,18 @@
               "format": "int32",
               "default": 10
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Canonical author/opus prefixes to search within; repeat for multiple scopes."
           }
         ],
         "responses": {
@@ -3131,6 +3179,18 @@
               "format": "int32",
               "default": 10
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Canonical author/opus prefixes to search within; repeat for multiple scopes."
           }
         ],
         "responses": {

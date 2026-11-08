@@ -1,4 +1,5 @@
 import { fetchReaderState, updateReaderState, type ReaderStatePayload } from './readerGraphql';
+import type { SearchResult } from '../types/textbase';
 
 export type SearchScope = 'library' | 'work';
 export type ReaderLastSearch = {
@@ -14,6 +15,9 @@ export type ReaderLastSearch = {
   fetchedPages: number[];
   cursor?: string;
   savedSearchId?: string;
+  /** Cached pages let the reader reopen the last search immediately offline. */
+  results?: SearchResult[];
+  activeResultId?: string;
   updatedAt: string;
 };
 

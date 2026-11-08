@@ -5,7 +5,7 @@ slice. The current implementation already provides an implicit workspace,
 desktop drawers, a mobile sheet, signed-in GraphQL synchronization, anonymous
 local persistence, saved-search deep links, and HTML/Markdown/ODT export.
 
-## 1. Server-side scoped search
+## 1. Server-side scoped search — implemented
 
 - Add repeatable `scope` parameters to `/api/search/lucene`, `/api/search/vector`,
   `/api/search/grep`, and `/api/search/divHeads`.
@@ -17,9 +17,12 @@ local persistence, saved-search deep links, and HTML/Markdown/ODT export.
 - Allow a collection to define a search scope.
 - Expose the active scope visibly in the search UI.
 
-The current reader work scope is a compatibility MVP: it fetches a broad result
-set and filters it client-side, so it can miss lower-ranked results from the
-open work.
+The reader now sends repeatable `scope` query parameters and the server applies
+the scope before limiting Lucene, grep, title and vector results. Lucene uses a
+URL prefix filter, grep skips out-of-scope opera before paragraph derivation,
+and Milvus applies a native expression where supported (the generic vector
+adapter over-fetches and filters server-side). The reader keeps a defensive
+filter for older proxies.
 
 ## 2. Complete last-search restoration
 
@@ -35,7 +38,7 @@ open work.
 The current implementation stores a compact, rerunnable descriptor and syncs it
 through the versioned GraphQL workspace state.
 
-## 3. Search history
+## 3. Search history — implemented
 
 - Store recent text searches.
 - Exclude title/author navigation lookups.
@@ -43,7 +46,9 @@ through the versioned GraphQL workspace state.
 - Support keyboard recall.
 - Delete individual entries.
 - Clear all history.
-- Decide whether history should share the signed-in workspace sync path.
+- History is local for anonymous readers and stored in the signed-in account's
+  preferences document for cross-device recall. It is capped at 20 entries,
+  deduplicated, and supports arrow-key recall, per-entry deletion, and clear.
 
 ## 4. Unified list model
 
@@ -62,7 +67,7 @@ Introduce the planned `src/library/` abstraction:
 The current UI still has separate models and renderers for collections, saved
 searches, and live search results.
 
-## 5. Collection-storage unification
+## 5. Collection-storage unification — initial implementation
 
 - Move curated collections and favorites from the preferences JSON blob into
   the server collection tables.
@@ -75,8 +80,12 @@ searches, and live search results.
   toolbar, search results, and drawer entries.
 - Add undo feedback after adding an item.
 
-Saved searches already use the new GraphQL CRUD path; ordinary collections and
-favorites still use the existing preferences-backed path.
+Saved searches already use the new GraphQL CRUD path. Signed-in curated
+collections and Favorites now use `/api/collections/mine` and its add/remove/
+reorder/rename/delete operations through `ServerCollectionsStore`; the old
+preferences representation is read once and copied into the server tables.
+Anonymous readers retain the local preferences adapter. The working-collection
+pin and explicit undo UI remain follow-up work.
 
 ## 6. Saved searches as transversal documents
 

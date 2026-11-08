@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { authorFromServer, chapterContentUrl, fetchRealChapterContent, fetchRealChaptersForWork, luceneSnippet, mapServerLanguage, rewriteServerBinaryUrls, workFromServerDiv } from './serversideApi';
+import { authorFromServer, chapterContentUrl, fetchRealChapterContent, fetchRealChaptersForWork, luceneSnippet, mapServerLanguage, realSearch, rewriteServerBinaryUrls, workFromServerDiv } from './serversideApi';
 
 test('reading succeeds without requesting the XML or JSON export endpoints', async () => {
   const originalFetch = globalThis.fetch;
@@ -14,7 +14,7 @@ test('reading succeeds without requesting the XML or JSON export endpoints', asy
   });
   const requests: string[] = [];
   globalThis.fetch = async input => {
-    const url = String(input);
+    const url = typeof input === 'object' && input && 'url' in input ? String((input as Request).url) : String(input);
     requests.push(url);
     if (url.endsWith('.txt')) return new Response('Chapter text.');
     if (url.endsWith('.html?fragments=1')) return new Response('<p>Chapter text.</p>');
@@ -46,6 +46,26 @@ test('maps every currently supported server language to reader codes', () => {
   assert.equal(mapServerLanguage('RO'), 'ron');
   assert.equal(mapServerLanguage('ZH'), 'zho');
   assert.equal(mapServerLanguage('GR'), 'grc');
+});
+
+test('scoped live search sends repeated canonical scope parameters to the server', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = async input => {
+    const url = typeof input === 'object' && input && 'url' in input ? String((input as Request).url) : String(input);
+    requests.push(url);
+    if (url.includes('/api/search/lucene')) {
+      return Response.json([{ url: '/api/server-content/bacon/gardens/chapter.txt', content: 'garden', data: { path: 'bacon/gardens/chapter', lang: 'EN' } }]);
+    }
+    return new Response(null, { status: 404 });
+  };
+  try {
+    const results = await realSearch('lucene', 'garden', 10, [{ id: 'bacon/gardens', authorId: 'bacon', authorName: 'Bacon', title: 'Gardens', detectedLanguage: 'eng', sizeWords: 1, sizeBytes: 1, chapterCount: 1, license: '', sourceRepo: '', teiHeaderSummary: { titleStmt: '', publicationStmt: '', sourceDesc: '' }, tags: [], summary: '' }], undefined, ['bacon/gardens']);
+    assert.equal(results.length, 1);
+    assert.match(requests.find(url => url.includes('/api/search/lucene')) || '', /scope=bacon%2Fgardens/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('live TOC chapters retain their non-leaf division hierarchy', async () => {

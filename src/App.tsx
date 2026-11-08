@@ -36,7 +36,9 @@ import { fetchWhoAmI, submitGoogleCredential, refreshGoogleProfile, cachedGoogle
 import { AddToCollectionModal, AddToCollectionPayload } from './components/AddToCollectionModal';
 import { ChatWidget } from './components/ChatWidget';
 import { setLogReaderIdentity } from './services/logRelay';
-import { loadWorkspaceState, persistWorkspaceState, getLastSearch, getWorkspace, setWorkspace, subscribeWorkspace } from './services/workspaceStore';
+import { loadWorkspaceState, persistWorkspaceState, getLastSearch, getWorkspace, setWorkspace, subscribeWorkspace, type ReaderLastSearch, setLastSearch } from './services/workspaceStore';
+import { attachSearchHistoryAccount, type SearchHistoryEntry } from './services/searchHistory';
+import { ServerCollectionsStore } from './services/collectionsStore';
 import { WorkspaceShell } from './components/WorkspaceShell';
 
 export default function App() {
@@ -101,6 +103,7 @@ export default function App() {
   const [searchWorkSeed, setSearchWorkSeed] = useState<string | undefined>(undefined);
   const [searchScopeWorkId, setSearchScopeWorkId] = useState<string | undefined>(undefined);
   const [savedSearchId, setSavedSearchId] = useState<string | undefined>(undefined);
+  const [searchRestore, setSearchRestore] = useState<ReaderLastSearch | null>(null);
 
   // Auth & User State
   const [currentUser, setCurrentUser] = useState<User | null>(() => readerService.getCurrentUser());
@@ -144,7 +147,7 @@ export default function App() {
     }
     if (account && collectionsAccountRef.current !== account) {
       collectionsAccountRef.current = account;
-      void readerService.attachCollectionsStore(account, preferencesStoreFor(true))
+      void readerService.attachCollectionsStore(account, new ServerCollectionsStore(account, preferencesStoreFor(true)))
         .catch(error => console.warn('[collections] could not load the account\'s collections', error));
       void attachSavedSearchesAccount()
         .catch(error => console.warn('[saved-search] could not load the account\'s saved searches', error));
@@ -165,6 +168,8 @@ export default function App() {
       setCurrentUser(null);
     }
     void loadWorkspaceState(Boolean(who.authenticated)).catch(error => console.warn('[workspace] state unavailable', error));
+    void attachSearchHistoryAccount(preferencesStoreFor(Boolean(account)), Boolean(account))
+      .catch(error => console.warn('[search-history] account state unavailable', error));
   };
 
   const [, setWorkspaceRevision] = useState(0);
@@ -186,7 +191,23 @@ export default function App() {
         setSearchWorkSeed(undefined);
         setSearchScopeWorkId(last?.scope === 'work' ? last.workId : currentView === 'reader' ? selectedWorkId ?? undefined : undefined);
         setSavedSearchId(last?.savedSearchId);
+        setSearchRestore(last);
         setCurrentView('search');
+      }
+      if ((event.key === '[' || event.key === ']') && currentView === 'search') {
+        const last = getLastSearch();
+        const results = last?.results ?? [];
+        if (!results.length) return;
+        const currentIndex = Math.max(0, results.findIndex(item => item.id === last?.activeResultId));
+        const nextIndex = event.key === '[' ? Math.max(0, currentIndex - 1) : Math.min(results.length - 1, currentIndex + 1);
+        const item = results[nextIndex];
+        if (!item) return;
+        event.preventDefault();
+        setLastSearch({ ...last!, activeResultId: item.id, updatedAt: new Date().toISOString() });
+        void persistWorkspaceState().catch(error => console.warn('[workspace] active search result save failed', error));
+        if (item.type === 'author') handleSelectAuthor(item.authorId);
+        else if (item.chapterId) handleSelectChapter(item.workId, item.chapterId);
+        else handleSelectWork(item.workId);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -693,10 +714,20 @@ export default function App() {
             initialQuery={searchQuery}
             initialWorkSeed={searchWorkSeed}
             initialScopeWorkId={searchScopeWorkId}
+            initialPage={searchRestore?.page ?? 1}
+            restoredSearch={searchRestore}
             savedSearchId={savedSearchId}
             onSelectWork={handleSelectWork}
             onSelectChapter={handleSelectChapter}
             onSelectAuthor={handleSelectAuthor}
+            onRestoreSearch={(entry: SearchHistoryEntry) => {
+              setSearchMode(entry.mode === 'all' ? 'title' : entry.mode);
+              setSearchQuery(entry.query);
+              setSearchWorkSeed(undefined);
+              setSearchScopeWorkId(entry.scope === 'work' ? entry.workId : undefined);
+              setSearchRestore(null);
+              setSavedSearchId(undefined);
+            }}
             currentUserId={currentUser?.id || ANONYMOUS_USER_ID}
             onOpenAddToCollection={handleOpenAddToCollection}
           />

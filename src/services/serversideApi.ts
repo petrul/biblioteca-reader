@@ -457,8 +457,8 @@ function hitData(hit: Hit): Record<string, unknown> {
   return hit.data && typeof hit.data === 'object' ? hit.data as Record<string, unknown> : {};
 }
 
-async function fetchSearchHits(mode: SearchMode, q: string, limit: number): Promise<Hit[]> {
-  const options = { params: { query: { q, limit } } } as const;
+async function fetchSearchHits(mode: SearchMode, q: string, limit: number, scope: string[] = []): Promise<Hit[]> {
+  const options = { params: { query: { q, limit, ...(scope.length ? { scope } : {}) } } };
   switch (mode) {
     case 'author': return requireData(await api.GET('/api/search/authors', options), '/api/search/authors');
     case 'title': return requireData(await api.GET('/api/search/divHeads', options), '/api/search/divHeads');
@@ -495,14 +495,18 @@ export function luceneSnippet(content: string, query: string, maxChars = 760): s
   return `${start > 0 ? '… ' : ''}${text.slice(start, end).trim()}${end < text.length ? ' …' : ''}`;
 }
 
-export async function realSearch(mode: SearchMode, q: string, limit: number, works: Work[], workId?: string): Promise<SearchResult[]> {
+export async function realSearch(mode: SearchMode, q: string, limit: number, works: Work[], workId?: string, scope: string[] = []): Promise<SearchResult[]> {
   if (q.trim().length < 3) return [];
-  const rawHits = await fetchSearchHits(mode, q, limit);
-  const hits = workId
+  const effectiveScope = scope.length ? scope : (workId ? [workId] : []);
+  const rawHits = await fetchSearchHits(mode, q, limit, effectiveScope);
+  // Keep a defensive client-side filter for older proxies that silently drop
+  // the new scope query parameter; current biblioteca-server filters before
+  // applying its limit, so this does not affect ranked scoped results.
+  const hits = effectiveScope.length
     ? rawHits.filter(hit => {
         const data = hitData(hit);
-        const path = String(data.path || pathFromUrl(hit.url));
-        return path.split('/').slice(0, 2).join('/') === workId;
+        const path = String(data.path || pathFromUrl(hit.url)).replace(/^\//, '').replace(/\.(txt|xml|json|xhtml)$/, '');
+        return effectiveScope.some(item => path === item || path.startsWith(`${item}/`));
       })
     : rawHits;
   const byPath = new Map(works.map(work => [work.id, work]));
@@ -666,6 +670,43 @@ export async function fetchUserPreferences(): Promise<Record<string, unknown>> {
 export async function saveUserPreferences(preferences: Record<string, unknown>): Promise<void> {
   const result = await api.PUT('/api/users/me/preferences', { body: preferences });
   requireData(result, '/api/users/me/preferences');
+}
+
+// Server-owned collection tables. Curated collections deliberately use this
+// API rather than the user-preferences JSON blob; the reader maps the DTOs to
+// its synchronous in-memory PersonalCollection shape in collectionsStore.ts.
+export type ServerCollectionDto = components['schemas']['DivCollectionDto'];
+export type ServerCollectionItemDto = components['schemas']['DivCollectionItemDto'];
+
+export async function fetchMyCollections(): Promise<ServerCollectionDto[]> {
+  const result = await bibliotecaServerApi.GET('/api/collections/mine');
+  return (result.data ?? []) as ServerCollectionDto[];
+}
+
+export async function createServerCollection(name: string): Promise<ServerCollectionDto> {
+  const result = await bibliotecaServerApi.POST('/api/collections/mine', { body: { name } });
+  return result.data as ServerCollectionDto;
+}
+
+export async function renameServerCollection(id: string, name: string): Promise<void> {
+  await bibliotecaServerApi.PATCH('/api/collections/mine/{id}', { params: { path: { id } }, body: { name } });
+}
+
+export async function deleteServerCollection(id: string): Promise<void> {
+  await bibliotecaServerApi.DELETE('/api/collections/mine/{id}', { params: { path: { id } } });
+}
+
+export async function addServerCollectionItem(id: string, item: { type: 'div' | 'fragment'; path: string; start?: string; end?: string }): Promise<ServerCollectionItemDto> {
+  const result = await bibliotecaServerApi.POST('/api/collections/mine/{id}/items', { params: { path: { id } }, body: item });
+  return result.data as ServerCollectionItemDto;
+}
+
+export async function removeServerCollectionItem(id: string, itemId: string): Promise<void> {
+  await bibliotecaServerApi.DELETE('/api/collections/mine/{id}/items/{itemId}', { params: { path: { id, itemId } } });
+}
+
+export async function reorderServerCollection(id: string, itemIds: string[]): Promise<void> {
+  await bibliotecaServerApi.PUT('/api/collections/mine/{id}/order', { params: { path: { id } }, body: { itemIds } });
 }
 
 // --- payments (server.ts's own Stripe/sandbox handlers) ---

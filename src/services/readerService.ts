@@ -1063,6 +1063,7 @@ export const readerService = {
     useRegex?: boolean;
     fuzzy?: boolean;
     workIdSeed?: string;
+    scope?: string[];
     throwOnError?: boolean;
     probeNextPage?: boolean;
   }): Promise<{
@@ -1090,7 +1091,7 @@ export const readerService = {
     }
     let live: SearchResult[] = [];
     try {
-      live = await realSearch(mode, query, Math.max(50, page * pageSize + (options?.probeNextPage ? 1 : 0)), realWorks, options?.workIdSeed);
+      live = await realSearch(mode, query, Math.max(50, page * pageSize + (options?.probeNextPage ? 1 : 0)), realWorks, options?.workIdSeed, options?.scope);
     } catch (error) {
       if (options?.throwOnError) throw error;
       console.warn(`live ${mode} search unavailable`, error);
@@ -1130,7 +1131,7 @@ export const readerService = {
   // one) within the bound, and onUpdate (optional) fires after EACH
   // mode lands with the best merged list so far, so fast tiers appear
   // immediately instead of waiting for the slowest one.
-  async searchCombined(query: string, perModeLimit: number = 5, onUpdate?: (results: SearchResult[]) => void, workIdSeed?: string): Promise<SearchResult[]> {
+  async searchCombined(query: string, perModeLimit: number = 5, onUpdate?: (results: SearchResult[]) => void, workIdSeed?: string, scope: string[] = []): Promise<SearchResult[]> {
     // Grep is deliberately NOT part of the combined default: it's by far the
     // most expensive mode (a live substring scan that re-derives paragraph
     // text from the TEI on every call, bounded only by the server-side
@@ -1141,11 +1142,9 @@ export const readerService = {
     // author's name means you are looking for the author - the author
     // card is the most direct answer and must not be pushed under
     // incidental title matches ("papini" -> Giovanni Papini first).
-    const tiers: SearchMode[][] = [
-      ['author', 'title'],
-      ['lucene'],
-      ['vector']
-    ];
+    const tiers: SearchMode[][] = scope.length
+      ? [['title'], ['lucene'], ['vector']]
+      : [['author', 'title'], ['lucene'], ['vector']];
     const resultsByMode = new Map<SearchMode, SearchResult[]>();
 
     const mergeAndDedupe = (): SearchResult[] => {
@@ -1166,7 +1165,7 @@ export const readerService = {
 
     const modePromises = tiers.flat().map(mode =>
       withTimeout(
-        this.searchConnected(mode, query, { page: 1, pageSize: perModeLimit, workIdSeed }).catch(() => ({ results: [] as SearchResult[] })),
+        this.searchConnected(mode, query, { page: 1, pageSize: perModeLimit, workIdSeed, scope }).catch(() => ({ results: [] as SearchResult[] })),
         PER_MODE_TIMEOUT_MS,
         { results: [] as SearchResult[] }
       ).then(response => {
