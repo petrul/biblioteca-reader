@@ -26,11 +26,15 @@ import { SearchMode, SearchResult, LanguageCode, PersonalCollection } from '../t
 import { languageName } from '../services/languageNames';
 import { readerService, ANONYMOUS_USER_ID } from '../services/readerService';
 import { saveSearch } from '../services/savedSearches';
+import { getSavedSearches, subscribeSavedSearches } from '../services/savedSearches';
+import { persistWorkspaceState, setLastSearch } from '../services/workspaceStore';
 
 interface SearchViewProps {
   initialMode?: SearchMode;
   initialQuery?: string;
   initialWorkSeed?: string;
+  initialScopeWorkId?: string;
+  savedSearchId?: string;
   onSelectWork: (workId: string) => void;
   onSelectChapter: (workId: string, chapterId: string) => void;
   onSelectAuthor: (authorId: string) => void;
@@ -110,6 +114,8 @@ export const SearchView: React.FC<SearchViewProps> = ({
   initialMode = 'lucene',
   initialQuery = '',
   initialWorkSeed,
+  initialScopeWorkId,
+  savedSearchId,
   onSelectWork,
   onSelectChapter,
   onSelectAuthor,
@@ -141,6 +147,19 @@ export const SearchView: React.FC<SearchViewProps> = ({
   // reader's behalf, so it starts single-mode rather than combined.
   const [combinedMode, setCombinedMode] = useState(!initialWorkSeed);
   const [query, setQuery] = useState(initialQuery);
+  const [scope, setScope] = useState<'library' | 'work'>(initialScopeWorkId ? 'work' : 'library');
+  useEffect(() => {
+    if (!savedSearchId) return;
+    const applySavedSearch = () => {
+      const saved = getSavedSearches().find(search => search.id === savedSearchId);
+      if (!saved) return;
+      setQuery(saved.query);
+      setActiveMode(saved.mode ?? 'lucene');
+      setCombinedMode(!saved.mode);
+    };
+    applySavedSearch();
+    return subscribeSavedSearches(applySavedSearch);
+  }, [savedSearchId]);
   // The query input owns the caret the moment the page opens - the search
   // entry point is typing, not clicking (the navbar's own search icon
   // hides while this view is active). autoFocus covers the initial mount;
@@ -196,7 +215,8 @@ export const SearchView: React.FC<SearchViewProps> = ({
     if (initialMode) setActiveMode(initialMode);
     if (initialQuery !== undefined) setQuery(initialQuery);
     setCombinedMode(!initialWorkSeed);
-  }, [initialMode, initialQuery, initialWorkSeed]);
+    setScope(initialScopeWorkId ? 'work' : 'library');
+  }, [initialMode, initialQuery, initialWorkSeed, initialScopeWorkId]);
 
   // Debounced query - waits for a pause in typing before actually
   // searching, same reasoning/value as the navbar's own live dropdown
@@ -239,7 +259,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
       // bounded - see searchCombined) - results from fast modes populate
       // the page immediately instead of the whole search waiting on the
       // slowest one (e.g. vector search behind a contended Ollama).
-      void readerService.searchCombined(debouncedQuery, perModeLimit, applyResults).then(applyResults);
+      void readerService.searchCombined(debouncedQuery, perModeLimit, applyResults, scope === 'work' ? initialScopeWorkId : undefined).then(applyResults);
       return () => { current = false; };
     }
     void readerService.searchConnected(activeMode, debouncedQuery, {
@@ -249,10 +269,35 @@ export const SearchView: React.FC<SearchViewProps> = ({
       caseSensitive,
       useRegex,
       fuzzy: fuzzySearch,
-      workIdSeed: initialWorkSeed
+      workIdSeed: scope === 'work' ? (initialScopeWorkId || initialWorkSeed) : undefined
     }).then(response => { if (current) setSearchResponse(response); });
     return () => { current = false; };
-  }, [combinedMode, activeMode, debouncedQuery, searchRun, page, langFilter, caseSensitive, useRegex, fuzzySearch, initialWorkSeed]);
+  }, [combinedMode, activeMode, debouncedQuery, searchRun, page, langFilter, caseSensitive, useRegex, fuzzySearch, initialWorkSeed, initialScopeWorkId, scope]);
+
+  // Keep the last search as a compact, account-synchronizable workspace
+  // document. Results are deliberately rerunnable rather than copied into
+  // the account blob; the page/cursor and scope are what make reopening
+  // deterministic without storing a large result payload.
+  useEffect(() => {
+    if (!query.trim()) return;
+    const timer = setTimeout(() => {
+      setLastSearch({
+        version: 1,
+        query,
+        mode: combinedMode ? 'all' : activeMode,
+        scope,
+        workId: scope === 'work' ? (initialScopeWorkId || initialWorkSeed) : undefined,
+        options: { caseSensitive, useRegex, fuzzy: fuzzySearch, language: langFilter },
+        page,
+        pageSize: 6,
+        fetchedPages: [page],
+        savedSearchId,
+        updatedAt: new Date().toISOString(),
+      });
+      void persistWorkspaceState().catch(error => console.warn('[workspace] last search save failed', error));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [query, combinedMode, activeMode, scope, initialScopeWorkId, initialWorkSeed, caseSensitive, useRegex, fuzzySearch, langFilter, page, savedSearchId]);
 
   const adminStatus = readerService.getAdminStatus();
   const vectorAvailable = adminStatus.vectorSearchStatus.available;
@@ -505,6 +550,9 @@ export const SearchView: React.FC<SearchViewProps> = ({
 
           {/* Search Metrics and Language Selector */}
           <div className="flex items-center space-x-3">
+            <button type="button" id="search-scope-toggle" onClick={() => { setScope(current => current === 'library' ? 'work' : 'library'); setPage(1); }} className="rounded-lg border border-white/20 px-2.5 py-1 text-[11px] text-white hover:bg-white/10 cursor-pointer">
+              Scope: {scope === 'work' && initialScopeWorkId ? 'Open work' : 'Whole library'}
+            </button>
             <span className="text-[11px] font-mono text-white/70">
               {searchResponse.tookMs}ms latency
             </span>

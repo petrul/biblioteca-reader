@@ -18,6 +18,7 @@ import {
   deleteSavedSearch,
   getSavedSearches,
   renameSavedSearch,
+  exportSavedSearch,
   subscribeSavedSearches,
 } from '../services/savedSearches';
 import {
@@ -378,6 +379,18 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
                 <button type="button" title="Rename" aria-label="Rename" className={ICON_BUTTON}
                         onClick={() => { setDraftName(group.title); setEditingId(group.id); }}>
                   <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" title="Export Markdown" aria-label="Export Markdown" className={ICON_BUTTON}
+                        onClick={() => exportSavedSearch(group.id, 'md')}>
+                  <span className="text-[9px] font-bold">MD</span>
+                </button>
+                <button type="button" title="Export HTML" aria-label="Export HTML" className={ICON_BUTTON}
+                        onClick={() => exportSavedSearch(group.id, 'html')}>
+                  <span className="text-[9px] font-bold">HTML</span>
+                </button>
+                <button type="button" title="Export OpenDocument" aria-label="Export OpenDocument" className={ICON_BUTTON}
+                        onClick={() => exportSavedSearch(group.id, 'odt')}>
+                  <span className="text-[9px] font-bold">ODT</span>
                 </button>
               </>
             )}

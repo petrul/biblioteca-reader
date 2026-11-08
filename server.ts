@@ -595,6 +595,60 @@ const BIBLIOTECA_GET_ROUTES = [
   '/api/search/lucene',
   '/api/search/vector',
 ];
+
+// The upstream GraphQL endpoint is internal-only. This narrow reader gateway
+// injects the service token server-side, forwards the browser session cookie,
+// and admits only the named operations used by the workspace UI. It must not
+// become a public arbitrary GraphQL tunnel.
+const READER_GRAPHQL_OPERATIONS = new Set([
+  'MyReaderState',
+  'UpdateMyReaderState',
+  'MySavedSearches',
+  'SaveMySearch',
+  'RenameMyCollection',
+  'DeleteMyCollection',
+]);
+const READER_GRAPHQL_ROOT_FIELDS: Record<string, string> = {
+  MyReaderState: 'myReaderState',
+  UpdateMyReaderState: 'updateMyReaderState',
+  MySavedSearches: 'mySavedSearches',
+  SaveMySearch: 'saveMySearch',
+  RenameMyCollection: 'renameMyCollection',
+  DeleteMyCollection: 'deleteMyCollection',
+};
+app.post('/api/reader-graphql', asyncRoute(async (req: Request, res: Response) => {
+  const operationName = req.body?.operationName;
+  const query = req.body?.query;
+  const rootField = typeof operationName === 'string' ? READER_GRAPHQL_ROOT_FIELDS[operationName] : undefined;
+  if (typeof operationName !== 'string' || !READER_GRAPHQL_OPERATIONS.has(operationName)
+      || typeof query !== 'string' || query.length > 20_000 || !rootField
+      || query.includes('__schema') || query.includes('__type') || !new RegExp(`\\b${rootField}\\b`).test(query)) {
+    res.status(400).json({ error: 'unsupported reader GraphQL operation' });
+    return;
+  }
+  if (!BIBLIOTECA_INTERNAL_API_TOKEN) {
+    res.status(503).json({ error: 'reader GraphQL gateway is not configured' });
+    return;
+  }
+  try {
+    const upstreamRes = await fetch(`${BIBLIOTECA_SERVER_URL}/graphql`, {
+      method: 'POST',
+      headers: {
+        ...forwardedHeaders(req),
+        Authorization: `Bearer ${BIBLIOTECA_INTERNAL_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables: req.body?.variables ?? {}, operationName }),
+      redirect: 'manual',
+    });
+    relaySetCookie(upstreamRes, res);
+    res.status(upstreamRes.status);
+    res.setHeader('Content-Type', upstreamRes.headers.get('content-type') || 'application/json');
+    res.send(Buffer.from(await upstreamRes.arrayBuffer()));
+  } catch (error: any) {
+    res.status(502).json({ error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
+  }
+}));
 // Wrapped, not passed directly: Express always calls a route handler as
 // fn(req, res, next), which would otherwise land in relayGetFromBiblioteca's
 // own optional third parameter (a function, not undefined) and defeat its

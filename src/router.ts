@@ -36,7 +36,7 @@ export interface RouteState {
   block?: ParagraphRange;
   fragment?: FragmentLocation;
   quoteId?: string;
-  search?: { mode?: SearchMode; query?: string; workSeed?: string };
+  search?: { mode?: SearchMode; query?: string; workSeed?: string; savedSearchId?: string };
 }
 
 export function parseAppPath(pathname: string, hash = '', search = ''): RouteState {
@@ -55,6 +55,7 @@ export function parseAppPath(pathname: string, hash = '', search = ''): RouteSta
 
 
   if (head === 'search') {
+    if (rest[0] === 'saved' && rest[1]) return { view: 'search', search: { savedSearchId: rest[1] } };
     const params = new URLSearchParams(search);
     const mode = params.get('mode');
     return {
@@ -62,7 +63,8 @@ export function parseAppPath(pathname: string, hash = '', search = ''): RouteSta
       search: {
         mode: mode && ['author', 'title', 'grep', 'lucene', 'vector'].includes(mode) ? (mode as SearchMode) : undefined,
         query: params.get('q') ?? undefined,
-        workSeed: params.get('seed') ?? undefined
+        workSeed: params.get('seed') ?? undefined,
+        savedSearchId: undefined
       }
     };
   }
@@ -162,6 +164,7 @@ export function buildCatalogFragment(catalog: CatalogState): string {
 export function buildAppPath(state: RouteState): string {
   switch (state.view) {
     case 'search': {
+      if (state.search?.savedSearchId) return `${APP_PREFIX}/search/saved/${encodeURIComponent(state.search.savedSearchId)}`;
       const params = new URLSearchParams();
       if (state.search?.mode && state.search.mode !== 'title') params.set('mode', state.search.mode);
       if (state.search?.query) params.set('q', state.search.query);

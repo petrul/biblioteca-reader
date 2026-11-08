@@ -34,3 +34,16 @@ test('catalogue links from before it had its own page still open the catalogue',
   assert.equal(route.catalog?.tab, 'reading-lists');
   assert.equal(route.catalog?.listsType, 'author');
 });
+
+test('Bible works keep the canonical trad/biblia-* reader namespace', () => {
+  const route = parseAppPath('/trad/biblia-ortodoxa/cartea-facerii/1');
+  assert.equal(route.view, 'reader');
+  assert.equal(route.workId, 'trad/biblia-ortodoxa');
+  assert.equal(route.chapterId, 'trad/biblia-ortodoxa/cartea-facerii/1');
+  assert.equal(buildAppPath(route), '/trad/biblia-ortodoxa/cartea-facerii/1');
+});
+
+test('saved searches have a bookmarkable route', () => {
+  assert.deepEqual(parseAppPath('/app/search/saved/search-123'), { view: 'search', search: { savedSearchId: 'search-123' } });
+  assert.equal(buildAppPath({ view: 'search', search: { savedSearchId: 'search-123' } }), '/app/search/saved/search-123');
+});

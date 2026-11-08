@@ -495,9 +495,16 @@ export function luceneSnippet(content: string, query: string, maxChars = 760): s
   return `${start > 0 ? '… ' : ''}${text.slice(start, end).trim()}${end < text.length ? ' …' : ''}`;
 }
 
-export async function realSearch(mode: SearchMode, q: string, limit: number, works: Work[]): Promise<SearchResult[]> {
+export async function realSearch(mode: SearchMode, q: string, limit: number, works: Work[], workId?: string): Promise<SearchResult[]> {
   if (q.trim().length < 3) return [];
-  const hits = await fetchSearchHits(mode, q, limit);
+  const rawHits = await fetchSearchHits(mode, q, limit);
+  const hits = workId
+    ? rawHits.filter(hit => {
+        const data = hitData(hit);
+        const path = String(data.path || pathFromUrl(hit.url));
+        return path.split('/').slice(0, 2).join('/') === workId;
+      })
+    : rawHits;
   const byPath = new Map(works.map(work => [work.id, work]));
   // Search results commonly point at works outside the currently loaded
   // catalogue page. Resolve those roots in parallel so their language (and

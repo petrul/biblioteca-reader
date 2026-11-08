@@ -106,6 +106,18 @@ const contentPath = {
 // implementation - the request/response shapes the reader's client
 // (readerService's payment flow, via serversideApi.ts) is typed against.
 const ownPaths = {
+    '/api/reader-graphql': {
+        post: {
+            summary: 'Allowlisted reader workspace GraphQL operations',
+            requestBody: { required: true, content: { 'application/json': { schema: {
+                type: 'object', required: ['operationName', 'query'], properties: {
+                    operationName: { type: 'string', enum: ['MyReaderState', 'UpdateMyReaderState', 'MySavedSearches', 'SaveMySearch', 'RenameMyCollection', 'DeleteMyCollection'] },
+                    query: { type: 'string' }, variables: { type: 'object' },
+                },
+            } } } },
+            responses: { '200': { description: 'GraphQL response' }, '400': { description: 'Unsupported operation' }, '503': { description: 'Gateway not configured' } },
+        },
+    },
     '/api/covers/work': {
         post: {
             summary: 'Render a randomized cover for a canonical work through the same-origin gateway',

@@ -1,6 +1,7 @@
 # Search and collections: specification
 
-Status: **spec, ready for implementation in steps** (see
+Status: **implementation in progress** (Steps 0/1/5/6 have an initial vertical
+slice; the remaining steps stay planned) (see
 [Assessment and implementation plan](#assessment-and-implementation-plan) at the
 end).
 
@@ -564,6 +565,27 @@ workspace is stable; cross-device sync of the last search is no longer
 deferred.
 
 ### Resolved decisions and remaining questions
+
+### Current implementation slice
+
+The first vertical slice is now in the reader and Biblioteca server:
+
+- an implicit workspace can be toggled from the navbar or `\\`, discarded
+  without deleting data, shown as left/right desktop drawers or a mobile
+  bottom sheet, and kept locally for anonymous readers;
+- signed-in workspace state and the bounded last-search descriptor are stored
+  through the same-origin, operation-allowlisted GraphQL gateway with a
+  revision check; anonymous state remains in local storage;
+- saved searches use GraphQL CRUD, have bookmarkable `/app/search/saved/:id`
+  routes, and export the frozen result list as Markdown, HTML, or a valid ODT
+  package;
+- `/` reopens the last search and search scope defaults to the open work;
+  Bible routes retain the canonical `/trad/biblia-*` namespace.
+
+The remaining work is deliberately still visible in the numbered steps above:
+server-side scope filtering, a unified virtualized entry-list model, true
+per-drawer list selection/cursors, search history, reference parsing and
+cross-references, and named workspaces are not silently implied by this MVP.
 
 - **Last search sync:** yes, for signed-in readers, including its cursor and
   fetched result pages.

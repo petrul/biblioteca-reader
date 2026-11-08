@@ -1090,7 +1090,7 @@ export const readerService = {
     }
     let live: SearchResult[] = [];
     try {
-      live = await realSearch(mode, query, Math.max(50, page * pageSize + (options?.probeNextPage ? 1 : 0)), realWorks);
+      live = await realSearch(mode, query, Math.max(50, page * pageSize + (options?.probeNextPage ? 1 : 0)), realWorks, options?.workIdSeed);
     } catch (error) {
       if (options?.throwOnError) throw error;
       console.warn(`live ${mode} search unavailable`, error);
@@ -1130,7 +1130,7 @@ export const readerService = {
   // one) within the bound, and onUpdate (optional) fires after EACH
   // mode lands with the best merged list so far, so fast tiers appear
   // immediately instead of waiting for the slowest one.
-  async searchCombined(query: string, perModeLimit: number = 5, onUpdate?: (results: SearchResult[]) => void): Promise<SearchResult[]> {
+  async searchCombined(query: string, perModeLimit: number = 5, onUpdate?: (results: SearchResult[]) => void, workIdSeed?: string): Promise<SearchResult[]> {
     // Grep is deliberately NOT part of the combined default: it's by far the
     // most expensive mode (a live substring scan that re-derives paragraph
     // text from the TEI on every call, bounded only by the server-side
@@ -1166,7 +1166,7 @@ export const readerService = {
 
     const modePromises = tiers.flat().map(mode =>
       withTimeout(
-        this.searchConnected(mode, query, { page: 1, pageSize: perModeLimit }).catch(() => ({ results: [] as SearchResult[] })),
+        this.searchConnected(mode, query, { page: 1, pageSize: perModeLimit, workIdSeed }).catch(() => ({ results: [] as SearchResult[] })),
         PER_MODE_TIMEOUT_MS,
         { results: [] as SearchResult[] }
       ).then(response => {
