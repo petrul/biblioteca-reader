@@ -78,14 +78,17 @@ function itemPath(result: SearchResult): string {
 }
 
 function fromServer(col: ServerCollection): SavedSearch {
-  let mode: SearchMode | undefined;
-  try { mode = (JSON.parse(col.searchParams ?? '{}') as { mode?: SearchMode }).mode; } catch { /* no options */ }
+  let params: { mode?: SearchMode; scope?: 'library' | 'work'; workId?: string; options?: Record<string, unknown> } = {};
+  try { params = JSON.parse(col.searchParams ?? '{}'); } catch { /* no options */ }
   return {
     id: col.id,
     kind: 'search',
     name: col.name,
     query: col.searchQuery ?? col.name,
-    mode,
+    mode: params.mode,
+    scope: params.scope,
+    scopeWorkId: params.workId,
+    options: params.options,
     createdAt: col.createdAt,
     updatedAt: col.createdAt,
     items: (col.items ?? []).map((item): SavedSearchItem => {
@@ -124,7 +127,7 @@ export function detachSavedSearchesAccount(): void {
   emit();
 }
 
-export async function saveSearch(query: string, mode: SearchMode | 'all', results: SearchResult[], name?: string): Promise<SavedSearch> {
+export async function saveSearch(query: string, mode: SearchMode | 'all', results: SearchResult[], name?: string, details?: { scope?: 'library' | 'work'; workId?: string; options?: Record<string, unknown> }): Promise<SavedSearch> {
   const trimmed = query.trim();
   const chosenName = (name ?? '').trim() || defaultSearchName(trimmed);
   const hits = results.filter(r => r.type !== 'author').slice(0, 100);
@@ -132,7 +135,7 @@ export async function saveSearch(query: string, mode: SearchMode | 'all', result
   if (serverBacked) {
     const result = await readerGraphql<{ saveMySearch: ServerCollection }>('SaveMySearch',
       'mutation SaveMySearch($name: String, $query: String!, $params: String, $hits: [SavedSearchHitInput!]) { saveMySearch(name: $name, query: $query, params: $params, hits: $hits) { id name kind searchQuery searchParams createdAt items { id divPath divHead snippet score addedAt } } }',
-      { name: chosenName, query: trimmed, params: JSON.stringify({ mode }), hits: hits.map(r => ({ path: itemPath(r), snippet: r.snippet, score: r.score })) });
+      { name: chosenName, query: trimmed, params: JSON.stringify({ mode, scope: details?.scope, workId: details?.workId, options: details?.options }), hits: hits.map(r => ({ path: itemPath(r), snippet: r.snippet, score: r.score })) });
     const created = result.saveMySearch;
     saved = fromServer(created);
   } else {
@@ -141,7 +144,7 @@ export async function saveSearch(query: string, mode: SearchMode | 'all', result
     let unique = chosenName;
     for (let n = 2; taken.has(unique); n++) unique = `${chosenName} (${n})`;
     saved = {
-      id: newId(), kind: 'search', name: unique, query: trimmed, mode: mode === 'all' ? undefined : mode,
+      id: newId(), kind: 'search', name: unique, query: trimmed, mode: mode === 'all' ? undefined : mode, scope: details?.scope, scopeWorkId: details?.workId, options: details?.options,
       createdAt: now, updatedAt: now,
       items: hits.map((r): SavedSearchItem => ({
         id: newId(), target: r.target, workId: r.workId, chapterId: r.chapterId, workTitle: r.workTitle, authorName: r.authorName,

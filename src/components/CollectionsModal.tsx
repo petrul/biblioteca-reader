@@ -12,6 +12,7 @@ interface CollectionsModalProps {
   onSelectChapter: (workId: string, chapterId: string) => void;
   onOpenQuote: (quoteId: string, saved?: SavedQuote) => void;
   onRunSearch: (query: string) => void;
+  onOpenSavedSearch?: (id: string) => void;
   /** Open the full Collections page, where items can be reordered and removed. */
   onManage: () => void;
 }
@@ -32,6 +33,7 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({
   onSelectChapter,
   onOpenQuote,
   onRunSearch,
+  onOpenSavedSearch,
   onManage,
 }) => {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -111,6 +113,7 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({
           onSelectChapter={onSelectChapter}
           onOpenQuote={onOpenQuote}
           onRunSearch={onRunSearch}
+          onOpenSavedSearch={onOpenSavedSearch}
           onNavigate={onClose}
           searchAddon={
             <button

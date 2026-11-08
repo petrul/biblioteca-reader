@@ -44,6 +44,7 @@ export interface CollectionsPanelProps {
   onSelectChapter: (workId: string, chapterId: string) => void;
   onOpenQuote: (quoteId: string, saved?: SavedQuote) => void;
   onRunSearch: (query: string) => void;
+  onOpenSavedSearch?: (id: string) => void;
   /** Called after something was opened - the modal closes itself here. */
   onNavigate?: () => void;
   /** Rendered next to the search box (the modal's close button). */
@@ -85,6 +86,7 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
   onSelectChapter,
   onOpenQuote,
   onRunSearch,
+  onOpenSavedSearch,
   onNavigate,
   searchAddon,
   className = '',
@@ -163,6 +165,12 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
   const runSearch = (group: CollectionsGroup) => {
     if (group.query === undefined) return;
     onRunSearch(group.query);
+    onNavigate?.();
+  };
+
+  const openSavedSearch = (group: CollectionsGroup) => {
+    if (group.query === undefined) return;
+    onOpenSavedSearch?.(group.id);
     onNavigate?.();
   };
 
@@ -368,6 +376,12 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
             )}
           </span>
         </button>
+        {isSearch && onOpenSavedSearch && (
+          <button type="button" title="Open frozen search document" aria-label="Open frozen search document" className={ICON_BUTTON}
+                  onClick={() => openSavedSearch(group)}>
+            <Bookmark className="w-3.5 h-3.5" />
+          </button>
+        )}
         {manage && (
           <div className="flex items-center shrink-0">
             {isSearch && (

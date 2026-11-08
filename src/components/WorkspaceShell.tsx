@@ -13,9 +13,10 @@ interface WorkspaceShellProps {
   onSelectChapter: (workId: string, chapterId: string) => void;
   onOpenQuote: (quoteId: string, saved?: SavedQuote) => void;
   onRunSearch: (query: string) => void;
+  onOpenSavedSearch?: (id: string) => void;
 }
 
-export function WorkspaceShell({ currentUser, onOpenAuth, onSelectWork, onSelectChapter, onOpenQuote, onRunSearch }: WorkspaceShellProps) {
+export function WorkspaceShell({ currentUser, onOpenAuth, onSelectWork, onSelectChapter, onOpenQuote, onRunSearch, onOpenSavedSearch }: WorkspaceShellProps) {
   const [, redraw] = useState(0);
   useEffect(() => subscribeWorkspace(() => redraw(value => value + 1)), []);
   const state = getWorkspace();
@@ -47,6 +48,7 @@ export function WorkspaceShell({ currentUser, onOpenAuth, onSelectWork, onSelect
         onSelectChapter={onSelectChapter}
         onOpenQuote={onOpenQuote}
         onRunSearch={onRunSearch}
+        onOpenSavedSearch={onOpenSavedSearch}
       />
     </aside>
   );
@@ -68,6 +70,7 @@ export function WorkspaceShell({ currentUser, onOpenAuth, onSelectWork, onSelect
           onSelectChapter={onSelectChapter}
           onOpenQuote={onOpenQuote}
           onRunSearch={onRunSearch}
+          onOpenSavedSearch={onOpenSavedSearch}
         />
       </div>
       <div className="fixed z-50 bottom-3 right-3 sm:right-6 flex items-center gap-2">

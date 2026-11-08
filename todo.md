@@ -50,7 +50,7 @@ through the versioned GraphQL workspace state.
   preferences document for cross-device recall. It is capped at 20 entries,
   deduplicated, and supports arrow-key recall, per-entry deletion, and clear.
 
-## 4. Unified list model
+## 4. Unified list model — initial implementation
 
 Introduce the planned `src/library/` abstraction:
 
@@ -64,8 +64,11 @@ Introduce the planned `src/library/` abstraction:
   drawers;
 - virtualization for large lists.
 
-The current UI still has separate models and renderers for collections, saved
-searches, and live search results.
+`src/library/` now provides the shared `Entry`, `PassageRef`, `EntryList`,
+`ListKey`, adapters, async iteration, paged loading and `ListCursor` contract.
+Saved-search documents use the shared `EntryListView`. Remaining work is to
+replace the older collection/search row renderer everywhere and add true
+virtualization plus server-backed unknown-size lists.
 
 ## 5. Collection-storage unification — initial implementation
 
@@ -98,8 +101,10 @@ pin and explicit undo UI remain follow-up work.
 - Separate “open frozen snapshot” from “rerun search”.
 - Use an internal identity such as `search:<uuid>` for the document model.
 
-HTML, Markdown, and minimal valid ODT package exports are implemented, but the
-center-reader document presentation is not yet a separate document model.
+Saved searches now open as immutable center-reader documents with identity
+`search:<uuid>`, frozen entries, query/mode/scope/timestamp metadata, source and
+score labels, explicit rerun and “Keep as collection” actions, plus the three
+exports. Opening the document never reruns the query.
 
 ## 7. Real workspace drawers
 
@@ -152,7 +157,7 @@ The current code only preserves the canonical Bible route behavior.
 - Display cross-references from selected passages.
 - Keep cross-reference navigation inside the list/workspace model.
 
-## 11. Browser-level testing
+## 11. Browser-level testing — initial coverage
 
 Add Playwright/e2e coverage for:
 
@@ -170,8 +175,11 @@ Add Playwright/e2e coverage for:
 - Bible route preservation;
 - anonymous sign-in prompts for sync-only features.
 
-The current unit suites cover the GraphQL gateway, workspace store, route
-parsing, saved-search operations, and ODT package generation.
+`e2e/workspace-saved-search.spec.ts` now covers the navbar workspace toggle,
+desktop drawer opening, frozen saved-search deep links, Markdown download,
+explicit rerun, and mobile bottom-sheet discard. The remaining account-sync,
+revision-conflict, last-search reload, Bible-route and focused-drawer cases
+still need a disposable integration environment.
 
 ## 12. Deployment and migration verification
 

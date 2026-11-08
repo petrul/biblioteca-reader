@@ -21,7 +21,7 @@ import { AuthorView } from './components/AuthorView';
 import { WorkView } from './components/WorkView';
 import { ReaderView } from './components/ReaderView';
 import { SearchView } from './components/SearchView';
-import { attachSavedSearchesAccount, detachSavedSearchesAccount, subscribeSavedSearches } from './services/savedSearches';
+import { attachSavedSearchesAccount, detachSavedSearchesAccount, subscribeSavedSearches, getSavedSearches } from './services/savedSearches';
 import { CollectionsView } from './components/CollectionsView';
 import { CollectionsModal } from './components/CollectionsModal';
 import { useCollectionsShortcut } from './hooks/useCollectionsShortcut';
@@ -40,6 +40,7 @@ import { loadWorkspaceState, persistWorkspaceState, getLastSearch, getWorkspace,
 import { attachSearchHistoryAccount, type SearchHistoryEntry } from './services/searchHistory';
 import { ServerCollectionsStore } from './services/collectionsStore';
 import { WorkspaceShell } from './components/WorkspaceShell';
+import { SavedSearchDocumentView } from './components/SavedSearchDocumentView';
 
 export default function App() {
   const [dataRevision, setDataRevision] = useState(0);
@@ -707,7 +708,30 @@ export default function App() {
           />
         )}
 
-        {currentView === 'search' && (
+        {currentView === 'search' && savedSearchId && getSavedSearches().find(search => search.id === savedSearchId) && (
+          <SavedSearchDocumentView
+            search={getSavedSearches().find(search => search.id === savedSearchId)!}
+            onSelectWork={handleSelectWork}
+            onSelectChapter={handleSelectChapter}
+            onRerun={search => {
+              setSavedSearchId(undefined);
+              setSearchQuery(search.query);
+              setSearchMode(search.mode ?? 'title');
+              setSearchScopeWorkId(search.scope === 'work' ? search.scopeWorkId : undefined);
+            }}
+            onKeepAsCollection={search => {
+              const userId = currentUser?.id || ANONYMOUS_USER_ID;
+              const collection = readerService.createCollection(userId, `${search.name} — collection`, `Frozen results from search: ${search.query}`);
+              search.items.forEach(item => readerService.addItemToCollection(userId, collection.id, {
+                type: item.chapterId ? 'chapter' : 'work', referenceId: item.chapterId || item.workId, workId: item.workId,
+                workTitle: item.workTitle, authorName: item.authorName, chapterId: item.chapterId, chapterTitle: item.chapterTitle,
+                quoteText: item.snippet,
+              }));
+            }}
+          />
+        )}
+
+        {currentView === 'search' && !savedSearchId && (
           <SearchView
             key={`${searchMode}|${searchQuery}|${searchWorkSeed ?? ''}|${searchScopeWorkId ?? ''}`}
             initialMode={searchMode}
@@ -745,6 +769,7 @@ export default function App() {
             setSavedSearchId(undefined);
             setCurrentView('search');
           }}
+          onOpenSavedSearch={id => { setSavedSearchId(id); setCurrentView('search'); }}
           onBack={handleAppBack}
         />
 
@@ -755,6 +780,7 @@ export default function App() {
           onSelectChapter={handleSelectChapter}
           onOpenQuote={handleOpenQuote}
           onRunSearch={query => { setSearchQuery(query); setSavedSearchId(undefined); setCurrentView('search'); }}
+          onOpenSavedSearch={id => { setSavedSearchId(id); setCurrentView('search'); }}
         />
 
         {currentView === 'admin' && isAdmin && (
@@ -877,6 +903,7 @@ export default function App() {
           setSavedSearchId(undefined);
           setCurrentView('search');
         }}
+        onOpenSavedSearch={id => { setSavedSearchId(id); setCurrentView('search'); }}
         onManage={() => setCurrentView('collections')}
       />
 

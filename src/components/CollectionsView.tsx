@@ -14,6 +14,7 @@ interface CollectionsViewProps {
   onSelectChapter: (workId: string, chapterId: string) => void;
   onOpenQuote: (quoteId: string, saved?: SavedQuote) => void;
   onRunSearch: (query: string) => void;
+  onOpenSavedSearch?: (id: string) => void;
   onBack: () => void;
 }
 
@@ -29,6 +30,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
   onSelectChapter,
   onOpenQuote,
   onRunSearch,
+  onOpenSavedSearch,
   onBack
 }) => {
   // Sign-out lives in the AuthModal (the signed-in navbar avatar opens it),
@@ -131,6 +133,7 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
           onSelectChapter={onSelectChapter}
           onOpenQuote={onOpenQuote}
           onRunSearch={onRunSearch}
+          onOpenSavedSearch={onOpenSavedSearch}
         />
       </div>
 
