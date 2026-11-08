@@ -20,6 +20,7 @@ import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
 import { useLongPressDrag } from '../hooks/useLongPressDrag';
 import { readerService } from '../services/readerService';
 import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
+import { authorLabelForTitleBar } from '../services/authorLabel';
 
 // Waits this long after the last keystroke before actually searching -
 // long enough that a fast typist doesn't fire a request per letter, short
@@ -131,7 +132,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onChatDragActiveChange
 }) => {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const brandSubtitle = pageTitle ? pageSubtitle : 'Your Scriptorium classical readings';
+  const brandSubtitle = pageTitle ? authorLabelForTitleBar(pageSubtitle, pageTitle) : 'Your Scriptorium classical readings';
+  const visiblePageAuthorId = brandSubtitle ? pageAuthorId : undefined;
   // Starts empty on every page load: a search runs only when the reader
   // types. (A remembered last query used to be restored here, and the
   // search effect below then re-ran it on every load - a long pasted query
@@ -548,10 +550,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 </div>
               </button>
-              {brandSubtitle && (pageAuthorId && onOpenAuthor ? (
+              {brandSubtitle && (visiblePageAuthorId && onOpenAuthor ? (
                 <button
                   id="nav-logo-author-btn"
-                  onClick={() => onOpenAuthor(pageAuthorId)}
+                  onClick={() => onOpenAuthor(visiblePageAuthorId)}
                   title={`Open ${brandSubtitle}'s page`}
                   className="text-left cursor-pointer min-w-0 group/author"
                 >
