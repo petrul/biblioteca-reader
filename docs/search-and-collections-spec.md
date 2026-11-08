@@ -10,6 +10,23 @@ collections with one tap, and arrange searches and collections beside the
 reader. One vocabulary, one item model, and shared UI components cover all
 of it.
 
+Product decisions recorded for this revision:
+
+- The last search **does sync across devices for signed-in readers**, including
+  its query, mode, scope, fetched pages and cursor. Anonymous readers may use
+  the feature locally and are invited to sign in when they ask for sync.
+- There are two Bible works for now. Bible routes use the `/trad/biblia-*`
+  namespace; reference resolution and generated links must preserve that
+  namespace rather than inventing a second Bible URL scheme.
+- Any feature that needs account synchronization (last search, workspaces and
+  future synced history) invites an anonymous reader to log in. Anonymous use
+  remains useful locally; it is never silently discarded.
+- `/`, `[` / `]`, and `\` are accepted shortcuts. `/` opens search, `[` and
+  `]` move through the active list, and `\` toggles the workspace drawers.
+- A saved search is a first-class **transversal document**: a frozen,
+  navigable result list that can be opened in a drawer or in the center reader,
+  kept as a collection, rerun, and exported as HTML, Markdown or ODT.
+
 ## 1. What already exists
 
 The spec builds on what is there; most of the data plumbing exists.
@@ -47,7 +64,7 @@ One set of terms in code, UI and docs.
 | **Passage** | Anything addressable in the library: a work, a division (chapter, subchapter), a paragraph range, or a quoted fragment. Identified by a stable path plus an optional range. |
 | **Entry** | A passage *inside a list*, with list-specific data: label, snippet, score, note, when added. Every list holds entries. |
 | **List** | An ordered, iterable sequence of entries. Every list is iterable. |
-| **Collection** | A named, persisted list. Kinds: **Favorites** (one per reader), **Curated** (hand-made), **Saved search** (a frozen result snapshot plus its query). |
+| **Collection** | A named, persisted list. Kinds: **Favorites** (one per reader), **Curated** (hand-made), **Saved search** (a frozen result snapshot plus its query and a first-class transversal document). |
 | **Search** | Query + mode + scope. Running it produces a **result list** (transient, server-paged). |
 | **Last search** | The most recent search and its results, cursor included. Always kept, survives reloads, reopened by `/`. Not a collection until saved. |
 | **Search history** | The recent searches (query + mode + scope, no results), for quick re-run. |
@@ -55,7 +72,7 @@ One set of terms in code, UI and docs.
 | **Scope** | Where a search looks: the whole library, a set of works, or a division subtree. Defaults from context. |
 | **Cursor** | The current position in a list: "result 7 of 120". Lets the reader step to the next or previous entry while reading. |
 | **Drawer** | A collapsible panel beside the reader showing one list. |
-| **Workspace** | A named arrangement: which list sits in which drawer, plus the working collection and the default scope. Stored with the account. |
+| **Workspace** | A named arrangement of up to two active collection/search lists in desktop drawers, plus the working collection and default scope. Stored with the account. |
 
 **Searching vs filtering.** *Searching* asks the server, produces a new
 result list and is recorded in history. *Filtering* narrows a list that is
@@ -65,12 +82,19 @@ visually distinct: a magnifier with "Search the library…" / "Search in
 *Biblia ortodoxă*…" versus a funnel with "Filter 37 entries…". The UI never
 switches silently from one to the other.
 
-**Last search vs working collection** (open question in the notes): these are
+**Last search vs working collection:** these are
 two roles, not one. The last search is where you *read from*; the working
 collection is where you *put things*. Both can be shown in drawers at the
 same time. A saved search is a snapshot and does not accept manual adds;
 **Keep as collection** turns it into a curated collection when the reader
 wants to curate it.
+
+**Transversal document:** a saved search is not an opus and does not pretend to
+have a TEI chapter path. Its stable identity is `search:<uuid>`; its document
+body is the ordered, paged result snapshot with query, mode, scope, source
+labels and links back to each passage. Opening it in the center reader uses a
+search-document presentation, while opening it in a drawer uses the same list
+and cursor state.
 
 ## 3. Data model
 
@@ -215,7 +239,7 @@ Design rules:
 - **+ Add work** puts other works in scope (typeahead over titles). A
   collection can be used as a scope ("search within the works of collection
   X"), so curated collections double as reusable search perimeters, e.g.
-  "my three Bibles".
+  "my two Bibles".
 - Scope is part of `SearchSpec`. It is recorded in history and saved with a
   saved search.
 - Server: `scope=<path>` (repeatable) on `/api/search/lucene`, `/grep`,
@@ -231,23 +255,24 @@ Combined (default), Lucene, Vector (semantic), Grep, and **Reference**
 dropdown (open a work or author page). They are not recorded in history or
 saved. History is for text searches.
 
-### 4.4 Reference search (Bible and other numbered texts)
+### 4.4 Reference search (the two Bible works and other numbered texts)
 
 - Typing a reference such as `1 Samuel 17`, `1 Sam 21:6`, `1 Regi 21`,
   `Mt 12:3-4` or `Luc 6, 3-4` is detected by a reference parser. The
-  **first result** is "Go to 1 Samuel 17 in *Biblia ortodoxă*" (the Bible in
-  scope or currently open), followed by the same passage in the other Bibles
-  of the library. Enter jumps there, highlighting the verse paragraphs.
+  **first result** is "Go to 1 Samuel 17" in the currently open Bible, or in
+  the first of the two `/trad/biblia-*` works when no Bible is open, followed
+  by the same passage in the other Bible. Enter jumps there, highlighting the
+  verse paragraphs and preserving the canonical `/trad/biblia-*` URL.
 - Book names depend on language **and tradition**: the Romanian Orthodox
   Bible calls 1–2 Samuel "1–2 Regi" (Septuagint naming), so "1 Regi 21:6" there
   is 1 Samuel 21:6 elsewhere, and Psalm numbers differ between Hebrew and
   Septuagint numbering. The parser yields canonical OSIS ids (`1Sam.21.6`);
-  a **per-edition reference index** maps OSIS book/chapter/verse to that
-  edition's division path and paragraph.
+  a **per-edition reference index** maps OSIS book/chapter/verse to one of the
+  two Bible works' `/trad/biblia-*` division paths and paragraph.
 - That index cannot be derived from paths: division slugs come from headings
   (`…/cartea_intai_a_regilor/nasterea_lui_samuel`). Chapters are marked in
-  heading text (`<span class="head-label">Capitolul 1.</span>`, or `Chapitre 1`
-  as a `div3` inside one `div2` per book in the French Bible). Verses are
+  heading text (`<span class="head-label">Capitolul 1.</span>` or the
+  corresponding chapter heading in the second Bible). Verses are
   paragraphs starting with `1.` or `1 `. The index is built **server-side at
   import** with per-edition rules (book-heading → OSIS map, chapter-label
   regex, verse-prefix regex) and stored as a small table:
@@ -271,9 +296,16 @@ saved. History is for text searches.
 - The **last search** stores its spec, the result pages fetched so far and its
   cursor. It survives reloads (IndexedDB via a tiny key-value wrapper;
   localStorage is too small for result pages) and is restored by `/`.
-- Anonymous readers keep both in the browser. Signed-in readers: history is
-  synced through the preferences store (small), and the last search stays
-  per-device in the first version.
+- For signed-in readers, the last-search document is synced across devices:
+  the server stores the spec, fetched pages (bounded and versioned), active
+  entry and cursor, while IndexedDB remains a fast local cache. A newer
+  server document wins by revision/updated-at, and a device that has unsynced
+  local state offers an explicit merge/replace choice rather than silently
+  losing results.
+- Anonymous readers keep the last search locally. When they use a sync-only
+  action (open on another device or save a workspace), the UI invites them to
+  sign in and explains what will sync. Exporting an already-local result list
+  remains available locally.
 
 ## 5. Collections
 
@@ -303,23 +335,56 @@ saved. History is for text searches.
 - The `s` quick-find (CollectionsModal) becomes a lightweight view of the
   same list component, not a second implementation.
 
+### 5.3 Saved-search documents and export
+
+- A saved search is a frozen transversal document, not merely a shortcut to
+  rerun a query. It keeps the ordered hit snapshot, query, mode, scope,
+  executed-at timestamp, result count, source labels, snippets, scores and
+  passage links. Rerun is an explicit action that creates a fresh result list;
+  it never silently mutates the saved document.
+- The saved-search actions include **Open in center**, **Open in drawer**,
+  **Add selected/all results to a collection**, **Run again**, **Keep as
+  collection**, **Rename**, **Delete**, and **Export**.
+- Export offers HTML, Markdown and ODT. The export contains a title, the query
+  and scope metadata, a generated table of contents when headings are present,
+  and one linked entry per hit with its label, source work/author, snippet,
+  score (when available), citation/path and permanent reader URL. HTML keeps
+  links and semantic headings; Markdown keeps stable links and plain metadata;
+  ODT is generated through the existing document-conversion boundary rather
+  than a second ad-hoc office-format writer.
+- Export is available to anonymous readers for result lists they still have
+  locally. Signed-in readers can export any synced saved-search document and
+  can choose a filename derived from the saved-search name. The export is a
+  snapshot and does not expose private account metadata or another reader's
+  collections.
+
 ## 6. Drawers and workspaces
 
-- **Desktop:** the reader stays centered; a right drawer (and later a left
-  one) hosts any list: the last search, a saved search, a curated
-  collection. Drawers are resizable and collapsible to a thin rail, with
-  their own filter input. A key toggles them (proposal: `\`), and they
-  remember open/closed state and width.
-- **Phone:** no side space, so drawers become one **bottom sheet** with snap
-  points (peek / half / full) and tabs for the lists the workspace holds. The
-  same list component renders inside. Principle: every desktop operation is
+- **Workspace button:** entering workspace mode places one or two selected
+  collections/saved searches beside the reader. **Discard workspace** closes
+  every drawer, clears the active drawer arrangement and returns to the simple
+  centered reader without deleting any collection or saved search. Reopening
+  the workspace restores the last arrangement.
+- **Desktop:** the reader stays centered; one list may be placed in a right
+  drawer and a second in a left drawer. Each drawer is resizable, collapsible
+  to a thin rail, and has its own filter box that filters only that list. The
+  `\` shortcut toggles the workspace drawers. A drawer row can be opened in
+  the center reader, added to the working collection, or moved/copied to
+  another collection without closing the drawer.
+- **Phone:** no side space, so the active drawers become one **bottom sheet**
+  with peek / half / full snap points and tabs for the one or two lists held by
+  the workspace. The same list component and per-list filter render inside.
+  Opening a hit promotes it to the center reader and leaves the sheet state
+  recoverable from the workspace button. Every desktop operation remains
   possible on a phone, one drawer at a time.
-- **Workspace:** the drawer arrangement plus the working collection and the
-  default scope, stored with the account through the preferences store and
-  switchable by name ("Bible study", "Hugo letters"). Version one has a single
-  implicit workspace; named workspaces come later (step 8).
-- Top and bottom drawers, tabs inside drawers, floating or detached panels:
-  **not planned** (see the assessment).
+- **Workspace document:** the drawer arrangement, open/closed state, working
+  collection, default scope and active list/cursors are stored with the
+  account. Version one has one implicit workspace with a discard button;
+  named workspaces remain a later extension once the two-drawer flow is
+  stable. Anonymous readers can use the workspace locally and are invited to
+  sign in before syncing it across devices.
+- Top drawers and floating/detached panels remain out of scope; the requested
+  mobile placement is the bottom sheet, not a second top drawer.
 
 ## 7. Server work required
 
@@ -329,8 +394,11 @@ saved. History is for text searches.
 | Curated collections and favorites served from `/api/collections` instead of the preferences blob, with a one-time migration of existing preference collections | Step 0 | M |
 | `FRAGMENT` items carrying quote addresses and `DIV` items carrying paragraph ranges (fields exist: `fragmentStart`, `fragmentEnd`) | Step 3 | S |
 | Search history in the preferences document (or its own small table if it grows) | Step 2 | S |
+| Last-search document sync (spec, bounded result pages, active entry, cursor, revision) for signed-in readers | Step 1 | M: account API plus optimistic revision handling; IndexedDB remains the local cache |
+| Saved-search document export as HTML, Markdown and ODT | Step 5.3 | M: deterministic serializers plus the existing document-conversion boundary for ODT |
+| Workspace document persistence (drawer slots, filter state, working collection, scope, cursors) | Step 6 | M: authenticated preferences/document endpoint; anonymous local-only adapter |
 | Per-edition Bible reference index built at import | Step 7 | L |
-| Workspace documents in the preferences store | Steps 6 and 8 | S |
+| Named workspace documents in the preferences store | Step 8 | S after the implicit workspace is stable |
 
 ## 8. Open-source building blocks
 
@@ -349,7 +417,7 @@ to keep everything else in-house.
 | Command-palette style quick switcher (collections, history, commands) | [cmdk](https://cmdk.paco.me/) | **Optional.** Good for a "jump to collection / re-run search" palette; the main search panel is server-driven and stateful, so it stays our own. |
 | Bible reference parsing | [bible-passage-reference-parser](https://github.com/openbibleinfo/Bible-Passage-Reference-Parser) (MIT, TypeScript, ESM) | **Adopt** in step 7. About 50 languages, including Romanian, French, Finnish, German, Hungarian and Spanish (no Catalan); OSIS output; versification options and custom translations for the Septuagint naming. |
 | Client-side fuzzy filtering | MiniSearch, FlexSearch, Orama | **Not needed yet**: `matchesSearch` (accent-folded, all words) handles collections and TOC sizes. Reconsider MiniSearch if typo tolerance is requested. |
-| Persisting the last search's result pages | idb-keyval (or Dexie) | **Adopt idb-keyval** in step 1 (tiny); Dexie only if querying stored data becomes necessary. |
+| Persisting and syncing the last search's result pages | idb-keyval (or Dexie) plus the authenticated preferences/document API | **Adopt idb-keyval** as the local cache; signed-in readers also sync a bounded, versioned last-search document. |
 | Global state | Zustand, Jotai | **Not needed**: module stores + `useSyncExternalStore`, the pattern `savedSearches.ts` already uses. |
 
 ---
@@ -368,11 +436,13 @@ to keep everything else in-house.
 | Unified entry model and list component | High (enables everything) | Medium | Pays off once two views share it; removes today's duplicated result, collection and saved-search rows. |
 | Book-scoped search (default scope from context) | Very high | Medium, server side | Without it "search in this Bible" and "Similar in the New Testament" give poor results. |
 | Collections page as a manager (inline edit, reorder, scope-from-collection) | High | Medium | Mostly UI on top of existing server endpoints. |
+| Saved searches as transversal documents, with HTML/Markdown/ODT export | High | Medium | Makes a frozen search useful outside the reader and keeps the result snapshot addressable. |
 | Drawers (one side + phone sheet) | Medium–high | Medium–high | Valuable for long study sessions, but only after lists and the last search are solid; otherwise it is chrome around little content. |
+| Workspace mode with discard, two desktop drawers and one mobile bottom sheet | High | Medium–high | The main study environment; implement after the list model, persistence and last-search sync. |
 | Bible reference jump and citation | High for the Bible corpus | High | The parser is off the shelf; the per-edition index over heading-derived paths is the real work, plus Septuagint vs Hebrew naming and numbering. |
 | Cross-references (1 Sam 21:6 → Mt 12:3-4…) | High for Bible study | Medium once references exist | A dataset lookup is precise; scoped Similar is the generic fallback. |
-| Named workspaces | Medium | Medium | Useful only once people keep several drawers; start with one implicit workspace. |
-| Free docking, top/bottom drawers, floating panels | Low | High | IDE features; complexity for both users and code. Defer indefinitely. |
+| Named workspaces | Medium | Medium | Defer names; first ship one implicit workspace with explicit enter/discard and two drawer slots. |
+| Free docking, top drawers, floating panels | Low | High | IDE features; complexity for both users and code. Defer indefinitely. Mobile bottom-sheet placement is in scope. |
 
 Critical points:
 
@@ -391,8 +461,13 @@ Critical points:
   and workspaces reference them by id. Otherwise every later feature carries
   two code paths.
 - **Bible references are their own project.** Plan it with real data checks
-  per edition (Romanian Orthodox, French, Finnish…), not as a search-box
-  tweak.
+  for the two current `/trad/biblia-*` works, not as a search-box tweak. Keep
+  the index extensible for future traditions without hard-coding a third work
+  into the first implementation.
+- **Workspace mode is disposable UI state, not destructive collection state.**
+  Discarding a workspace closes and forgets drawer placement only; it never
+  deletes a saved search or collection. The workspace button is the visible
+  way back from the simple reader.
 
 ### Implementation steps, by increasing complexity
 
@@ -407,12 +482,17 @@ localStorage behind the same interface). No visible UI change.
 *Done when:* every existing collections and search test passes against the
 adapters, and a migrated account shows identical collections.
 
-**Step 1: last search that never gets lost (S, client).**
+**Step 1: last search that never gets lost (M, client + server).**
 The search panel becomes non-modal; the last search (spec, fetched pages,
-cursor) is persisted in IndexedDB and restored by `/` with the highlight on
-the last-opened entry; `]` / `[` step through the active list while reading.
-*Done when:* search → open result 3 → reload → `/` shows the same results
-with result 3 highlighted, and `]` opens result 4.
+cursor and active entry) is cached in IndexedDB and synced as a bounded,
+versioned document for signed-in readers. Restore it by `/` with the highlight
+on the last-opened entry; `]` / `[` step through the active list while reading.
+Anonymous readers keep the local path and receive a sign-in invitation when
+they request sync. Define revision/updated-at conflict handling before wiring
+the account endpoint.
+*Done when:* search → open result 3 → reload → `/` shows the same results with
+result 3 highlighted, a second signed-in device restores it, and `]` opens
+result 4 on both devices.
 
 **Step 2: search history (S, client; sync via preferences).**
 Record text searches (spec + count); show them under the empty input; ↑
@@ -438,44 +518,60 @@ Gospel parallels near the top (verify on real data).
 `EntryListView` (React Aria `GridList` + virtualization) used by search
 results, collections, saved searches and the quick-find; inline
 create/rename/describe; reorder by drag and keyboard; move/copy between
-collections; Keep as collection; Search within its works.
+collections; Keep as collection; Search within its works. Add the saved-search
+document view, center-reader opening, and deterministic HTML/Markdown/ODT
+export from the same snapshot model.
 *Done when:* the same component renders all lists, the old duplicated row
-code is gone, and keyboard-only reordering works.
+code is gone, keyboard-only reordering works, and a saved search can be opened
+in the center or exported in all three formats without changing its snapshot.
 
-**Step 6: drawers (M/L, client).**
-Right drawer on desktop (react-resizable-panels, collapsible, size
-remembered), bottom sheet with snap points and list tabs on phones;
-"Open in drawer" from any list; the toggle key; persisted via preferences.
-*Done when:* a saved search in the drawer can be stepped through with `]`
-while the reader shows each passage, on desktop and on a phone.
+**Step 6: workspace mode and drawers (M/L, client + persistence).**
+Add the workspace button and an implicit workspace that can hold one or two
+selected collections/saved searches. On desktop place them in resizable,
+collapsible left/right drawers; each drawer has its own filter box and actions
+to open a hit in the center, add it to the working collection, or move/copy it.
+On phones render the same lists in one bottom sheet with peek/half/full snap
+points and tabs. The `\` shortcut toggles the workspace; **Discard workspace**
+closes all drawers and returns to the simple reader without deleting data.
+Persist the workspace document for signed-in readers and keep an anonymous
+local adapter.
+*Done when:* a saved search and a collection can be opened together, each can
+be filtered independently, `]` steps through the focused list while the reader
+shows each passage, and discard/reopen works on desktop and mobile.
 
 **Step 7: Bible references, citations, cross-references (L, server + data + client).**
 Reference parser in the search input (Reference mode); per-edition reference
 index built at import (book map, chapter-label and verse-prefix rules per
 edition, Septuagint vs Hebrew naming and Psalm numbering); "Go to" as the
-first result across all Bibles; Copy citation with/without text;
+first result across the two `/trad/biblia-*` Bible works; Copy citation with/without text;
 cross-references from a licensed dataset in the selection toolbar.
-*Done when:* "1 Samuel 17" opens chapter 17 in the open Bible, in Romanian,
-French and Finnish, and "1 Regi 21:6" in the Romanian Bible offers Mt 12:3-4,
-Mk 2:25-26 and Lk 6:3-4.
+*Done when:* "1 Samuel 17" opens chapter 17 in the open Bible and offers the
+same reference in the other current `/trad/biblia-*` work, while "1 Regi 21:6"
+in the Romanian Bible offers Mt 12:3-4, Mk 2:25-26 and Lk 6:3-4.
 
-**Step 8: named workspaces and a left drawer (M).**
-Workspace documents (drawers, working collection, default scope), switcher,
-a second (left) drawer on wide screens.
+**Step 8: named workspaces and multi-device polish (M).**
+Promote the implicit workspace to named workspace documents, add a workspace
+switcher and make the drawer arrangement, working collection, scope, filters
+and active cursors portable across devices. The left/right two-drawer behavior
+and the mobile bottom sheet are already delivered in Step 6.
 *Done when:* switching from "Bible study" to "Hugo letters" restores each
-workspace's drawers and working collection, on another device too.
+workspace's drawers, filters and working collection on another device too;
+discarding one workspace leaves its saved collections and searches untouched.
 
-**Deferred:** docking/tabs/floating panels (dockview), top and bottom
-drawers, cross-device sync of the last search's results, fuzzy client
-search.
+**Deferred:** free docking/floating panels (dockview), top drawers, and fuzzy
+client search. Named workspaces are deferred until the single implicit
+workspace is stable; cross-device sync of the last search is no longer
+deferred.
 
-### Open questions
+### Resolved decisions and remaining questions
 
-1. Should the last search sync across devices for signed-in readers (it is
-   per-device in this plan), or is history sync enough?
-2. Which Bible editions are in the corpus, and which naming tradition should
-   be the default for a reference typed with no Bible open?
-3. Is a cross-reference dataset with CC-BY attribution acceptable?
-4. `]` / `[` and `\` as new shortcuts: acceptable, or do you prefer others?
-5. Should anonymous readers get drawers and workspaces too (local only), or
-   are they a signed-in feature?
+- **Last search sync:** yes, for signed-in readers, including its cursor and
+  fetched result pages.
+- **Bible corpus:** two works for now, addressed under `/trad/biblia-*`; the
+  implementation must discover their exact slugs from the catalogue rather
+  than hard-code a third edition.
+- **Anonymous readers:** local collections/searches/workspaces are allowed;
+  sync actions invite login and explain the benefit.
+- **Shortcuts:** `/`, `[` / `]`, and `\` are accepted.
+- **Remaining:** confirm the licence/attribution requirements for a curated
+  cross-reference dataset before shipping that optional source.
