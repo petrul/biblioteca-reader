@@ -31,6 +31,7 @@ Every Biblioteca project has the same Rake interface. The tasks load the
 ```bash
 rake run                  # Vite + Express on http://localhost:3333 (PORT overrides)
 rake "run[zmeu]"          # with an explicit profile
+rake "run[yoga]"          # yoga development profile
 rake "run[zmeu,http://localhost:3335]"   # and a different covers service
 rake test                 # typecheck + unit tests
 rake ci                   # clean, install, test, build, publish the Docker image
@@ -42,6 +43,19 @@ Needs Node and a running biblioteca-server (`BIBLIOTECA_EXTERNAL_URL`,
 `e2e/` (`npx playwright test`). `npm run test:bundle` checks that the
 production server bundle starts and renders a quote card; run
 `node scripts/build-server.mjs` first.
+
+For the yoga LAN setup, port 3333 may already belong to another Scriptorium
+site. Start the reader on 3334 and open it from a phone on the same network:
+
+```bash
+PORT=3334 rake "run[yoga]"
+```
+
+Then use `http://<yoga-lan-ip>:3334/app/` (or
+`http://yoga.local:3334/app/`). The development Vite allowlist includes
+`yoga.local` and the yoga LAN address. The yoga backend's local TEI source is
+the build at `/home/petru/work/corpus/scriptorium-masters/build`; the former
+`/home/petru/work/scriptorium-masters/build` path is no longer valid.
 
 ## Configuration
 
