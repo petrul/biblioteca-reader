@@ -29,6 +29,8 @@ const BIBLIOTECA_PATHS = {
     '/api/users/me/preferences': ['get', 'put'],
     '/api/divs': ['get'],
     '/api/divs/{id}/toc': ['get'],
+    // where a division path a TEI reimport changed lives now (biblioteca-server's Relocation)
+    '/api/relocations': ['get'],
     '/api/authors/': ['get'],
     '/api/authors/page': ['get'],
     '/api/authors/{strId}': ['get'],

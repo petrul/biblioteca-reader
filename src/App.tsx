@@ -1,7 +1,7 @@
 import { savedQuoteAddress, type SavedQuote } from './services/serverQuoteApi';
 import { fetchFragment } from './services/fragmentApi';
 import { parseFragmentLocation, type FragmentLocation } from './services/fragmentAddress';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   AppView,
   CatalogState,
@@ -9,6 +9,7 @@ import {
   User
 } from './types/textbase';
 import { readerService, ANONYMOUS_USER_ID } from './services/readerService';
+import { fetchRelocation } from './services/serversideApi';
 import { buildAppPath, parseAppPath, DEFAULT_CATALOG_STATE } from './router';
 
 // UI Components
@@ -30,6 +31,7 @@ import { AdminView } from './components/AdminView';
 import { QuoteView } from './components/QuoteView';
 import { AuthModal } from './components/AuthModal';
 import { ServerStatusToast } from './components/ServerStatusToast';
+import { RelocationToast, takeRelocatedCookie } from './components/RelocationToast';
 import { NotFoundCard } from './components/NotFoundCard';
 import { GoogleOneTapAuto, googleIdentityPresentation } from './components/GoogleOneTap';
 import { fetchWhoAmI, submitGoogleCredential, refreshGoogleProfile, cachedGoogleAvatar, restoreStoredGoogleCredential, signOut, bookmarkStoreFor, preferencesStoreFor, WhoAmI } from './services/identity';
@@ -62,6 +64,12 @@ export default function App() {
   // Set by WorkView/ReaderView when the work/chapter id in the current URL
   // doesn't exist - the not-found card below explains it.
   const [contentNotFound, setContentNotFound] = useState(false);
+  // The old address a relocation brought the reader from - the "URL changed" toast.
+  const [relocatedFrom, setRelocatedFrom] = useState<string | null>(null);
+  // only a value found sets it: StrictMode runs this twice, and the second
+  // run finds the cookie already taken
+  useEffect(() => { const old = takeRelocatedCookie(); if (old) setRelocatedFrom(old); }, []);
+  const clearRelocatedFrom = useCallback(() => setRelocatedFrom(null), []);
   // BrowseView's entire catalog state (tab plus per-tab query, filters
   // and page), held here (not inside BrowseView) because all of it is
   // part of the bookmarkable route: /app (works, defaults),
@@ -243,6 +251,32 @@ export default function App() {
   // jumping to a remembered tab doesn't add a history entry the back
   // button then has to walk through.
   const replaceNextPathSyncRef = useRef(false);
+
+  // A work or chapter that is not where the URL says may have been relocated
+  // by a TEI reimport (biblioteca-server's Relocation): ask where it is now
+  // and go there, replacing the old address - favourites, history entries and
+  // links rendered from a cached TOC all keep working. A full page load of an
+  // old address is already redirected (301) by this app's server.
+  useEffect(() => {
+    if (!contentNotFound) return;
+    const oldPath = currentView === 'reader' ? selectedChapterId : currentView === 'work' ? selectedWorkId : null;
+    if (!oldPath) return;
+    const controller = new AbortController();
+    void fetchRelocation(oldPath, controller.signal).then(newPath => {
+      if (!newPath || controller.signal.aborted) return;
+      const relocated = newPath.slice(1);
+      const workId = relocated.split('/').slice(0, 2).join('/');
+      replaceNextPathSyncRef.current = true;
+      setRelocatedFrom(oldPath);
+      setContentNotFound(false);
+      setSelectedWorkId(workId);
+      if (currentView === 'reader') {
+        setSelectedFragment(undefined);
+        setSelectedChapterId(relocated);
+      }
+    });
+    return () => controller.abort();
+  }, [contentNotFound, currentView, selectedChapterId, selectedWorkId]);
 
   // Depth marker pushed into every history entry this app creates (see the
   // push effect below): the reader's back button uses it to tell "there is
@@ -797,6 +831,7 @@ export default function App() {
 
       {/* Connectivity status for online requests. */}
       <ServerStatusToast userId={currentUser?.id || ANONYMOUS_USER_ID} />
+      {relocatedFrom && <RelocationToast oldPath={relocatedFrom} onDone={clearRelocatedFrom} />}
 
       {/* Biblioteca's universal assistant: available from every reader page,
           including the site-simulator-style admin surfaces. */}

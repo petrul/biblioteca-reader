@@ -30,6 +30,7 @@ import createClient from 'openapi-fetch';
 import type { paths as NestjsPaths } from './src/generated/biblioteca-nestjs-api';
 import { registerTextTwins, canonicalReaderPath, textAlternates } from './src/services/textTwin';
 import { crawlerPageRateLimit } from './src/services/crawlerPageLimit';
+import { readerLocation, registerRelocationRedirects, relocationLookup } from './src/services/relocationRedirect';
 import { responseCompression } from './src/services/httpCompression';
 import { resourceLimitOverridesFromEnv } from './src/services/resourceLimits';
 import { createVisitorCookies } from './src/services/visitorCookie';
@@ -548,6 +549,14 @@ async function relayGetFromBiblioteca(req: Request, res: Response, upstreamPathO
       const cookiesOut = upstreamRes.headers.getSetCookie?.() ?? [];
       console.debug(`[tb-proxy][whoami] upstream status=${upstreamRes.status}, set-cookie relayed=${cookiesOut.length}`);
     }
+    // A relocated division (biblioteca-server's Relocation: a TEI reimport
+    // gave it another path) answers 301: a real redirect here too, its
+    // Location made a path on this origin, so the browser follows it to the
+    // division's current address - content pages and /api/divs alike.
+    if (upstreamRes.status === 301 || upstreamRes.status === 308) {
+      res.redirect(upstreamRes.status, readerLocation(upstreamRes.headers.get('location') || '/', upstreamPathOverride !== undefined));
+      return;
+    }
     // /util/random replies with a 302 to the reading-view page - surface the
     // Location header as-is instead of following it, so the caller decides.
     if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
@@ -581,6 +590,7 @@ const BIBLIOTECA_GET_ROUTES = [
   '/api/reading-progress/one',
   '/api/divs',
   '/api/divs/:id/toc',
+  '/api/relocations',
   '/api/authors',
   '/api/authors/page',
   '/api/authors/:strId',
@@ -1366,6 +1376,9 @@ async function renderPageFor(req: Request, template: string): Promise<string> {
 }
 
 async function startServer() {
+  // first: a relocated division's old address (page, text edition, export)
+  // answers 301 to its current one before anything reads the old path
+  registerRelocationRedirects(app, relocationLookup(BIBLIOTECA_SERVER_URL));
   registerFragmentGateway(app, { serverUrl: BIBLIOTECA_SERVER_URL, originFor });
   registerQuoteTwins(app, { serverUrl: BIBLIOTECA_SERVER_URL, originFor, apiDocument: openApiPublicDoc });
   registerTextTwins(app, { serverUrl: BIBLIOTECA_SERVER_URL, originFor, defaultImage: defaultOgImage });

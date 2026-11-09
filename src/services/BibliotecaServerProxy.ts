@@ -1,4 +1,5 @@
 import type { Express, NextFunction, Request, Response } from 'express';
+import { readerLocation } from './relocationRedirect';
 
 export function isSafeServerContentPath(value: string): boolean {
   const rawPath = value.split('?', 1)[0];
@@ -73,6 +74,13 @@ export class BibliotecaServerProxy {
       let upstream = await get(serverPath ?? req.originalUrl);
       if (serverPath && upstream.status === 404) upstream = await get(req.originalUrl);
       this.relayCookies(upstream, res);
+      // A relocated division (a TEI reimport gave it another path) answers
+      // 301: relayed as a real redirect, its Location a path on this origin,
+      // so fetch() follows it to the current address (same origin, no CORS).
+      if (upstream.status === 301 || upstream.status === 308) {
+        res.redirect(upstream.status, readerLocation(upstream.headers.get('location') || '/', req.path.startsWith('/api/server-content/')));
+        return;
+      }
       if (upstream.status >= 300 && upstream.status < 400) {
         // Relay the upstream redirect as data, never as a browser-observable
         // redirect: a same-origin fetch() auto-follows any Location header

@@ -81,26 +81,67 @@
           }
         }
       },
-      "EntityModelTeiOpus": {
+      "EntityModelTeiElem": {
         "type": "object",
         "properties": {
-          "description": {
+          "xpath": {
             "type": "string"
           },
-          "significantQuote": {
+          "domPath": {
             "type": "string"
           },
-          "summary": {
-            "type": "string"
-          },
-          "summarySourceUrl": {
-            "type": "string"
-          },
-          "workEnrichedAt": {
+          "lang": {
             "type": "string",
-            "format": "date-time"
+            "enum": [
+              "BG",
+              "BR",
+              "CA",
+              "DA",
+              "DE",
+              "EN",
+              "ES",
+              "FI",
+              "FR",
+              "GR",
+              "HU",
+              "IT",
+              "LA",
+              "NL",
+              "NO",
+              "PT",
+              "RO",
+              "RU",
+              "ZH"
+            ]
           },
-          "coverUrl": {
+          "name": {
+            "type": "string"
+          },
+          "nth": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "urlFragment": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0
+          },
+          "txtSha256": {
+            "type": "string",
+            "format": "byte"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "wordSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "leaf": {
+            "type": "boolean"
+          },
+          "completePath": {
             "type": "string"
           },
           "_links": {
@@ -129,16 +170,16 @@
           }
         }
       },
-      "PagedModelEntityModelTeiOpus": {
+      "PagedModelEntityModelTeiElem": {
         "type": "object",
         "properties": {
           "_embedded": {
             "type": "object",
             "properties": {
-              "teiOpuses": {
+              "teiElems": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/EntityModelTeiOpus"
+                  "$ref": "#/components/schemas/EntityModelTeiElem"
                 }
               }
             }
@@ -234,15 +275,39 @@
           }
         }
       },
-      "CollectionModelObject": {
+      "PagedModelEntityModelTeiDiv": {
         "type": "object",
         "properties": {
           "_embedded": {
             "type": "object",
             "properties": {
-              "objects": {
+              "teiDivs": {
                 "type": "array",
-                "items": {}
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelTeiDiv"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "CollectionModelEntityModelTeiDiv": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "teiDivs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelTeiDiv"
+                }
               }
             }
           },
@@ -338,6 +403,182 @@
           },
           "anonymous": {
             "type": "boolean"
+          }
+        }
+      },
+      "TeiFile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 0
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Author"
+            }
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "BG",
+              "BR",
+              "CA",
+              "DA",
+              "DE",
+              "EN",
+              "ES",
+              "FI",
+              "FR",
+              "GR",
+              "HU",
+              "IT",
+              "LA",
+              "NL",
+              "NO",
+              "PT",
+              "RO",
+              "RU",
+              "ZH"
+            ]
+          },
+          "repoName": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "author": {
+            "$ref": "#/components/schemas/Author"
+          }
+        }
+      },
+      "EntityModelOpusVectorizingStat": {
+        "type": "object",
+        "properties": {
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "opusId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalParas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalBatches": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "embedderModel": {
+            "type": "string"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "PagedModelEntityModelOpusVectorizingStat": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "opusVectorizingStats": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelOpusVectorizingStat"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "EntityModelTeiOpus": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "significantQuote": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "summarySourceUrl": {
+            "type": "string"
+          },
+          "workEnrichedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        }
+      },
+      "PagedModelEntityModelTeiOpus": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "teiOpuses": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EntityModelTeiOpus"
+                }
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageMetadata"
+          }
+        }
+      },
+      "CollectionModelObject": {
+        "type": "object",
+        "properties": {
+          "_embedded": {
+            "type": "object",
+            "properties": {
+              "objects": {
+                "type": "array",
+                "items": {}
+              }
+            }
+          },
+          "_links": {
+            "$ref": "#/components/schemas/Links"
           }
         }
       },
@@ -475,194 +716,6 @@
           }
         }
       },
-      "PagedModelEntityModelTeiDiv": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "teiDivs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelTeiDiv"
-                }
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          },
-          "page": {
-            "$ref": "#/components/schemas/PageMetadata"
-          }
-        }
-      },
-      "CollectionModelEntityModelTeiDiv": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "teiDivs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelTeiDiv"
-                }
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "TeiFile": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "filename": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 0
-          },
-          "authors": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Author"
-            }
-          },
-          "language": {
-            "type": "string",
-            "enum": [
-              "BG",
-              "BR",
-              "CA",
-              "DA",
-              "DE",
-              "EN",
-              "ES",
-              "FI",
-              "FR",
-              "GR",
-              "HU",
-              "IT",
-              "LA",
-              "NL",
-              "NO",
-              "PT",
-              "RO",
-              "RU",
-              "ZH"
-            ]
-          },
-          "repoName": {
-            "type": "string"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "author": {
-            "$ref": "#/components/schemas/Author"
-          }
-        }
-      },
-      "EntityModelTeiElem": {
-        "type": "object",
-        "properties": {
-          "xpath": {
-            "type": "string"
-          },
-          "domPath": {
-            "type": "string"
-          },
-          "lang": {
-            "type": "string",
-            "enum": [
-              "BG",
-              "BR",
-              "CA",
-              "DA",
-              "DE",
-              "EN",
-              "ES",
-              "FI",
-              "FR",
-              "GR",
-              "HU",
-              "IT",
-              "LA",
-              "NL",
-              "NO",
-              "PT",
-              "RO",
-              "RU",
-              "ZH"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "nth": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "urlFragment": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 0
-          },
-          "txtSha256": {
-            "type": "string",
-            "format": "byte"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "wordSize": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "leaf": {
-            "type": "boolean"
-          },
-          "completePath": {
-            "type": "string"
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          }
-        }
-      },
-      "PagedModelEntityModelTeiElem": {
-        "type": "object",
-        "properties": {
-          "_embedded": {
-            "type": "object",
-            "properties": {
-              "teiElems": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/EntityModelTeiElem"
-                }
-              }
-            }
-          },
-          "_links": {
-            "$ref": "#/components/schemas/Links"
-          },
-          "page": {
-            "$ref": "#/components/schemas/PageMetadata"
-          }
-        }
-      },
       "EntityModelEmbeddingBatchStat": {
         "type": "object",
         "properties": {
@@ -716,47 +769,72 @@
           }
         }
       },
-      "EntityModelOpusVectorizingStat": {
+      "AppUser": {
         "type": "object",
         "properties": {
-          "recordedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "opusId": {
+          "id": {
             "type": "integer",
             "format": "int64"
           },
-          "totalParas": {
-            "type": "integer",
-            "format": "int32"
+          "username": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0
           },
-          "totalBatches": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "embedderModel": {
+          "googleSub": {
             "type": "string"
           },
-          "durationMs": {
+          "avatarUrl": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "ADMIN"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EntityModelReaderWorkspaceState": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "$ref": "#/components/schemas/AppUser"
+          },
+          "revision": {
             "type": "integer",
             "format": "int64"
+          },
+          "lastSearch": {
+            "type": "string"
+          },
+          "workspace": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           },
           "_links": {
             "$ref": "#/components/schemas/Links"
           }
         }
       },
-      "PagedModelEntityModelOpusVectorizingStat": {
+      "PagedModelEntityModelReaderWorkspaceState": {
         "type": "object",
         "properties": {
           "_embedded": {
             "type": "object",
             "properties": {
-              "opusVectorizingStats": {
+              "readerWorkspaceStates": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/EntityModelOpusVectorizingStat"
+                  "$ref": "#/components/schemas/EntityModelReaderWorkspaceState"
                 }
               }
             }
@@ -920,6 +998,32 @@
           "durationMs": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "ReaderWorkspaceStateRequestBody": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/AppUser"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastSearch": {
+            "type": "string"
+          },
+          "workspace": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -1366,6 +1470,14 @@
           },
           "replaceCover": {
             "type": "boolean"
+          }
+        }
+      },
+      "GuestName": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
           }
         }
       },
@@ -1884,6 +1996,24 @@
           "number": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "RelocationDto": {
+        "type": "object",
+        "properties": {
+          "oldPath": {
+            "type": "string"
+          },
+          "newPath": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -2601,6 +2731,37 @@
         }
       }
     },
+    "/api/relocations": {
+      "get": {
+        "tags": [
+          "relocation-rest-controller"
+        ],
+        "description": "the current path of a division path that a TEI reimport changed (relocation chains followed), e.g. /shakespeare/the_tragedy/act_iv/another_room_in_the_castle; 404 when it was not relocated",
+        "operationId": "getRelocation",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/vnd.hal+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelocationDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/authors/": {
       "get": {
         "tags": [
@@ -2996,6 +3157,17 @@
               "format": "int32",
               "default": 10
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         ],
         "responses": {
@@ -3040,6 +3212,17 @@
               "type": "integer",
               "format": "int32",
               "default": 10
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           }
         ],
@@ -3086,6 +3269,17 @@
               "format": "int32",
               "default": 10
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         ],
         "responses": {
@@ -3130,6 +3324,17 @@
               "type": "integer",
               "format": "int32",
               "default": 10
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           }
         ],

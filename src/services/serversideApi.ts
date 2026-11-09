@@ -187,6 +187,22 @@ function requireData<T>(result: { data?: T; error?: unknown; response: Response 
   throw new ServerHttpError(`textbase-server ${path} -> HTTP ${result.response.status}`, result.response.status);
 }
 
+/**
+ * Where a division path that a TEI reimport changed lives now (biblioteca-
+ * server's Relocation, chains followed), or null when it was not relocated -
+ * or the lookup failed: the caller then just shows its not-found page.
+ */
+export async function fetchRelocation(divisionPath: string, signal?: AbortSignal): Promise<string | null> {
+  try {
+    const path = divisionPath.startsWith('/') ? divisionPath : '/' + divisionPath;
+    const result = await api.GET('/api/relocations', { params: { query: { path } }, signal });
+    const newPath = result.response.ok ? result.data?.newPath : undefined;
+    return typeof newPath === 'string' && newPath.startsWith('/') ? newPath : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchRealAuthorPage(page = 1, size = 12, query = ''): Promise<CatalogPage<AuthorDto>> {
   const result = await api.GET('/api/authors/page', {
     params: { query: { page, size, ...(query.trim() ? { q: query.trim() } : {}) } }
