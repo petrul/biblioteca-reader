@@ -36,6 +36,9 @@ rake "run[zmeu,http://localhost:3335]"   # and a different covers service
 rake test                 # typecheck + unit tests
 rake ci                   # clean, install, test, build, publish the Docker image
 rake gen-client           # regenerate the upstream API clients (see below)
+rake "s3mount[yoga]"      # background-mount yoga's MinIO bucket at ~/s3mount/...
+rake "s3mount[yoga,/mnt/biblioteca-s3]"  # choose an explicit mount point
+rake "s3unmount[yoga]"     # unmount yoga's profile-derived path
 ```
 
 Needs Node and a running biblioteca-server (`BIBLIOTECA_EXTERNAL_URL`,
@@ -70,6 +73,26 @@ real values come only from the pass store.
 | `GOOGLE_OAUTH_CLIENT_ID` | Google One Tap; becomes `VITE_GOOGLE_CLIENT_ID` and must equal the server's |
 | `MINIO_URL`, `MINIO_CREDS` | Optional cover cache in MinIO; credentials never reach the browser |
 | `PORT` | Listening port, default 3333 |
+
+### Mounting the profile's MinIO bucket
+
+`rake s3mount[profile]` loads the same `biblioteca/<profile>` pass-store
+environment as the other tasks and mounts its `MINIO_URL` bucket with
+`s3fs`, so Rake returns after the mount is ready. It prints a
+GNOME-terminal-clickable `file://` URL for the mounted directory. `MINIO_CREDS`
+is passed only through the environment; it is never put in the command line.
+When a graphical session is available it also opens the directory with
+`gio open` (Nautilus); set `S3_MOUNT_OPEN=0` to suppress that window.
+The default mount directory is derived from the endpoint and bucket, under
+`~/s3mount/`. Supply a second Rake argument (or `S3_MOUNT_POINT`) to choose
+another directory. Use `S3_MOUNT_FOREGROUND=1 rake "s3mount[profile]"` for a
+blocking Ctrl-C-owned mount. Background mounts can be stopped with
+`rake "s3unmount[profile]"`, or directly with `fusermount3 -u <mount-point>`
+(or `fusermount -u`).
+
+The shared helper is installed at `~/scripts/s3/mount-minio.sh`; the checked-in
+copy under `scripts/s3/` is used as a fallback on a fresh machine. It requires
+`s3fs` with FUSE support.
 
 Payments (`STRIPE_*`) are deliberately left unconfigured: those features
 report themselves as unavailable.

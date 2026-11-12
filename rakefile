@@ -48,6 +48,13 @@ def selected_profile(args)
     args[:profile] || ENV['PROFILE'] || Socket.gethostname.split('.').first
 end
 
+require_relative 'scripts/s3/rake_tasks'
+register_s3_tasks(
+    profile_resolver: method(:selected_profile),
+    profile_loader: method(:load_profile!),
+    base_dir: __dir__
+)
+
 # Mirrors biblioteca-server's and biblioteca-nestjs's check-env tasks. The
 # reader itself has no hard required()-style boot-time check (server.ts's
 # own env reads all fall back to a default instead of throwing), but
