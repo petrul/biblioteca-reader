@@ -1,33 +1,26 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { Window } from 'happy-dom';
 import { authorFromServer, chapterContentUrl, fetchRealChapterContent, fetchRealChaptersForWork, luceneSnippet, mapServerLanguage, rewriteServerBinaryUrls, workFromServerDiv } from './serversideApi';
 
-test('reading succeeds without requesting the XML or JSON export endpoints', async () => {
+test('reading a chapter is one request: the HTML, its plain text derived from it', async () => {
   const originalFetch = globalThis.fetch;
   const parserDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'DOMParser');
-  Object.defineProperty(globalThis, 'DOMParser', {
-    configurable: true,
-    value: class {
-      parseFromString() { return { querySelectorAll: () => [] }; }
-    }
-  });
+  Object.defineProperty(globalThis, 'DOMParser', { configurable: true, value: new Window().DOMParser });
   const requests: string[] = [];
   globalThis.fetch = async input => {
     const url = String(input);
     requests.push(url);
-    if (url.endsWith('.txt')) return new Response('Chapter text.');
-    if (url.endsWith('.html?fragments=1')) return new Response('<p>Chapter text.</p>');
+    if (url.endsWith('.html?fragments=1')) return new Response('<p>Chapter text.<button class="note" title="A note"><sup>1</sup></button></p>');
     return new Response(null, { status: 503 });
   };
   try {
     const chapter = await fetchRealChapterContent('author/work/chapter');
-    assert.equal(chapter?.htmlContent, '<p>Chapter text.</p>');
-    assert.equal(chapter?.plainText, 'Chapter text.');
-    assert.deepEqual(requests.sort(), [
-      '/api/server-content/author/work/chapter.html?fragments=1',
-      '/api/server-content/author/work/chapter.txt'
-    ]);
+    assert.equal(chapter?.plainText, 'Chapter text. [A note]');
+    assert.equal(chapter?.noteCount, 1);
+    assert.equal(chapter?.sentenceCount, 1);
+    assert.deepEqual(requests, ['/api/server-content/author/work/chapter.html?fragments=1']);
   } finally {
     globalThis.fetch = originalFetch;
     if (parserDescriptor) Object.defineProperty(globalThis, 'DOMParser', parserDescriptor);

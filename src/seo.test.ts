@@ -69,7 +69,7 @@ test('reader page with an inline TEI illustration: og/twitter image is the illus
   const seo = await withFetchMock(
     [
       [/\/api\/divs\?path=mitru%2Fpovesti_despre_pacala_si_tandala%2Flacul_popii/, () =>
-        json({ id: 2, head: 'Lacul popii', author: { displayName: 'Alexandru Mitru' } })],
+        json({ id: 2, head: 'Lacul popii', leaf: true, author: { displayName: 'Alexandru Mitru' } })],
       [/\/api\/divs\?path=mitru%2Fpovesti_despre_pacala_si_tandala$/, () =>
         json({ id: 1, head: 'Povești despre Păcală și Tândală', author: { displayName: 'Alexandru Mitru' } })],
       [/\.xml$/, () => new Response(
@@ -101,6 +101,34 @@ test('reader page with no inline image falls back to the work\'s stored cover', 
 
   assert.equal(seo.image, STORED_COVER);
   assert.equal(seo.imageType, 'image/png');
+});
+
+test('a section page never downloads its XML: its preview is the work cover', async () => {
+  const sectionPath = '/app/reader/trad/biblia/vechiul_testament';
+  const seo = await withFetchMock(
+    [
+      [/\/api\/divs\?path=trad%2Fbiblia%2Fvechiul_testament/, () => json({ id: 5, head: 'Vechiul Testament', leaf: false, author: { displayName: 'Anonim' } })],
+      [/\/api\/divs\?path=trad%2Fbiblia$/, () => json({ id: 1, head: 'Biblia', coverUrl: STORED_COVER, author: { displayName: 'Anonim' } })],
+      [/\.xml$/, () => { throw new Error('the section XML must not be fetched'); }]
+    ],
+    () => seoFor(parseAppPath(sectionPath), sectionPath)
+  );
+  assert.equal(seo.image, STORED_COVER);
+});
+
+test('divisions the caller already read are not requested again, and illustration: false skips the XML', async () => {
+  const chapterPath = '/app/reader/abbott_edwin_a/flatland/preface';
+  const route = parseAppPath(chapterPath);
+  const seo = await withFetchMock([], () => buildPageSeo({
+    route, origin: ORIGIN, path: chapterPath, searchParams: new URLSearchParams(), bibliotecaServerUrl: BIBLIOTECA_SERVER_URL, defaultImage: DEFAULT_IMAGE,
+    divs: {
+      work: { id: 1, head: 'Flatland', coverUrl: STORED_COVER, author: { displayName: 'Edwin A. Abbott' } },
+      chapter: { id: 3, head: 'Preface', leaf: true, author: { displayName: 'Edwin A. Abbott' } },
+    },
+    illustration: false,
+  }));
+  assert.equal(seo.title, 'Preface — Flatland by Edwin A. Abbott | Biblioteca');
+  assert.equal(seo.image, STORED_COVER);
 });
 
 test('author page: bio as description, portrait proxied through server-content as og+twitter image, Person JSON-LD', async () => {

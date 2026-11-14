@@ -43,7 +43,9 @@ test('reading a chapter caches its content, and reopening it after a reload skip
   // resets entirely, so this is a genuine cold-start cache-hit path, not
   // just reusing in-memory Chapter objects from before.
   let contentRequestCount = 0;
-  await page.route('**/*.txt', route => {
+  // A chapter's content is one request, its HTML (the plain text is
+  // derived from it).
+  await page.route(/\/api\/server-content\/.*\.html(\?|$)/, route => {
     contentRequestCount++;
     route.continue();
   });

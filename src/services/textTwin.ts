@@ -2,7 +2,7 @@ import createClient from 'openapi-fetch';
 import type { paths } from '../generated/biblioteca-server-api';
 import type { Express, Request, Response } from 'express';
 import { load } from 'cheerio';
-import { buildPageSeo, escapeHtml, parseAppPath, renderIndexHtml } from '../seo';
+import { buildPageSeo, escapeHtml, parseAppPath, renderIndexHtml, type Div } from '../seo';
 import { PARAGRAPHS, parseParagraphRange, formatCitation, type ParagraphRange } from './paragraphLinks';
 
 export type PageFormat = 'spa' | 'html' | 'text' | 'markdown' | 'json';
@@ -172,7 +172,9 @@ export function registerTextTwins(app: Express, opts: { serverUrl: string; origi
       const range = parseParagraphRange(params.get('p'));
       const twin = prepareTwin(html, upstreamPage, range);
       const origin = opts.originFor(req), canonicalPath = canonicalReaderPath(req.path);
-      const seo = await buildPageSeo({ route, origin, path: canonicalPath, searchParams: params, bibliotecaServerUrl: opts.serverUrl, defaultImage: opts.defaultImage(origin) });
+      // The divisions read above, and no illustration lookup: the image is
+      // the work's cover, set just below.
+      const seo = await buildPageSeo({ route, origin, path: canonicalPath, searchParams: params, bibliotecaServerUrl: opts.serverUrl, defaultImage: opts.defaultImage(origin), divs: { work: work as Div, chapter: div as Div }, illustration: false });
       seo.image = `${origin}/api/covers/work/${route.workId.split('/').map(encodeURIComponent).join('/')}`;
       seo.imageType = 'image/png';
       seo.sharedUrl = `${origin}${canonicalPath}${range ? '?p=' + params.get('p') : ''}`;

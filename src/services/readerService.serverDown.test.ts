@@ -1,3 +1,4 @@
+import { Window } from 'happy-dom';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -10,12 +11,9 @@ import assert from 'node:assert/strict';
 // ServerStatusToast declares the outage. Recovery follows the toast's own
 // Retry path: retryServerConnection, then the chapter loads on demand.
 
-// countNotes parses the fetched chapter HTML with DOMParser - Node has none.
-(globalThis as any).DOMParser = class {
-  parseFromString(): { querySelectorAll: () => [] } {
-    return { querySelectorAll: () => [] };
-  }
-};
+// The fetched chapter HTML is parsed with DOMParser (its notes, its plain
+// text) - Node has none.
+(globalThis as any).DOMParser = new Window().DOMParser;
 
 class FakeStorage implements Storage {
   private readonly store = new Map<string, string>();
@@ -54,14 +52,12 @@ function healthyFetch(input: RequestInfo | URL): Promise<Response> {
   if (url.includes('/api/works')) return Promise.resolve(Response.json(emptyPage()));
   if (url.includes('/api/collections/system/repos')) return Promise.resolve(Response.json([]));
   if (url.includes('/api/collections/system/featured')) return Promise.resolve(Response.json([]));
-  if (url.includes(`/api/server-content/${CH14}.txt`)) return Promise.resolve(new Response('fourteen text'));
   if (url.includes(`/api/server-content/${CH14}.xml`)) return Promise.resolve(new Response('<tei/>'));
   if (url.includes(`/api/server-content/${CH14}.json`)) return Promise.resolve(new Response('{}'));
-  if (url.includes(`/api/server-content/${CH14}.html`)) return Promise.resolve(new Response('<p>14</p>'));
-  if (url.includes(`/api/server-content/${CH15}.txt`)) return Promise.resolve(new Response('fifteen text'));
+  if (url.includes(`/api/server-content/${CH14}.html`)) return Promise.resolve(new Response('<p>fourteen text</p>'));
   if (url.includes(`/api/server-content/${CH15}.xml`)) return Promise.resolve(new Response('<tei/>'));
   if (url.includes(`/api/server-content/${CH15}.json`)) return Promise.resolve(new Response('{}'));
-  if (url.includes(`/api/server-content/${CH15}.html`)) return Promise.resolve(new Response('<p>15</p>'));
+  if (url.includes(`/api/server-content/${CH15}.html`)) return Promise.resolve(new Response('<p>fifteen text</p>'));
   return Promise.resolve(new Response('', { status: 404 }));
 }
 

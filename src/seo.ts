@@ -53,9 +53,11 @@ interface DivAuthor {
   writingLanguage?: string;
 }
 
-interface Div {
+export interface Div {
   id?: number;
   head?: string;
+  /** A chapter with no sub-divisions. */
+  leaf?: boolean;
   /** The work's stored cover (MinIO), set by biblioteca-nestjs; absent until one is generated. */
   coverUrl?: string;
   path?: string;
@@ -130,6 +132,10 @@ function coverImage(div: Div | null | undefined, defaultImage: string): { image:
 // (figures, plates, illustrations) gets a real, page-specific preview
 // instead of the generic work cover. Returns null when the chapter has
 // no inline image at all, so the caller can fall back to the cover.
+//
+// Leaf chapters only: a section's XML is all of its chapters (5.5 MB for the
+// Old Testament), downloaded for every page view just to find one image -
+// a section's preview is its work's cover.
 async function fetchFirstIllustrationUrl(bibliotecaServerUrl: string, origin: string, workId: string, divPath: string): Promise<string | null> {
   try {
     const res = await fetch(`${bibliotecaServerUrl}/${divPath.split('/').map(encodeURIComponent).join('/')}.xml`, {
@@ -212,8 +218,16 @@ export async function buildPageSeo(opts: {
   searchParams: URLSearchParams;
   bibliotecaServerUrl: string;
   defaultImage: string;
+  /**
+   * Divisions the caller already read from /api/divs (the text twin reads
+   * both), so they are not requested again.
+   */
+  divs?: { work?: Div | null; chapter?: Div | null };
+  /** False when the caller sets its own image: no illustration lookup. */
+  illustration?: boolean;
 }): Promise<PageSeo> {
   const { route, origin, path, searchParams, bibliotecaServerUrl, defaultImage } = opts;
+  const div = (divPath: string, known?: Div | null) => known !== undefined ? Promise.resolve(known?.id ? known : null) : fetchDiv(bibliotecaServerUrl, divPath);
   const canonicalUrl = `${origin}${path}`;
 
   const fallback: PageSeo = {
@@ -231,13 +245,13 @@ export async function buildPageSeo(opts: {
   switch (route.view) {
     case 'work': {
       if (!route.workId) return fallback;
-      const div = await fetchDiv(bibliotecaServerUrl, route.workId);
-      if (!div) return fallback;
-      const author = authorDisplayName(div.author);
-      const title = div.head || route.workId;
-      const { image, imageType } = coverImage(div, defaultImage);
+      const workDiv = await div(route.workId, opts.divs?.work);
+      if (!workDiv) return fallback;
+      const author = authorDisplayName(workDiv.author);
+      const title = workDiv.head || route.workId;
+      const { image, imageType } = coverImage(workDiv, defaultImage);
       return {
-        language: div.lang || div.language || div.author?.writingLanguage || 'und',
+        language: workDiv.lang || workDiv.language || workDiv.author?.writingLanguage || 'und',
         title: `${title} by ${author} | Biblioteca`,
         description: truncate(`Read "${title}" by ${author} free online at Biblioteca — a living, searchable TEI critical edition.`, 200),
         image,
@@ -245,22 +259,24 @@ export async function buildPageSeo(opts: {
         imageAlt: `Cover of ${title} by ${author}`,
         canonicalUrl,
         robots: 'index, follow',
-        jsonLd: bookJsonLd({ title, author, url: canonicalUrl, image, language: div.lang || div.language })
+        jsonLd: bookJsonLd({ title, author, url: canonicalUrl, image, language: workDiv.lang || workDiv.language })
       };
     }
     case 'reader': {
       if (!route.workId || !route.chapterId) return fallback;
-      const chapterDiv = await fetchDiv(bibliotecaServerUrl, route.chapterId);
+      const chapterDiv = await div(route.chapterId, opts.divs?.chapter);
       if (!chapterDiv) return fallback;
       const author = authorDisplayName(chapterDiv.author);
       const chapterTitle = chapterDiv.head || route.chapterId.split('/').pop() || route.chapterId;
       let workTitle = chapterTitle;
       let workDiv: Div | null = chapterDiv;
       if (route.chapterId !== route.workId) {
-        workDiv = await fetchDiv(bibliotecaServerUrl, route.workId);
+        workDiv = await div(route.workId, opts.divs?.work);
         if (workDiv?.head) workTitle = workDiv.head;
       }
-      const illustration = await fetchFirstIllustrationUrl(bibliotecaServerUrl, origin, route.workId, route.chapterId);
+      const illustration = opts.illustration !== false && chapterDiv.leaf === true
+        ? await fetchFirstIllustrationUrl(bibliotecaServerUrl, origin, route.workId, route.chapterId)
+        : null;
       const cover = coverImage(workDiv, defaultImage);
       const image = illustration || cover.image;
       const title = chapterTitle === workTitle

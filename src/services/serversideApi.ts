@@ -4,6 +4,7 @@ import type { components, paths } from '../generated/same-origin-api';
 import type { paths as bibliotecaServerPaths } from '../generated/biblioteca-server-api';
 import type { Author, Chapter, LanguageCode, SearchMode, SearchResult, Work } from '../types/textbase';
 import { sameOriginFetch } from './sameOriginFetch';
+import { plainTextOf } from './plainText';
 
 // Content passthrough only (rawText/proxiedAsset below). Structured API calls
 // use the generated same-origin client; raw canonical content has its own
@@ -395,10 +396,6 @@ async function rawText(path: string, extension: 'txt' | 'xml' | 'json' | 'html',
 // teidiv2html.xsl renders each tei:note as <button class="btn note" ...> -
 // counting them client-side from the already-fetched htmlContent is free
 // (no extra request), unlike parsing the TEI XML server-side would be.
-function countNotes(html: string): number {
-  return new DOMParser().parseFromString(html, 'text/html').querySelectorAll('.note').length;
-}
-
 // Naive but good enough for a stat, not a linguistic analysis: count
 // run of characters ending in ./!/? (one or more, for "…" / "?!") followed
 // by whitespace or end-of-text.
@@ -435,10 +432,13 @@ export async function fetchRealChapterContent(chapterPath: string, onNotFound?: 
     // which is what this used to fetch by mistake, dumping that whole page
     // into the reader's own content area via dangerouslySetInnerHTML.
     // XML and JSON are requested only by the explicit export links.
-    const [plainText, htmlContent] = await Promise.all([
-      rawText(chapterPath, 'txt', skeleton), rawText(chapterPath, 'html', skeleton)
-    ]);
-    return { plainText, htmlContent: rewriteServerBinaryUrls(htmlContent), noteCount: countNotes(htmlContent), sentenceCount: countSentences(plainText) };
+    // One request: the plain text (read-aloud, share excerpt, sentence
+    // count, text download) is derived from this HTML - fetching .txt as
+    // well made the server transform every chapter twice.
+    const htmlContent = await rawText(chapterPath, 'html', skeleton);
+    const doc = new DOMParser().parseFromString(htmlContent, 'text/html');
+    const plainText = plainTextOf(doc.body ?? doc);
+    return { plainText, htmlContent: rewriteServerBinaryUrls(htmlContent), noteCount: doc.querySelectorAll('.note').length, sentenceCount: countSentences(plainText) };
   } catch (error) {
     if (error instanceof ServerHttpError && error.status === 404) onNotFound?.();
     console.warn(`failed to load chapter ${chapterPath}`, error);
