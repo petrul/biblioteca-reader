@@ -69,6 +69,7 @@ import { SearchField } from './SearchField';
 import { ReaderBlockSelection } from './ReaderBlockSelection';
 import { ReaderSimilarityDialog } from './ReaderSimilarityDialog';
 import { matchesSearch } from '../services/collectionSearch';
+import { currentPageSimilarityQuery } from '../services/similarityQuery';
 
 interface ReaderViewProps {
   workId: string;
@@ -92,7 +93,7 @@ interface ReaderViewProps {
    *  id AddToCollectionModal uses: real user, or ANONYMOUS_USER_ID). */
   currentUserId: string;
   onSelectChapter: (workId: string, chapterId: string) => void;
-  onMoreLikeThis: (workId: string, title: string) => void;
+  onMoreLikeThis: (workId: string, title: string, query?: string) => void;
   onOpenAddToCollection: (item: { 
     type: 'work' | 'chapter' | 'quote'; 
     referenceId: string; 
@@ -958,9 +959,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {/* "More Like This" Similarity Vector search */}
             <button
               id="btn-reader-more-like-this"
-              onClick={() => onMoreLikeThis(work.id, work.title)}
+              onClick={() => onMoreLikeThis(work.id, work.title, currentPageSimilarityQuery(contentRef.current, work.title))}
               className="hidden sm:flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer"
-              title="Search vector similarity for this work"
+              title="Embed this page and find similar passages"
             >
               <Sparkles className="w-3.5 h-3.5 text-[#f59e0b]" />
               <span>More Like This</span>

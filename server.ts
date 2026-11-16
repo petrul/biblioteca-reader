@@ -38,6 +38,7 @@ import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderInde
 import { renderServerErrorPage } from './src/httpErrorPage';
 import { GUEST_COOKIE, INITIATOR_HEADER, isGuestName, isUserLabel, prefixProcessOutput, propagateInitiator, receivedLabel, runAs } from './src/services/initiator';
 import { createSessionInitiators, guestNameOf } from './src/services/readerInitiator';
+import { DEFAULT_COVER_LAYOUTS, DEFAULT_COVER_PALETTES, stableCoverTheme } from './src/services/stableCoverTheme';
 
 // Every line this process writes starts with its initiator - see initiator.ts.
 prefixProcessOutput();
@@ -421,12 +422,6 @@ app.post('/api/guests', asyncRoute(async (req: Request, res: Response) => {
   res.cookie(GUEST_COOKIE, name, { sameSite: 'lax', secure: req.secure, path: '/', maxAge: 365 * 24 * 3600 * 1000 });
   res.json({ name });
 }));
-const COVER_LAYOUTS = ['archival_monograph', 'folio_heritage', 'criterion_minimal', 'faber_poetry'] as const;
-const COVER_PALETTES = [
-  'archival_alabaster', 'oxford_blue', 'imperial_crimson', 'forest_emerald',
-  'terracotta_linen', 'gallimard_cream', 'midnight_obsidian'
-] as const;
-
 // Generated covers are immutable for a canonical work once cached. MinIO is
 // optional so local development still works without object-store credentials;
 // when configured, only this server writes to the public-read bucket.
@@ -790,20 +785,24 @@ app.post('/api/covers/work', requireAdmin(isAdminSession), asyncRoute(async (req
     }
   }
 
-  const layout = COVER_LAYOUTS[Math.floor(Math.random() * COVER_LAYOUTS.length)];
-  const paletteId = COVER_PALETTES[Math.floor(Math.random() * COVER_PALETTES.length)];
+  const theme = workId
+    ? stableCoverTheme(workId)
+    : {
+        layout: DEFAULT_COVER_LAYOUTS[Math.floor(Math.random() * DEFAULT_COVER_LAYOUTS.length)],
+        paletteId: DEFAULT_COVER_PALETTES[Math.floor(Math.random() * DEFAULT_COVER_PALETTES.length)],
+      };
   const coverRequest = {
     title: title.trim(),
     author: author.trim(),
     ...(typeof subtitle === 'string' && subtitle.trim() ? { subtitle: subtitle.trim() } : {}),
     ...(typeof date === 'string' && date.trim() ? { date: date.trim() } : {}),
     ...(typeof coverArtUrl === 'string' && coverArtUrl.trim() ? { coverArtUrl: coverArtUrl.trim() } : {}),
-    layout,
+    layout: theme.layout,
     foilEffect: 'none',
     hardcover: false,
     format: 'png',
     pixelRatio: 2,
-    theme: { paletteId, showBarcode: false },
+    theme: { paletteId: theme.paletteId, showBarcode: false },
   };
 
   try {
@@ -886,11 +885,10 @@ app.get('/api/covers/work/:authorId/:opusId', asyncRoute(async (req: Request, re
     return;
   }
 
-  const layout = COVER_LAYOUTS[Math.floor(Math.random() * COVER_LAYOUTS.length)];
-  const paletteId = COVER_PALETTES[Math.floor(Math.random() * COVER_PALETTES.length)];
+  const theme = stableCoverTheme(workId);
   const coverRequest = {
-    title, author, layout, foilEffect: 'none', hardcover: false, format: 'png', pixelRatio: 2,
-    theme: { paletteId, showBarcode: false },
+    title, author, layout: theme.layout, foilEffect: 'none', hardcover: false, format: 'png', pixelRatio: 2,
+    theme: { paletteId: theme.paletteId, showBarcode: false },
   };
 
   try {

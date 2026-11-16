@@ -516,9 +516,9 @@ export default function App() {
     else setCollectionsModalOpen(true);
   }, !isAuthModalOpen && collectionModalPayload === null);
 
-  const handleMoreLikeThis = (workId: string, title: string) => {
+  const handleMoreLikeThis = (workId: string, title: string, query?: string) => {
     setSearchMode('vector');
-    setSearchQuery(title);
+    setSearchQuery(query?.trim() || title);
     setSavedSearchId(undefined);
     setSearchWorkSeed(workId);
     setSearchScopeWorkId(workId);
