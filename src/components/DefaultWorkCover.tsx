@@ -17,11 +17,15 @@ export const DefaultWorkCover: React.FC<DefaultWorkCoverProps> = ({ title, autho
   >
     <img src={appAsset('cover-blue.jpg')} alt="" aria-hidden="true" onError={event => { event.currentTarget.style.visibility = 'hidden'; }} className="absolute inset-0 h-full w-full object-cover" />
     <div className="absolute inset-0 bg-linear-to-b from-white/20 via-transparent to-[#061f3e]/35" />
+    {/* cover-blue.jpg has a white paper margin at its lower edge. Keep that
+        source asset unchanged, but mask the margin so the fallback remains a
+        coherent blue cover instead of ending in an accidental white strip. */}
+    <div data-testid="default-cover-bottom" aria-hidden="true" className="absolute inset-x-0 bottom-0 h-[20%] bg-[#061f3e]" />
     <div className="absolute inset-x-0 top-0 p-3 sm:p-4 text-[#071c34] drop-shadow-[0_1px_1px_rgba(255,255,255,.65)]">
       <div className="font-serif-reading text-[clamp(0.85rem,2vw,1.25rem)] font-semibold leading-tight line-clamp-4">{title}</div>
       <div className="mt-1 font-serif-reading text-[clamp(0.65rem,1.4vw,0.9rem)] italic leading-tight line-clamp-2">{author}</div>
     </div>
-    <div className="absolute inset-x-0 bottom-0 p-2 text-center text-[0.48rem] font-semibold uppercase tracking-[0.22em] text-white/80">Biblioteca</div>
+    <div className="absolute inset-x-0 bottom-0 z-10 p-2 text-center text-[0.48rem] font-semibold uppercase tracking-[0.22em] text-white/80">Biblioteca</div>
   </div>
 );
 
