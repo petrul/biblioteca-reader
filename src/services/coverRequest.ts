@@ -2,9 +2,17 @@
 export function withoutLegacyCoverArtUrl(request: Record<string, unknown>): Record<string, unknown> {
   const value = request.coverArtUrl;
   if (value === undefined || typeof value !== 'string') return request;
-  let pathname = value;
-  try { pathname = new URL(value, 'http://biblioteca.invalid').pathname; } catch { /* keep raw value */ }
-  if (!/(^|\/)img\/authors(?:\/|$)/i.test(pathname) && !/(^|\/)authors(?:\/|$)/i.test(pathname)) return request;
+  if (/^data:/i.test(value.trim())) return request;
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { return withoutCoverArt(request); }
+  if (!['http:', 'https:'].includes(parsed.protocol)
+    || /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[?::1\]?)$/i.test(parsed.hostname)
+    || /(^|\/)img\/authors(?:\/|$)/i.test(parsed.pathname)
+    || /(^|\/)authors(?:\/|$)/i.test(parsed.pathname)) return withoutCoverArt(request);
+  return request;
+}
+
+function withoutCoverArt(request: Record<string, unknown>): Record<string, unknown> {
   const { coverArtUrl: _removed, ...clean } = request;
   return clean;
 }

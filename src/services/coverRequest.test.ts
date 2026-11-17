@@ -9,4 +9,5 @@ test('stored cover JSON does not re-propose deleted local author portraits', () 
   );
   const external = { title: 'Alexiada', coverArtUrl: 'https://commons.wikimedia.org/a.jpg' };
   assert.equal(withoutLegacyCoverArtUrl(external), external);
+  assert.deepEqual(withoutLegacyCoverArtUrl({ title: 'Alexiada', coverArtUrl: 'http://localhost:8080/covers/local.jpg' }), { title: 'Alexiada' });
 });
