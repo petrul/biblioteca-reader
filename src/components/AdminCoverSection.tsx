@@ -56,25 +56,10 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
     return () => { cancelled = true; };
   }, [workId]);
 
-  const newRandomJson = async () => {
-    setRolling(true);
-    setError('');
-    try {
-      const res = await trackedFetch(`/api/admin/covers/work/request/random?path=${encodeURIComponent(workId)}`, { headers: { Accept: 'application/json' } });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || body?.message || `HTTP ${res.status}`);
-      if (body.request) setJsonText(JSON.stringify(body.request, null, 2));
-    } catch (e: any) {
-      setError(`Could not roll a random JSON: ${e.message}`);
-    } finally {
-      setRolling(false);
-    }
-  };
-
-  const generate = async () => {
+  const generateRequest = async (requestText: string) => {
     let request: unknown;
     try {
-      request = JSON.parse(jsonText);
+      request = JSON.parse(requestText);
     } catch {
       setError('The JSON is not valid - fix it before generating.');
       return;
@@ -100,6 +85,31 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
     } finally {
       setRendering(false);
     }
+  };
+
+  const newRandomJson = async () => {
+    setRolling(true);
+    setError('');
+    try {
+      const res = await trackedFetch(`/api/admin/covers/work/request/random?path=${encodeURIComponent(workId)}`, { headers: { Accept: 'application/json' } });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || body?.message || `HTTP ${res.status}`);
+      if (body.request) {
+        const requestText = JSON.stringify(body.request, null, 2);
+        setJsonText(requestText);
+        // A random request is useful only once its PNG exists. Render it now
+        // instead of leaving a coverless work on the local DefaultWorkCover.
+        await generateRequest(requestText);
+      }
+    } catch (e: any) {
+      setError(`Could not roll a random JSON: ${e.message}`);
+    } finally {
+      setRolling(false);
+    }
+  };
+
+  const generate = async () => {
+    await generateRequest(jsonText);
   };
 
   const uploadImage = async (file: File | undefined) => {
@@ -139,7 +149,7 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0f3d30] hover:bg-emerald-700/50 disabled:opacity-60 text-emerald-100 text-xs font-bold border border-emerald-500/30 cursor-pointer disabled:cursor-wait"
           >
             {rolling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shuffle className="w-3.5 h-3.5" />}
-            {rolling ? 'Rolling…' : 'New random JSON'}
+            {rolling ? 'Rendering…' : 'New random cover'}
           </button>
           <input ref={fileInput} type="file" accept="image/*" hidden data-testid="admin-cover-upload-input"
             onChange={e => void uploadImage(e.target.files?.[0])} />
