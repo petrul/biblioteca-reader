@@ -64,7 +64,8 @@ function installDom() {
   };
 }
 
-async function mountReader(context: { mock: any }, htmlContent = chapter.htmlContent) {
+async function mountReader(context: { mock: any }, htmlContent = chapter.htmlContent,
+  onMoreLikeThis: (...args: unknown[]) => void = () => {}) {
   const dom = installDom();
   const { act, createElement } = await import('react').then(react => ({ act: react.act, createElement: react.createElement }));
   const { createRoot } = await import('react-dom/client');
@@ -86,7 +87,7 @@ async function mountReader(context: { mock: any }, htmlContent = chapter.htmlCon
       settingsOpen: false, currentUserId: 'guest',
       onBack: noop, onBackToWork: noop, onSelectWork: noop,
       onSettingsOpenChange: noop, onSelectChapter: noop,
-      onMoreLikeThis: noop, onOpenAddToCollection: noop
+      onMoreLikeThis, onOpenAddToCollection: noop
     }));
   });
   const document = dom.window.document;
@@ -103,6 +104,21 @@ async function mountReader(context: { mock: any }, htmlContent = chapter.htmlCon
     unmount: async () => { await act(async () => root.unmount()); await dom.restore(); }
   };
 }
+
+test('More Like This sends the current page to vector search', async context => {
+  const calls: unknown[][] = [];
+  const reader = await mountReader(context, chapter.htmlContent, (...args) => calls.push(args));
+  try {
+    const button = reader.document.getElementById('btn-reader-more-like-this') as unknown as HTMLButtonElement | null;
+    assert.ok(button, 'the reader exposes More Like This');
+    await reader.act(async () => { button!.dispatchEvent(new (globalThis as any).MouseEvent('click', { bubbles: true })); });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], work.id);
+    assert.equal(calls[0][1], work.title);
+    assert.match(String(calls[0][2]), /Arma virumque cano/);
+    assert.ok(String(calls[0][2]).length > work.title.length, 'the query is page text, not only the title');
+  } finally { await reader.unmount(); }
+});
 
 test('the Similar button is offered once the reader selects arbitrary text', async context => {
   const reader = await mountReader(context);

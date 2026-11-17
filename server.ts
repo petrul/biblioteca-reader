@@ -39,6 +39,8 @@ import { buildPageSeo, buildRobotsTxt, buildSitemapXml, parseAppPath, renderInde
 import { renderServerErrorPage } from './src/httpErrorPage';
 import { GUEST_COOKIE, INITIATOR_HEADER, isGuestName, isUserLabel, prefixProcessOutput, propagateInitiator, receivedLabel, runAs } from './src/services/initiator';
 import { createSessionInitiators, guestNameOf } from './src/services/readerInitiator';
+import { DEFAULT_COVER_LAYOUTS, DEFAULT_COVER_PALETTES, stableCoverTheme } from './src/services/stableCoverTheme';
+import { withoutLegacyCoverArtUrl } from './src/services/coverRequest';
 
 // Every line this process writes starts with its initiator - see initiator.ts.
 prefixProcessOutput();
@@ -422,12 +424,6 @@ app.post('/api/guests', asyncRoute(async (req: Request, res: Response) => {
   res.cookie(GUEST_COOKIE, name, { sameSite: 'lax', secure: req.secure, path: '/', maxAge: 365 * 24 * 3600 * 1000 });
   res.json({ name });
 }));
-const COVER_LAYOUTS = ['archival_monograph', 'folio_heritage', 'criterion_minimal', 'faber_poetry'] as const;
-const COVER_PALETTES = [
-  'archival_alabaster', 'oxford_blue', 'imperial_crimson', 'forest_emerald',
-  'terracotta_linen', 'gallimard_cream', 'midnight_obsidian'
-] as const;
-
 // Generated covers are immutable for a canonical work once cached. MinIO is
 // optional so local development still works without object-store credentials;
 // when configured, only this server writes to the public-read bucket.
@@ -605,6 +601,60 @@ const BIBLIOTECA_GET_ROUTES = [
   '/api/search/lucene',
   '/api/search/vector',
 ];
+
+// The upstream GraphQL endpoint is internal-only. This narrow reader gateway
+// injects the service token server-side, forwards the browser session cookie,
+// and admits only the named operations used by the workspace UI. It must not
+// become a public arbitrary GraphQL tunnel.
+const READER_GRAPHQL_OPERATIONS = new Set([
+  'MyReaderState',
+  'UpdateMyReaderState',
+  'MySavedSearches',
+  'SaveMySearch',
+  'RenameMyCollection',
+  'DeleteMyCollection',
+]);
+const READER_GRAPHQL_ROOT_FIELDS: Record<string, string> = {
+  MyReaderState: 'myReaderState',
+  UpdateMyReaderState: 'updateMyReaderState',
+  MySavedSearches: 'mySavedSearches',
+  SaveMySearch: 'saveMySearch',
+  RenameMyCollection: 'renameMyCollection',
+  DeleteMyCollection: 'deleteMyCollection',
+};
+app.post('/api/reader-graphql', asyncRoute(async (req: Request, res: Response) => {
+  const operationName = req.body?.operationName;
+  const query = req.body?.query;
+  const rootField = typeof operationName === 'string' ? READER_GRAPHQL_ROOT_FIELDS[operationName] : undefined;
+  if (typeof operationName !== 'string' || !READER_GRAPHQL_OPERATIONS.has(operationName)
+      || typeof query !== 'string' || query.length > 20_000 || !rootField
+      || query.includes('__schema') || query.includes('__type') || !new RegExp(`\\b${rootField}\\b`).test(query)) {
+    res.status(400).json({ error: 'unsupported reader GraphQL operation' });
+    return;
+  }
+  if (!BIBLIOTECA_INTERNAL_API_TOKEN) {
+    res.status(503).json({ error: 'reader GraphQL gateway is not configured' });
+    return;
+  }
+  try {
+    const upstreamRes = await fetch(`${BIBLIOTECA_SERVER_URL}/graphql`, {
+      method: 'POST',
+      headers: {
+        ...forwardedHeaders(req),
+        Authorization: `Bearer ${BIBLIOTECA_INTERNAL_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables: req.body?.variables ?? {}, operationName }),
+      redirect: 'manual',
+    });
+    relaySetCookie(upstreamRes, res);
+    res.status(upstreamRes.status);
+    res.setHeader('Content-Type', upstreamRes.headers.get('content-type') || 'application/json');
+    res.send(Buffer.from(await upstreamRes.arrayBuffer()));
+  } catch (error: any) {
+    res.status(502).json({ error: `biblioteca-server unreachable at ${BIBLIOTECA_SERVER_URL}: ${error.message}` });
+  }
+}));
 // Wrapped, not passed directly: Express always calls a route handler as
 // fn(req, res, next), which would otherwise land in relayGetFromBiblioteca's
 // own optional third parameter (a function, not undefined) and defeat its
@@ -746,20 +796,27 @@ app.post('/api/covers/work', requireAdmin(isAdminSession), asyncRoute(async (req
     }
   }
 
-  const layout = COVER_LAYOUTS[Math.floor(Math.random() * COVER_LAYOUTS.length)];
-  const paletteId = COVER_PALETTES[Math.floor(Math.random() * COVER_PALETTES.length)];
+  const theme = workId
+    ? stableCoverTheme(workId)
+    : {
+        layout: DEFAULT_COVER_LAYOUTS[Math.floor(Math.random() * DEFAULT_COVER_LAYOUTS.length)],
+        paletteId: DEFAULT_COVER_PALETTES[Math.floor(Math.random() * DEFAULT_COVER_PALETTES.length)],
+      };
+  const safeArt = typeof coverArtUrl === 'string'
+    ? withoutLegacyCoverArtUrl({ coverArtUrl }).coverArtUrl
+    : undefined;
   const coverRequest = {
     title: title.trim(),
     author: author.trim(),
     ...(typeof subtitle === 'string' && subtitle.trim() ? { subtitle: subtitle.trim() } : {}),
     ...(typeof date === 'string' && date.trim() ? { date: date.trim() } : {}),
-    ...(typeof coverArtUrl === 'string' && coverArtUrl.trim() ? { coverArtUrl: coverArtUrl.trim() } : {}),
-    layout,
+    ...(typeof safeArt === 'string' && safeArt.trim() ? { coverArtUrl: safeArt.trim() } : {}),
+    layout: theme.layout,
     foilEffect: 'none',
     hardcover: false,
     format: 'png',
     pixelRatio: 2,
-    theme: { paletteId, showBarcode: false },
+    theme: { paletteId: theme.paletteId, showBarcode: false },
   };
 
   try {
@@ -842,11 +899,10 @@ app.get('/api/covers/work/:authorId/:opusId', asyncRoute(async (req: Request, re
     return;
   }
 
-  const layout = COVER_LAYOUTS[Math.floor(Math.random() * COVER_LAYOUTS.length)];
-  const paletteId = COVER_PALETTES[Math.floor(Math.random() * COVER_PALETTES.length)];
+  const theme = stableCoverTheme(workId);
   const coverRequest = {
-    title, author, layout, foilEffect: 'none', hardcover: false, format: 'png', pixelRatio: 2,
-    theme: { paletteId, showBarcode: false },
+    title, author, layout: theme.layout, foilEffect: 'none', hardcover: false, format: 'png', pixelRatio: 2,
+    theme: { paletteId: theme.paletteId, showBarcode: false },
   };
 
   try {
@@ -918,7 +974,9 @@ app.post(ADMIN_COVER_WORK_PATH, requireAdmin(isAdminSession), express.json({ lim
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
     return;
   }
-  const request = req.body?.request;
+  const request = req.body?.request && typeof req.body.request === 'object' && !Array.isArray(req.body.request)
+    ? withoutLegacyCoverArtUrl(req.body.request as Record<string, unknown>)
+    : req.body?.request;
   if (request !== undefined && (request === null || typeof request !== 'object' || Array.isArray(request))) {
     res.status(400).json({ error: 'request must be a JSON object' });
     return;

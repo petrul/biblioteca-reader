@@ -12,13 +12,15 @@ import {
   ArrowLeft,
   Settings,
   BookMarked,
-  MessageCircle
+  MessageCircle,
+  PanelLeft
 } from 'lucide-react';
 import { AppView, SearchResult } from '../types/textbase';
 import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
 import { useLongPressDrag } from '../hooks/useLongPressDrag';
 import { readerService } from '../services/readerService';
 import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
+import { authorLabelForTitleBar } from '../services/authorLabel';
 
 // Waits this long after the last keystroke before actually searching -
 // long enough that a fast typist doesn't fire a request per letter, short
@@ -51,6 +53,7 @@ interface NavbarProps {
   onToggleReaderSettings?: () => void;
   // Opens the collections quick-jump modal (the `s` shortcut's touch/mouse twin).
   onOpenCollectionsQuickFind?: () => void;
+  onToggleWorkspace?: () => void;
   // Undefined (not just a no-op) for a non-admin - see App.tsx's isAdmin -
   // hides the hamburger button entirely rather than showing it disabled.
   onOpenAdminSidebar?: () => void;
@@ -106,6 +109,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRandomDiscovery,
   onToggleReaderSettings,
   onOpenCollectionsQuickFind,
+  onToggleWorkspace,
   onOpenAdminSidebar,
   onCloseBook,
   onSearch,
@@ -128,7 +132,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onChatDragActiveChange
 }) => {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const brandSubtitle = pageTitle ? pageSubtitle : 'Your Scriptorium classical readings';
+  const brandSubtitle = pageTitle ? authorLabelForTitleBar(pageSubtitle, pageTitle) : 'Your Scriptorium classical readings';
+  const visiblePageAuthorId = brandSubtitle ? pageAuthorId : undefined;
   // Starts empty on every page load: a search runs only when the reader
   // types. (A remembered last query used to be restored here, and the
   // search effect below then re-ran it on every load - a long pasted query
@@ -545,10 +550,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 </div>
               </button>
-              {brandSubtitle && (pageAuthorId && onOpenAuthor ? (
+              {brandSubtitle && (visiblePageAuthorId && onOpenAuthor ? (
                 <button
                   id="nav-logo-author-btn"
-                  onClick={() => onOpenAuthor(pageAuthorId)}
+                  onClick={() => onOpenAuthor(visiblePageAuthorId)}
                   title={`Open ${brandSubtitle}'s page`}
                   className="text-left cursor-pointer min-w-0 group/author"
                 >
@@ -604,6 +609,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Bookmark className="w-4 h-4 text-[#f59e0b]" />
                 <span>Collections</span>
               </button>
+
+              {onToggleWorkspace && (
+                <button
+                  id="nav-workspace-btn"
+                  onClick={onToggleWorkspace}
+                  className="flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs uppercase tracking-wider font-semibold transition-all cursor-pointer text-emerald-100/70 hover:text-white hover:bg-emerald-500/10"
+                  title="Toggle workspace drawers"
+                >
+                  <PanelLeft className="w-4 h-4 text-[#f59e0b]" />
+                  <span>Workspace</span>
+                </button>
+              )}
 
               {/* Docked assistant on desktop: the bubble traded its corner
                   for this bar. Tap opens the same chat panel; long-press

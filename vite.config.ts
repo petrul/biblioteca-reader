@@ -95,7 +95,7 @@ export default defineConfig(() => {
       // Vite's DNS-rebinding protection rejects requests whose Host header
       // isn't localhost/the dev IP by default - needed here because Caddy
       // fronts this dev server at test.scriptorium.ro (see docker/caddy/Caddyfile).
-      allowedHosts: ['test.scriptorium.ro'],
+      allowedHosts: ['test.scriptorium.ro', 'yoga.local', '192.168.0.101'],
     },
   };
 });

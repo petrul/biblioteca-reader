@@ -68,6 +68,21 @@ for (const [publicPath, entry] of Object.entries(BIBLIOTECA_PATHS)) {
             throw new Error(`biblioteca-server's ${upstreamPath} has no ${method} - update BIBLIOTECA_PATHS in this script`);
         }
         filtered[method] = upstreamOp[method];
+        if (method === 'get' && publicPath.startsWith('/api/search/')) {
+            filtered[method] = {
+                ...filtered[method],
+                parameters: [
+                    ...(filtered[method].parameters || []),
+                    {
+                        name: 'scope',
+                        in: 'query',
+                        required: false,
+                        schema: { type: 'array', items: { type: 'string' } },
+                        description: 'Canonical author/opus prefixes to search within; repeat for multiple scopes.',
+                    },
+                ].filter((parameter, index, all) => all.findIndex(candidate => candidate.name === parameter.name) === index),
+            };
+        }
     }
     biblioPaths[publicPath] = filtered;
 }
@@ -108,6 +123,18 @@ const contentPath = {
 // implementation - the request/response shapes the reader's client
 // (readerService's payment flow, via serversideApi.ts) is typed against.
 const ownPaths = {
+    '/api/reader-graphql': {
+        post: {
+            summary: 'Allowlisted reader workspace GraphQL operations',
+            requestBody: { required: true, content: { 'application/json': { schema: {
+                type: 'object', required: ['operationName', 'query'], properties: {
+                    operationName: { type: 'string', enum: ['MyReaderState', 'UpdateMyReaderState', 'MySavedSearches', 'SaveMySearch', 'RenameMyCollection', 'DeleteMyCollection'] },
+                    query: { type: 'string' }, variables: { type: 'object' },
+                },
+            } } } },
+            responses: { '200': { description: 'GraphQL response' }, '400': { description: 'Unsupported operation' }, '503': { description: 'Gateway not configured' } },
+        },
+    },
     '/api/covers/work': {
         post: {
             summary: 'Render a randomized cover for a canonical work through the same-origin gateway',

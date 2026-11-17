@@ -439,10 +439,10 @@ export interface components {
              */
             coverArtUrl?: string;
             /**
-             * @description Layout archetype id (see GET /api/cover/meta). Defaults to archival_monograph.
+             * @description Layout archetype id (see GET /api/cover/meta). Defaults to folio_bauhaus.
              * @enum {string}
              */
-            layout?: "criterion_minimal" | "archival_monograph" | "folio_heritage" | "cinematic_bleed" | "swiss_modernist" | "woodcut_broadside" | "faber_poetry" | "constructivist" | "storybook_whimsy" | "classical_graeco_roman" | "historical_annals" | "slavonic_construct" | "asian_inkwash" | "adventure_pulp";
+            layout?: "folio_bauhaus" | "folio_ethereal" | "folio_topographic" | "folio_brutalist" | "folio_nocturne" | "folio_botanical" | "criterion_minimal" | "archival_monograph" | "folio_heritage" | "cinematic_bleed" | "swiss_modernist" | "woodcut_broadside" | "faber_poetry" | "constructivist" | "storybook_whimsy" | "classical_graeco_roman" | "historical_annals" | "slavonic_construct" | "asian_inkwash" | "adventure_pulp" | "pure_typographic";
             /**
              * @description Hot-stamped foil effect on the title.
              * @enum {string}
@@ -480,7 +480,7 @@ export interface components {
              * @description Alternative to the top-level `layout` field.
              * @enum {string}
              */
-            archetypeId?: "criterion_minimal" | "archival_monograph" | "folio_heritage" | "cinematic_bleed" | "swiss_modernist" | "woodcut_broadside" | "faber_poetry" | "constructivist" | "storybook_whimsy" | "classical_graeco_roman" | "historical_annals" | "slavonic_construct" | "asian_inkwash" | "adventure_pulp";
+            archetypeId?: "folio_bauhaus" | "folio_ethereal" | "folio_topographic" | "folio_brutalist" | "folio_nocturne" | "folio_botanical" | "criterion_minimal" | "archival_monograph" | "folio_heritage" | "cinematic_bleed" | "swiss_modernist" | "woodcut_broadside" | "faber_poetry" | "constructivist" | "storybook_whimsy" | "classical_graeco_roman" | "historical_annals" | "slavonic_construct" | "asian_inkwash" | "adventure_pulp" | "pure_typographic";
             /**
              * @description Palette preset id (see GET /api/cover/meta). Ignored when `palette` is given.
              * @example oxford_blue
@@ -550,7 +550,7 @@ export interface components {
             borderStyle?: "none" | "thin_gold" | "double_hairline" | "ornate_woodcut";
         };
         LayoutMeta: {
-            /** @example archival_monograph */
+            /** @example folio_bauhaus */
             id?: string;
             /** @example The Archival Monograph */
             name?: string;

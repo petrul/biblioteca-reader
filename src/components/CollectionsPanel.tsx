@@ -18,6 +18,7 @@ import {
   deleteSavedSearch,
   getSavedSearches,
   renameSavedSearch,
+  exportSavedSearch,
   subscribeSavedSearches,
 } from '../services/savedSearches';
 import {
@@ -43,6 +44,7 @@ export interface CollectionsPanelProps {
   onSelectChapter: (workId: string, chapterId: string) => void;
   onOpenQuote: (quoteId: string, saved?: SavedQuote) => void;
   onRunSearch: (query: string) => void;
+  onOpenSavedSearch?: (id: string) => void;
   /** Called after something was opened - the modal closes itself here. */
   onNavigate?: () => void;
   /** Rendered next to the search box (the modal's close button). */
@@ -84,6 +86,7 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
   onSelectChapter,
   onOpenQuote,
   onRunSearch,
+  onOpenSavedSearch,
   onNavigate,
   searchAddon,
   className = '',
@@ -162,6 +165,12 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
   const runSearch = (group: CollectionsGroup) => {
     if (group.query === undefined) return;
     onRunSearch(group.query);
+    onNavigate?.();
+  };
+
+  const openSavedSearch = (group: CollectionsGroup) => {
+    if (group.query === undefined) return;
+    onOpenSavedSearch?.(group.id);
     onNavigate?.();
   };
 
@@ -367,6 +376,12 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
             )}
           </span>
         </button>
+        {isSearch && onOpenSavedSearch && (
+          <button type="button" title="Open frozen search document" aria-label="Open frozen search document" className={ICON_BUTTON}
+                  onClick={() => openSavedSearch(group)}>
+            <Bookmark className="w-3.5 h-3.5" />
+          </button>
+        )}
         {manage && (
           <div className="flex items-center shrink-0">
             {isSearch && (
@@ -378,6 +393,18 @@ export const CollectionsPanel: React.FC<CollectionsPanelProps> = ({
                 <button type="button" title="Rename" aria-label="Rename" className={ICON_BUTTON}
                         onClick={() => { setDraftName(group.title); setEditingId(group.id); }}>
                   <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" title="Export Markdown" aria-label="Export Markdown" className={ICON_BUTTON}
+                        onClick={() => exportSavedSearch(group.id, 'md')}>
+                  <span className="text-[9px] font-bold">MD</span>
+                </button>
+                <button type="button" title="Export HTML" aria-label="Export HTML" className={ICON_BUTTON}
+                        onClick={() => exportSavedSearch(group.id, 'html')}>
+                  <span className="text-[9px] font-bold">HTML</span>
+                </button>
+                <button type="button" title="Export OpenDocument" aria-label="Export OpenDocument" className={ICON_BUTTON}
+                        onClick={() => exportSavedSearch(group.id, 'odt')}>
+                  <span className="text-[9px] font-bold">ODT</span>
                 </button>
               </>
             )}

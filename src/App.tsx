@@ -22,7 +22,7 @@ import { AuthorView } from './components/AuthorView';
 import { WorkView } from './components/WorkView';
 import { ReaderView } from './components/ReaderView';
 import { SearchView } from './components/SearchView';
-import { attachSavedSearchesAccount, detachSavedSearchesAccount, subscribeSavedSearches } from './services/savedSearches';
+import { attachSavedSearchesAccount, detachSavedSearchesAccount, subscribeSavedSearches, getSavedSearches } from './services/savedSearches';
 import { CollectionsView } from './components/CollectionsView';
 import { CollectionsModal } from './components/CollectionsModal';
 import { useCollectionsShortcut } from './hooks/useCollectionsShortcut';
@@ -38,6 +38,11 @@ import { fetchWhoAmI, submitGoogleCredential, refreshGoogleProfile, cachedGoogle
 import { AddToCollectionModal, AddToCollectionPayload } from './components/AddToCollectionModal';
 import { ChatWidget } from './components/ChatWidget';
 import { setLogReaderIdentity } from './services/logRelay';
+import { loadWorkspaceState, persistWorkspaceState, getLastSearch, getWorkspace, setWorkspace, subscribeWorkspace, type ReaderLastSearch, setLastSearch } from './services/workspaceStore';
+import { attachSearchHistoryAccount, type SearchHistoryEntry } from './services/searchHistory';
+import { ServerCollectionsStore } from './services/collectionsStore';
+import { WorkspaceShell } from './components/WorkspaceShell';
+import { SavedSearchDocumentView } from './components/SavedSearchDocumentView';
 
 export default function App() {
   const [dataRevision, setDataRevision] = useState(0);
@@ -105,6 +110,9 @@ export default function App() {
   const [searchMode, setSearchMode] = useState<SearchMode>('title');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchWorkSeed, setSearchWorkSeed] = useState<string | undefined>(undefined);
+  const [searchScopeWorkId, setSearchScopeWorkId] = useState<string | undefined>(undefined);
+  const [savedSearchId, setSavedSearchId] = useState<string | undefined>(undefined);
+  const [searchRestore, setSearchRestore] = useState<ReaderLastSearch | null>(null);
 
   // Auth & User State
   const [currentUser, setCurrentUser] = useState<User | null>(() => readerService.getCurrentUser());
@@ -148,7 +156,7 @@ export default function App() {
     }
     if (account && collectionsAccountRef.current !== account) {
       collectionsAccountRef.current = account;
-      void readerService.attachCollectionsStore(account, preferencesStoreFor(true))
+      void readerService.attachCollectionsStore(account, new ServerCollectionsStore(account, preferencesStoreFor(true)))
         .catch(error => console.warn('[collections] could not load the account\'s collections', error));
       void attachSavedSearchesAccount()
         .catch(error => console.warn('[saved-search] could not load the account\'s saved searches', error));
@@ -168,7 +176,52 @@ export default function App() {
       readerService.setUser(null);
       setCurrentUser(null);
     }
+    void loadWorkspaceState(Boolean(who.authenticated)).catch(error => console.warn('[workspace] state unavailable', error));
+    void attachSearchHistoryAccount(preferencesStoreFor(Boolean(account)), Boolean(account))
+      .catch(error => console.warn('[search-history] account state unavailable', error));
   };
+
+  const [, setWorkspaceRevision] = useState(0);
+  useEffect(() => subscribeWorkspace(() => setWorkspaceRevision(value => value + 1)), []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
+      if (event.key === '\\') {
+        event.preventDefault();
+        setWorkspace({ ...getWorkspace(), active: !getWorkspace().active });
+        void persistWorkspaceState().catch(error => console.warn('[workspace] save failed', error));
+      }
+      if (event.key === '/' && currentView !== 'search') {
+        event.preventDefault();
+        const last = getLastSearch();
+        setSearchMode(last?.mode === 'all' ? 'title' : last?.mode ?? 'title');
+        setSearchQuery(last?.query ?? '');
+        setSearchWorkSeed(undefined);
+        setSearchScopeWorkId(last?.scope === 'work' ? last.workId : currentView === 'reader' ? selectedWorkId ?? undefined : undefined);
+        setSavedSearchId(last?.savedSearchId);
+        setSearchRestore(last);
+        setCurrentView('search');
+      }
+      if ((event.key === '[' || event.key === ']') && currentView === 'search') {
+        const last = getLastSearch();
+        const results = last?.results ?? [];
+        if (!results.length) return;
+        const currentIndex = Math.max(0, results.findIndex(item => item.id === last?.activeResultId));
+        const nextIndex = event.key === '[' ? Math.max(0, currentIndex - 1) : Math.min(results.length - 1, currentIndex + 1);
+        const item = results[nextIndex];
+        if (!item) return;
+        event.preventDefault();
+        setLastSearch({ ...last!, activeResultId: item.id, updatedAt: new Date().toISOString() });
+        void persistWorkspaceState().catch(error => console.warn('[workspace] active search result save failed', error));
+        if (item.type === 'author') handleSelectAuthor(item.authorId);
+        else if (item.chapterId) handleSelectChapter(item.workId, item.chapterId);
+        else handleSelectWork(item.workId);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [currentView, selectedWorkId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -310,6 +363,7 @@ export default function App() {
         setSearchMode(route.search?.mode ?? 'title');
         setSearchQuery(route.search?.query ?? '');
         setSearchWorkSeed(route.search?.workSeed);
+        setSavedSearchId(route.search?.savedSearchId);
         setCurrentView('search');
       } else if (route.view === 'admin' || route.view === 'collections') {
         setCurrentView(route.view);
@@ -377,7 +431,7 @@ export default function App() {
     else if (currentView === 'quote' && selectedQuoteId) path = buildAppPath({ view: 'quote', quoteId: selectedQuoteId });
     else if (currentView === 'author' && selectedAuthorId) path = buildAppPath({ view: 'author', authorId: selectedAuthorId });
     else if (currentView === 'search') {
-      path = buildAppPath({ view: 'search', search: { mode: searchMode, query: searchQuery, workSeed: searchWorkSeed } });
+      path = buildAppPath({ view: 'search', search: { mode: searchMode, query: searchQuery, workSeed: searchWorkSeed, savedSearchId } });
     } else if (currentView === 'admin' || currentView === 'collections') path = buildAppPath({ view: currentView });
 
     const replace = replaceNextPathSyncRef.current;
@@ -392,7 +446,7 @@ export default function App() {
     // Do not reset the viewport on navigation. Opening a work or author from
     // a catalogue should preserve the reader's current place; individual
     // reader pagination/position hooks manage their own scroll state.
-  }, [currentView, catalog, searchMode, searchQuery, searchWorkSeed, selectedWorkId, selectedChapterId, selectedQuoteId, selectedAuthorId, selectedFragment]);
+  }, [currentView, catalog, searchMode, searchQuery, searchWorkSeed, savedSearchId, selectedWorkId, selectedChapterId, selectedQuoteId, selectedAuthorId, selectedFragment]);
 
   // Navigation handlers
   const handleAppBack = () => {
@@ -496,10 +550,12 @@ export default function App() {
     else setCollectionsModalOpen(true);
   }, !isAuthModalOpen && collectionModalPayload === null);
 
-  const handleMoreLikeThis = (workId: string, title: string) => {
+  const handleMoreLikeThis = (workId: string, title: string, query?: string) => {
     setSearchMode('vector');
-    setSearchQuery(title);
+    setSearchQuery(query?.trim() || title);
+    setSavedSearchId(undefined);
     setSearchWorkSeed(workId);
+    setSearchScopeWorkId(workId);
     setCurrentView('search');
   };
 
@@ -569,6 +625,8 @@ export default function App() {
           if (view === 'search' && currentView !== 'search') {
             setSearchQuery('');
             setSearchWorkSeed(undefined);
+            setSearchScopeWorkId(undefined);
+            setSavedSearchId(undefined);
           }
           setCurrentView(view);
         }}
@@ -579,10 +637,15 @@ export default function App() {
         onRandomDiscovery={handleRandomDiscovery}
         onToggleReaderSettings={() => setReaderSettingsOpen(open => !open)}
         onOpenCollectionsQuickFind={() => setCollectionsModalOpen(true)}
+            onToggleWorkspace={() => {
+              setWorkspace({ ...getWorkspace(), active: !getWorkspace().active });
+              void persistWorkspaceState().catch(error => console.warn('[workspace] save failed', error));
+            }}
         onCloseBook={handleCloseBook}
         onOpenAdminSidebar={() => setIsAdminSidebarOpen(true)}
         onSearch={(query) => {
           setSearchQuery(query);
+          setSavedSearchId(undefined);
           setCurrentView('search');
         }}
         onSelectWork={handleSelectWork}
@@ -679,15 +742,50 @@ export default function App() {
           />
         )}
 
-        {currentView === 'search' && (
+        {currentView === 'search' && savedSearchId && getSavedSearches().find(search => search.id === savedSearchId) && (
+          <SavedSearchDocumentView
+            search={getSavedSearches().find(search => search.id === savedSearchId)!}
+            onSelectWork={handleSelectWork}
+            onSelectChapter={handleSelectChapter}
+            onRerun={search => {
+              setSavedSearchId(undefined);
+              setSearchQuery(search.query);
+              setSearchMode(search.mode ?? 'title');
+              setSearchScopeWorkId(search.scope === 'work' ? search.scopeWorkId : undefined);
+            }}
+            onKeepAsCollection={search => {
+              const userId = currentUser?.id || ANONYMOUS_USER_ID;
+              const collection = readerService.createCollection(userId, `${search.name} — collection`, `Frozen results from search: ${search.query}`);
+              search.items.forEach(item => readerService.addItemToCollection(userId, collection.id, {
+                type: item.chapterId ? 'chapter' : 'work', referenceId: item.chapterId || item.workId, workId: item.workId,
+                workTitle: item.workTitle, authorName: item.authorName, chapterId: item.chapterId, chapterTitle: item.chapterTitle,
+                quoteText: item.snippet,
+              }));
+            }}
+          />
+        )}
+
+        {currentView === 'search' && !savedSearchId && (
           <SearchView
-            key={`${searchMode}|${searchQuery}|${searchWorkSeed ?? ''}`}
+            key={`${searchMode}|${searchQuery}|${searchWorkSeed ?? ''}|${searchScopeWorkId ?? ''}`}
             initialMode={searchMode}
             initialQuery={searchQuery}
             initialWorkSeed={searchWorkSeed}
+            initialScopeWorkId={searchScopeWorkId}
+            initialPage={searchRestore?.page ?? 1}
+            restoredSearch={searchRestore}
+            savedSearchId={savedSearchId}
             onSelectWork={handleSelectWork}
             onSelectChapter={handleSelectChapter}
             onSelectAuthor={handleSelectAuthor}
+            onRestoreSearch={(entry: SearchHistoryEntry) => {
+              setSearchMode(entry.mode === 'all' ? 'title' : entry.mode);
+              setSearchQuery(entry.query);
+              setSearchWorkSeed(undefined);
+              setSearchScopeWorkId(entry.scope === 'work' ? entry.workId : undefined);
+              setSearchRestore(null);
+              setSavedSearchId(undefined);
+            }}
             currentUserId={currentUser?.id || ANONYMOUS_USER_ID}
             onOpenAddToCollection={handleOpenAddToCollection}
           />
@@ -702,9 +800,21 @@ export default function App() {
           onOpenQuote={handleOpenQuote}
           onRunSearch={query => {
             setSearchQuery(query);
+            setSavedSearchId(undefined);
             setCurrentView('search');
           }}
+          onOpenSavedSearch={id => { setSavedSearchId(id); setCurrentView('search'); }}
           onBack={handleAppBack}
+        />
+
+        <WorkspaceShell
+          currentUser={currentUser}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+          onSelectWork={handleSelectWork}
+          onSelectChapter={handleSelectChapter}
+          onOpenQuote={handleOpenQuote}
+          onRunSearch={query => { setSearchQuery(query); setSavedSearchId(undefined); setCurrentView('search'); }}
+          onOpenSavedSearch={id => { setSavedSearchId(id); setCurrentView('search'); }}
         />
 
         {currentView === 'admin' && isAdmin && (
@@ -824,8 +934,10 @@ export default function App() {
         onOpenQuote={handleOpenQuote}
         onRunSearch={query => {
           setSearchQuery(query);
+          setSavedSearchId(undefined);
           setCurrentView('search');
         }}
+        onOpenSavedSearch={id => { setSavedSearchId(id); setCurrentView('search'); }}
         onManage={() => setCurrentView('collections')}
       />
 

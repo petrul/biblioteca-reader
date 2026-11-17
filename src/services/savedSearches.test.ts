@@ -45,38 +45,39 @@ test('a saved search can be renamed and deleted', async () => {
   assert.deepEqual(getSavedSearches(), []);
 });
 
-test('a signed-in reader\'s saved searches use the scoped REST API', async () => {
+test('a signed-in reader\'s saved searches use the scoped GraphQL API', async () => {
   const calls: { url: string; method: string; body?: any }[] = [];
   globals.fetch = async (url: string, init: RequestInit = {}) => {
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ url: String(url), method: init.method ?? 'GET', body });
     const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (String(url).endsWith('/api/collections/mine')) {
-      return json([
+    if (String(url).endsWith('/api/reader-graphql')) {
+      const op = body.operationName;
+      if (op === 'MySavedSearches') return json({ data: { mySavedSearches: [
         { id: 'fav', name: 'favorites', kind: 'FAVORITES', items: [] },
         { id: 's1', name: 'old search', kind: 'SEARCH', searchQuery: 'old', searchParams: '{"mode":"grep"}', createdAt: 't',
           items: [{ id: 'i1', divPath: 'a/b/c', divHead: 'Chapter', snippet: 'x', addedAt: 't' }] },
-      ]);
+      ] } });
+      if (op === 'SaveMySearch') return json({ data: { saveMySearch: { id: 's2', name: body.variables.name, kind: 'SEARCH', searchQuery: body.variables.query, createdAt: 't', items: [] } } });
+      if (op === 'DeleteMyCollection') return json({ data: { deleteMyCollection: true } });
     }
-    if (init.method === 'POST') return json({ id: 's2', name: body.name, kind: 'SEARCH', searchQuery: body.query, createdAt: 't', items: [] });
     return new Response(null, { status: 200 });
   };
   const { attachSavedSearchesAccount, saveSearch, getSavedSearches, deleteSavedSearch } = await import('./savedSearches');
   await attachSavedSearchesAccount();
-  assert.ok(calls.some(c => c.method === 'GET' && c.url.endsWith('/api/collections/mine')));
-  assert.ok(calls.every(c => !c.url.endsWith('/graphql')));
+  assert.ok(calls.some(c => c.url.endsWith('/api/reader-graphql') && c.body.operationName === 'MySavedSearches'));
   assert.deepEqual(getSavedSearches().map(s => s.name), ['old search']);
   assert.equal(getSavedSearches()[0].items[0].chapterId, 'a/b/c');
 
   await saveSearch('to be', 'lucene', [hit(1)]);
-  const post = calls.find(c => c.method === 'POST' && c.url.endsWith('/api/collections/mine/searches'))!;
-  assert.equal(post.body.query, 'to be');
-  assert.deepEqual(post.body.hits, [{ path: 'shakespeare/hamlet/1', snippet: 'to be 1' }]);
+  const post = calls.find(c => c.body?.operationName === 'SaveMySearch')!;
+  assert.equal(post.body.variables.query, 'to be');
+  assert.deepEqual(post.body.variables.hits, [{ path: 'shakespeare/hamlet/1', snippet: 'to be 1' }]);
   assert.deepEqual(getSavedSearches().map(s => s.id), ['s2', 's1']);
   assert.equal(store.size, 0, 'nothing of the account is kept in localStorage');
 
   await deleteSavedSearch('s1');
-  assert.ok(calls.some(c => c.method === 'DELETE' && c.url.endsWith('/api/collections/mine/s1')));
+  assert.ok(calls.some(c => c.body?.operationName === 'DeleteMyCollection'));
 });
 
 test('saved fragment targets retain canonical ranges independently of their reading chapter', async () => {
@@ -89,4 +90,29 @@ test('saved fragment targets retain canonical ranges independently of their read
   assert.equal(item.chapterId, 'shakespeare/hamlet/1');
   assert.equal(searchTargetPath(item), path);
   assert.ok(store.get('biblioteca_reader_saved_searches')!.includes('_2:3..3.1:8'));
+});
+
+test('a saved search exports a valid OpenDocument text package', async () => {
+  const { saveSearch, exportSavedSearch } = await import('./savedSearches');
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const saved = await saveSearch('to be', 'lucene', [hit(1)]);
+  const oldDocument = globals.document;
+  const oldUrl = globals.URL;
+  let downloaded: Blob | undefined;
+  globals.document = { createElement: () => ({ click() {}, set href(_: string) {}, set download(_: string) {} }) };
+  globals.URL = {
+    createObjectURL: (blob: Blob) => { downloaded = blob; return 'blob:test'; },
+    revokeObjectURL: () => {},
+  };
+  try {
+    exportSavedSearch(saved.id, 'odt');
+    assert.ok(downloaded);
+    const files = unzipSync(new Uint8Array(await downloaded!.arrayBuffer()));
+    assert.equal(strFromU8(files.mimetype), 'application/vnd.oasis.opendocument.text');
+    assert.match(strFromU8(files['content.xml']), /to be/);
+    assert.ok(files['META-INF/manifest.xml']);
+  } finally {
+    globals.document = oldDocument;
+    globals.URL = oldUrl;
+  }
 });

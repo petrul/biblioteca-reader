@@ -7,6 +7,7 @@
 // change when a given preference's storage moves from one to the other.
 
 import { PersonalCollection, ReaderTheme } from '../types/textbase';
+import type { SearchHistoryEntry } from './searchHistory';
 import { fetchUserPreferences, saveUserPreferences } from './serversideApi';
 
 export interface UserPreferences {
@@ -27,6 +28,8 @@ export interface UserPreferences {
   // in readerService's cache and persisted here (see attachCollectionsStore):
   // this browser's localStorage when anonymous, the account when signed in.
   collections?: PersonalCollection[];
+  /** Recent text searches, synchronized with the signed-in reader account. */
+  searchHistory?: SearchHistoryEntry[];
 }
 
 export interface PreferencesStore {

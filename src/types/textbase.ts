@@ -266,6 +266,10 @@ export interface SavedSearch extends Collection<SavedSearchItem> {
   kind: 'search';
   query: string;
   mode?: SearchMode;
+  scope?: 'library' | 'work';
+  scopeWorkId?: string;
+  /** Search options are retained so a frozen document can explain its provenance. */
+  options?: Record<string, unknown>;
 }
 
 export interface User {

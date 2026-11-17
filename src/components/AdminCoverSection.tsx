@@ -4,6 +4,7 @@ import { coverArtDataUrl, withCoverArt } from '../services/coverArtUpload';
 import { trackedFetch } from '../services/serversideApi';
 import { coverThumbnailUrl } from '../services/coverThumbnail';
 import { copyToClipboard } from '../services/clipboard';
+import { withoutLegacyCoverArtUrl } from '../services/coverRequest';
 
 type CoverWork = { coverUrl?: string; request: Record<string, unknown> | null };
 
@@ -45,8 +46,11 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body?.error || body?.message || `HTTP ${res.status}`);
         if (cancelled) return;
-        setCurrent(body as CoverWork);
-        if (body.request) setJsonText(JSON.stringify(body.request, null, 2));
+        const request = body.request && typeof body.request === 'object' && !Array.isArray(body.request)
+          ? withoutLegacyCoverArtUrl(body.request as Record<string, unknown>)
+          : body.request;
+        setCurrent({ ...body, request } as CoverWork);
+        if (request) setJsonText(JSON.stringify(request, null, 2));
       })
       .catch(e => { if (!cancelled) setError(`Could not load the cover request: ${e.message}`); });
     return () => { cancelled = true; };
@@ -85,8 +89,11 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || body?.message || `HTTP ${res.status}`);
-      setCurrent(body as CoverWork);
-      if (body.request) setJsonText(JSON.stringify(body.request, null, 2));
+      const normalizedRequest = body.request && typeof body.request === 'object' && !Array.isArray(body.request)
+        ? withoutLegacyCoverArtUrl(body.request as Record<string, unknown>)
+        : body.request;
+      setCurrent({ ...body, request: normalizedRequest } as CoverWork);
+      if (normalizedRequest) setJsonText(JSON.stringify(normalizedRequest, null, 2));
       if (body.coverUrl) onCoverChanged?.(body.coverUrl);
     } catch (e: any) {
       setError(`Cover generation failed: ${e.message}`);
