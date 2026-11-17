@@ -31,7 +31,7 @@ function installDom() {
   };
 }
 
-test('New random cover renders a PNG and replaces the local default cover', async context => {
+test('New random JSON only updates the editable request; Generate cover renders the PNG', async context => {
   const dom = installDom();
   const originalFetch = globalThis.fetch;
   const requests: Array<{ url: string; method: string; body?: string }> = [];
@@ -62,10 +62,41 @@ test('New random cover renders a PNG and replaces the local default cover', asyn
     const random = dom.dom.window.document.getElementById('btn-admin-new-random-json') as unknown as HTMLButtonElement;
     assert.ok(random);
     await act(async () => { random.click(); });
+    assert.equal(requests.filter(request => request.method === 'POST').length, 0, 'rolling JSON must not render');
+    assert.deepEqual(changed, []);
+    assert.match(dom.dom.window.document.querySelector('textarea')?.value || '', /folio_nocturne/);
+    const generate = dom.dom.window.document.getElementById('btn-admin-generate-cover') as unknown as HTMLButtonElement;
+    await act(async () => { generate.click(); });
     assert.equal(requests.filter(request => request.method === 'POST').length, 1);
     assert.deepEqual(changed, ['https://test.scriptorium.ro/biblioteca/covers/comnena/alexiada-new.png']);
     assert.ok(dom.dom.window.document.querySelector('[data-testid="admin-cover-image"]'), 'the generated PNG is shown');
-    assert.match(dom.dom.window.document.querySelector('textarea')?.value || '', /folio_nocturne/);
+    await act(async () => root.unmount());
+  } finally {
+    globalThis.fetch = originalFetch;
+    await dom.restore();
+  }
+});
+
+test('an existing generated cover is propagated to the front work card on load', async () => {
+  const dom = installDom();
+  const originalFetch = globalThis.fetch;
+  (globalThis as any).fetch = async () => Response.json({
+    coverUrl: 'https://test.scriptorium.ro/biblioteca/covers/comnena/alexiada-existing.png',
+    request: { title: 'Alexiada', author: 'Ana Comnena', layout: 'folio_nocturne' },
+  });
+  try {
+    const { act, createElement } = await import('react');
+    const { createRoot } = await import('react-dom/client');
+    const { AdminCoverSection } = await import('./AdminCoverSection');
+    const changed: string[] = [];
+    const host = dom.dom.window.document.createElement('div');
+    dom.dom.window.document.body.appendChild(host);
+    const root = createRoot(host as unknown as HTMLElement);
+    await act(async () => {
+      root.render(createElement(AdminCoverSection, { workId: 'comnena/alexiada', onCoverChanged: (url: string) => changed.push(url) }));
+    });
+    await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+    assert.deepEqual(changed, ['https://test.scriptorium.ro/biblioteca/covers/comnena/alexiada-existing.png']);
     await act(async () => root.unmount());
   } finally {
     globalThis.fetch = originalFetch;
