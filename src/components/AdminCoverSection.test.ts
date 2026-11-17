@@ -64,6 +64,7 @@ test('New random JSON only updates the editable request; Generate cover renders 
     await act(async () => { random.click(); });
     assert.equal(requests.filter(request => request.method === 'POST').length, 0, 'rolling JSON must not render');
     assert.deepEqual(changed, []);
+    assert.match(requests.find(request => request.url.includes('/request/random?'))?.url || '', /&nonce=/, 'random JSON requests must bypass browser caches');
     assert.match(dom.dom.window.document.querySelector('textarea')?.value || '', /folio_nocturne/);
     const generate = dom.dom.window.document.getElementById('btn-admin-generate-cover') as unknown as HTMLButtonElement;
     await act(async () => { generate.click(); });

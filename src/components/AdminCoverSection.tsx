@@ -64,7 +64,10 @@ export function AdminCoverSection({ workId, onCoverChanged, onOpenCover }: {
     setRolling(true);
     setError('');
     try {
-      const res = await trackedFetch(`/api/admin/covers/work/request/random?path=${encodeURIComponent(workId)}`, { headers: { Accept: 'application/json' } });
+      const nonce = Date.now().toString(36);
+      const res = await trackedFetch(`/api/admin/covers/work/request/random?path=${encodeURIComponent(workId)}&nonce=${nonce}`, {
+        headers: { Accept: 'application/json', 'Cache-Control': 'no-store' }
+      });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body?.error || body?.message || `HTTP ${res.status}`);
       if (body.request) {

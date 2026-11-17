@@ -999,6 +999,7 @@ app.post(ADMIN_COVER_WORK_PATH, requireAdmin(isAdminSession), express.json({ lim
 // A fresh random cover request JSON for the work, without rendering it -
 // the admin section's "New random JSON" button fills its editor from this.
 app.get('/api/admin/covers/work/request/random', asyncRoute(async (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
   const path = typeof req.query.path === 'string' ? req.query.path : '';
   if (!WORK_PATH.test(path)) {
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
