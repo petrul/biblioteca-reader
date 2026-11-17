@@ -39,6 +39,7 @@ import { renderServerErrorPage } from './src/httpErrorPage';
 import { GUEST_COOKIE, INITIATOR_HEADER, isGuestName, isUserLabel, prefixProcessOutput, propagateInitiator, receivedLabel, runAs } from './src/services/initiator';
 import { createSessionInitiators, guestNameOf } from './src/services/readerInitiator';
 import { DEFAULT_COVER_LAYOUTS, DEFAULT_COVER_PALETTES, stableCoverTheme } from './src/services/stableCoverTheme';
+import { withoutLegacyCoverArtUrl } from './src/services/coverRequest';
 
 // Every line this process writes starts with its initiator - see initiator.ts.
 prefixProcessOutput();
@@ -791,12 +792,15 @@ app.post('/api/covers/work', requireAdmin(isAdminSession), asyncRoute(async (req
         layout: DEFAULT_COVER_LAYOUTS[Math.floor(Math.random() * DEFAULT_COVER_LAYOUTS.length)],
         paletteId: DEFAULT_COVER_PALETTES[Math.floor(Math.random() * DEFAULT_COVER_PALETTES.length)],
       };
+  const safeArt = typeof coverArtUrl === 'string'
+    ? withoutLegacyCoverArtUrl({ coverArtUrl }).coverArtUrl
+    : undefined;
   const coverRequest = {
     title: title.trim(),
     author: author.trim(),
     ...(typeof subtitle === 'string' && subtitle.trim() ? { subtitle: subtitle.trim() } : {}),
     ...(typeof date === 'string' && date.trim() ? { date: date.trim() } : {}),
-    ...(typeof coverArtUrl === 'string' && coverArtUrl.trim() ? { coverArtUrl: coverArtUrl.trim() } : {}),
+    ...(typeof safeArt === 'string' && safeArt.trim() ? { coverArtUrl: safeArt.trim() } : {}),
     layout: theme.layout,
     foilEffect: 'none',
     hardcover: false,
@@ -960,7 +964,9 @@ app.post(ADMIN_COVER_WORK_PATH, requireAdmin(isAdminSession), express.json({ lim
     res.status(400).json({ error: 'path must be authorStrId/opusStrId' });
     return;
   }
-  const request = req.body?.request;
+  const request = req.body?.request && typeof req.body.request === 'object' && !Array.isArray(req.body.request)
+    ? withoutLegacyCoverArtUrl(req.body.request as Record<string, unknown>)
+    : req.body?.request;
   if (request !== undefined && (request === null || typeof request !== 'object' || Array.isArray(request))) {
     res.status(400).json({ error: 'request must be a JSON object' });
     return;
