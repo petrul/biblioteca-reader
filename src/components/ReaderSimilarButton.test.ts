@@ -120,6 +120,23 @@ test('More Like This sends the current page to vector search', async context => 
   } finally { await reader.unmount(); }
 });
 
+// happy-dom applies no Tailwind, so a button hidden on phones (a bare
+// `hidden`, shown only from sm: up) still "works" above; this checks the
+// classes themselves: nothing on the way up from the button hides it at
+// the smallest breakpoint. It was hidden there from the start (823b180).
+test('More Like This is offered on phones too, as an icon with an accessible name', async context => {
+  const reader = await mountReader(context);
+  try {
+    const button = reader.document.getElementById('btn-reader-more-like-this');
+    assert.ok(button, 'the reader exposes More Like This');
+    for (let element: any = button; element && element.classList; element = element.parentElement) {
+      assert.ok(!element.classList.contains('hidden'),
+        `hidden on phones by ${element.id ? '#' + element.id : element.tagName}: "${element.className}"`);
+    }
+    assert.equal(button!.getAttribute('aria-label'), 'More like this');
+  } finally { await reader.unmount(); }
+});
+
 test('the Similar button is offered once the reader selects arbitrary text', async context => {
   const reader = await mountReader(context);
   try {

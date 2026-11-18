@@ -960,11 +960,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <button
               id="btn-reader-more-like-this"
               onClick={() => onMoreLikeThis(work.id, work.title, currentPageSimilarityQuery(contentRef.current, work.title))}
-              className="hidden sm:flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+              // on phones too: just the icon there, the label from sm up
+              className="flex items-center space-x-1 p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer"
               title="Embed this page and find similar passages"
+              aria-label="More like this"
             >
               <Sparkles className="w-3.5 h-3.5 text-[#f59e0b]" />
-              <span>More Like This</span>
+              <span className="hidden sm:inline">More Like This</span>
             </button>
 
             {/* "Share on..." - discrete toolbar button. Shows the LAST-USED
