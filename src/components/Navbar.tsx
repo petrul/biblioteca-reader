@@ -21,6 +21,7 @@ import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
 import { useLongPressDrag } from '../hooks/useLongPressDrag';
 import { readerService } from '../services/readerService';
 import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
+import { rememberSessionResults, sessionResultsFor } from '../services/sessionSearchResults';
 import { lastSearchQuery, mayAutoRun, recentSearchQueries, recordSearch, removeSearch, subscribeSearchHistory, type SearchHistoryEntry } from '../services/searchHistory';
 import { authorLabelForTitleBar } from '../services/authorLabel';
 
@@ -185,6 +186,14 @@ export const Navbar: React.FC<NavbarProps> = ({
       setHighlightedDropdownIndex(-1);
       return;
     }
+    // the latest search of this session is shown again, not sent again
+    const remembered = sessionResultsFor(trimmed);
+    if (remembered) {
+      runNowRef.current = false;
+      setDropdownResults(remembered);
+      setIsDropdownSearching(false);
+      return;
+    }
     let cancelled = false;
     setIsDropdownSearching(true);
     const delay = runNowRef.current ? 0 : SEARCH_DEBOUNCE_MS;
@@ -196,8 +205,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       void readerService.searchCombined(trimmed, 5, results => {
         if (cancelled) return;
         setDropdownResults(results);
-      }).then(() => {
+      }).then(results => {
         if (cancelled) return;
+        rememberSessionResults(trimmed, results);
         setIsDropdownSearching(false);
       });
     }, delay);

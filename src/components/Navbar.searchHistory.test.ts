@@ -8,6 +8,11 @@ import { Window } from 'happy-dom';
 // - searches are recorded (up to 50), in the account's preferences when signed in;
 // - nothing is searched on page load, and a pasted paragraph is never re-run unasked.
 
+const tabSession = (() => {
+  const values = new Map<string, string>();
+  return { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => void values.set(k, v), removeItem: (k: string) => void values.delete(k) };
+})();
+
 function installDom() {
   const window = new Window({ url: 'http://localhost/' });
   const globals = globalThis as any;
@@ -20,6 +25,8 @@ function installDom() {
   define('document', window.document);
   define('navigator', window.navigator);
   define('localStorage', window.localStorage);
+  // one tab's session storage, kept across "reloads" (mounts), as a browser does
+  define('sessionStorage', tabSession);
   for (const key of ['HTMLElement', 'HTMLInputElement', 'Element', 'Node', 'Event', 'MouseEvent', 'PointerEvent', 'KeyboardEvent', 'FocusEvent', 'InputEvent']) {
     if (key in window) define(key, (window as any)[key]);
   }
@@ -38,7 +45,7 @@ function installDom() {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function mount(pastQueries: string[]) {
+async function mount(pastQueries: string[], keepSession = false) {
   const dom = installDom();
   const { act, createElement } = await import('react');
   const { createRoot } = await import('react-dom/client');
@@ -46,6 +53,8 @@ async function mount(pastQueries: string[]) {
   const { readerService } = await import('../services/readerService');
   const { Navbar } = await import('./Navbar');
 
+  const session = await import('../services/sessionSearchResults');
+  session.resetSessionResultsForTests(keepSession);
   history.resetSearchHistoryForTests();
   // oldest first, so the last one is the newest
   for (const query of pastQueries) history.recordSearch({ query, mode: 'all', scope: 'library', options: {} });
@@ -83,6 +92,7 @@ async function mount(pastQueries: string[]) {
     click,
     key: async (key: string) => act(async () => { input().dispatchEvent(new (dom.window as any).KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); }),
     historyQueries: () => [...doc.querySelectorAll('#nav-search-history [data-history-query]')].map((b: any) => b.getAttribute('data-history-query')),
+    close: async () => { await click(doc.querySelector('[aria-label="Close search"]')); },
     unmount: async () => {
       (readerService as any).searchCombined = original;
       await act(async () => root.unmount());
@@ -155,4 +165,29 @@ test('a pasted paragraph is remembered but never re-run when the box opens', asy
     await nav.focus();
     assert.equal(nav.historyQueries().length, 1, 'still offered in the history');
   } finally { await nav.unmount(); }
+});
+
+test('the latest search runs once per session: reopening the box or reloading shows it again without searching', async () => {
+  const nav = await mount(['Hamlet', 'Odyssey']);
+  try {
+    await nav.open();
+    assert.deepEqual(nav.searched, ['Odyssey']);
+    await nav.close();
+    await nav.open();
+    assert.deepEqual(nav.searched, ['Odyssey'], 'reopening does not search again');
+    await nav.type('Odyssey ');
+    await nav.act(async () => { await sleep(450); });
+    assert.deepEqual(nav.searched, ['Odyssey'], 'the same query, spaced differently, is not searched again');
+  } finally { await nav.unmount(); }
+  // a reload in the same session: the navbar mounts again
+  const reloaded = await mount(['Hamlet', 'Odyssey'], true);
+  try {
+    await reloaded.open();
+    assert.equal(reloaded.input().value, 'Odyssey');
+    assert.deepEqual(reloaded.searched, [], 'not searched again after a reload');
+    assert.match(reloaded.doc.getElementById('nav-search-dropdown')!.textContent!, /Result for Odyssey/);
+    await reloaded.type('Hamlet');
+    await reloaded.act(async () => { await sleep(450); });
+    assert.deepEqual(reloaded.searched, ['Hamlet'], 'a new query is searched');
+  } finally { await reloaded.unmount(); }
 });
