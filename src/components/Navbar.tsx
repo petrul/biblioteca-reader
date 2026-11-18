@@ -13,13 +13,15 @@ import {
   Settings,
   BookMarked,
   MessageCircle,
-  PanelLeft
+  PanelLeft,
+  Clock
 } from 'lucide-react';
 import { AppView, SearchResult } from '../types/textbase';
 import { useHideHeaderOnScroll } from '../hooks/useHideHeaderOnScroll';
 import { useLongPressDrag } from '../hooks/useLongPressDrag';
 import { readerService } from '../services/readerService';
 import { isTypingBurst, noteLetterKey } from '../services/typingBurst';
+import { lastSearchQuery, mayAutoRun, recentSearchQueries, recordSearch, removeSearch, subscribeSearchHistory, type SearchHistoryEntry } from '../services/searchHistory';
 import { authorLabelForTitleBar } from '../services/authorLabel';
 
 // Waits this long after the last keystroke before actually searching -
@@ -134,12 +136,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const brandSubtitle = pageTitle ? authorLabelForTitleBar(pageSubtitle, pageTitle) : 'Your Scriptorium classical readings';
   const visiblePageAuthorId = brandSubtitle ? pageAuthorId : undefined;
-  // Starts empty on every page load: a search runs only when the reader
-  // types. (A remembered last query used to be restored here, and the
-  // search effect below then re-ran it on every load - a long pasted query
-  // made opening any page fail.) The value still persists across the
-  // overlay being opened and closed within the session.
+  // Empty until the search box is opened: then it holds the very last search
+  // (searchHistory - the account's preferences when signed in), whose results
+  // show at once. Never restored or run on page load: a remembered query run
+  // on every load once made a long pasted paragraph break every page
+  // (6c393b2). The value persists across the box being closed and reopened.
   const [searchInputValue, setSearchInputValue] = useState('');
+  // The past searches, newest first: the drop-down of the empty box.
+  const [history, setHistory] = useState<SearchHistoryEntry[]>(() => recentSearchQueries());
+  useEffect(() => {
+    const update = () => setHistory(recentSearchQueries());
+    update();
+    return subscribeSearchHistory(update);
+  }, []);
+  // Set when the box opens with the last search, so it runs without the typing debounce.
+  const runNowRef = useRef(false);
   // Drop what the removed last-search cache left in this browser.
   useEffect(() => {
     try { window.localStorage.removeItem('biblioteca.reader.lastSearch.v1'); } catch { /* storage unavailable */ }
@@ -176,6 +187,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
     let cancelled = false;
     setIsDropdownSearching(true);
+    const delay = runNowRef.current ? 0 : SEARCH_DEBOUNCE_MS;
+    runNowRef.current = false;
     const timer = setTimeout(() => {
       // onUpdate fires after each of the 5 modes lands (each individually
       // bounded - see searchCombined) - fast tiers show immediately
@@ -187,7 +200,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         if (cancelled) return;
         setIsDropdownSearching(false);
       });
-    }, SEARCH_DEBOUNCE_MS);
+    }, delay);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [searchInputValue]);
 
@@ -222,11 +235,40 @@ export const Navbar: React.FC<NavbarProps> = ({
     navigate('collections');
   };
 
+  // Opening the box brings back the very last search with its results at once
+  // (not a query too long to re-run unasked), its text selected so typing
+  // replaces it.
   const handleOpenSearch = () => {
     setIsSearchExpanded(true);
+    setSearchInputValue(current => {
+      if (current.trim()) return current;
+      const last = lastSearchQuery();
+      if (!last) return current;
+      runNowRef.current = mayAutoRun(last);
+      return mayAutoRun(last) ? last : current;
+    });
     setTimeout(() => {
       searchInputRef.current?.focus();
+      searchInputRef.current?.select();
     }, 50);
+  };
+
+  // A navbar search counts once it ran: on submit, on picking a result, and
+  // when the box closes over a query of 3+ letters.
+  const rememberNavbarSearch = (query: string) => {
+    const trimmed = query.trim();
+    if (trimmed.length < 3) return;
+    recordSearch({ query: trimmed, mode: 'all', scope: 'library', options: {} });
+  };
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [highlightedHistoryIndex, setHighlightedHistoryIndex] = useState(-1);
+  const showHistory = historyOpen && !searchInputValue.trim() && history.length > 0;
+  const pickHistory = (entry: SearchHistoryEntry) => {
+    runNowRef.current = true;
+    setSearchInputValue(entry.query);
+    setHistoryOpen(false);
+    setHighlightedHistoryIndex(-1);
+    searchInputRef.current?.focus();
   };
 
   // Familiar catalog shortcut: `/` opens the same search control as the
@@ -270,12 +312,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, []);
 
   const handleCloseSearch = () => {
+    rememberNavbarSearch(searchInputValue);
+    setHistoryOpen(false);
     setIsSearchExpanded(false);
   };
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (searchInputValue.trim()) {
+      rememberNavbarSearch(searchInputValue);
       if (onSearch) {
         onSearch(searchInputValue.trim());
       } else {
@@ -286,6 +331,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showHistory && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      const count = history.length;
+      setHighlightedHistoryIndex(index => e.key === 'ArrowDown' ? (index + 1) % count : (index <= 0 ? count - 1 : index - 1));
+      return;
+    }
+    if (showHistory && e.key === 'Enter' && history[highlightedHistoryIndex]) {
+      e.preventDefault();
+      pickHistory(history[highlightedHistoryIndex]);
+      return;
+    }
     const dropdownItemCount = visibleDropdownResults.length + 1; // rows + “See all”
     if (e.key === 'ArrowDown' && visibleDropdownResults.length > 0) {
       e.preventDefault();
@@ -308,7 +364,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     } else if (e.key === 'Enter') {
       handleSearchSubmit();
     } else if (e.key === 'Escape') {
-      setIsSearchExpanded(false);
+      handleCloseSearch();
     }
   };
 
@@ -324,8 +380,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     } else {
       return;
     }
-    setSearchInputValue('');
-    setDropdownResults([]);
+    // the query stays: it is the last search the box opens with next time
+    rememberNavbarSearch(searchInputValue);
+    setHistoryOpen(false);
     setIsSearchExpanded(false);
   };
 
@@ -356,10 +413,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                     ref={searchInputRef}
                     type="text"
                     value={searchInputValue}
-                    onChange={(e) => setSearchInputValue(e.target.value)}
+                    onChange={(e) => { setSearchInputValue(e.target.value); setHighlightedHistoryIndex(-1); }}
                     onKeyDown={handleKeyDown}
-                    aria-controls="nav-search-dropdown"
-                    aria-activedescendant={highlightedDropdownIndex >= 0
+                    onFocus={() => setHistoryOpen(true)}
+                    onClick={() => setHistoryOpen(true)}
+                    aria-controls={showHistory ? 'nav-search-history' : 'nav-search-dropdown'}
+                    aria-activedescendant={showHistory
+                      ? (highlightedHistoryIndex >= 0 ? `nav-search-history-${highlightedHistoryIndex}` : undefined)
+                      : highlightedDropdownIndex >= 0
                       ? (highlightedDropdownIndex < visibleDropdownResults.length
                         ? `nav-search-dropdown-result-${visibleDropdownResults[highlightedDropdownIndex]?.id}`
                         : 'nav-search-dropdown-see-all')
@@ -382,6 +443,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         onMouseDown={(e) => {
                           e.preventDefault();
                           setSearchInputValue('');
+                          setHistoryOpen(true);
                         }}
                         className="p-1 rounded-md text-emerald-300/70 hover:text-white hover:bg-emerald-500/20"
                         title="Clear input"
@@ -409,6 +471,45 @@ export const Navbar: React.FC<NavbarProps> = ({
                       preventDefault on each row so the click registers
                       before the input's onBlur (180ms below) would
                       otherwise close this. */}
+                  {/* The empty box's drop-down: the past searches, newest
+                      first (up to 50, the account's when signed in). */}
+                  {showHistory && (
+                    <div
+                      id="nav-search-history"
+                      role="listbox"
+                      aria-label="Recent searches"
+                      className="absolute top-full left-0 right-0 mt-2 max-h-[70vh] overflow-y-auto bg-[#022332] border border-amber-500/40 rounded-xl shadow-2xl shadow-black/50 z-20"
+                    >
+                      <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider text-emerald-300/60 border-b border-emerald-500/10">Recent searches</div>
+                      {history.map((entry, index) => (
+                        <div key={entry.id} className={`flex items-center border-b border-emerald-500/10 last:border-b-0 ${index === highlightedHistoryIndex ? 'bg-emerald-500/25 ring-inset ring-1 ring-amber-400/60' : ''}`}>
+                          <button
+                            type="button"
+                            id={`nav-search-history-${index}`}
+                            role="option"
+                            aria-selected={index === highlightedHistoryIndex}
+                            data-history-query={entry.query}
+                            onMouseEnter={() => setHighlightedHistoryIndex(index)}
+                            onMouseDown={(e) => { e.preventDefault(); pickHistory(entry); }}
+                            className="flex-1 min-w-0 text-left px-4 py-2 flex items-center space-x-2.5 hover:bg-emerald-500/15 cursor-pointer"
+                          >
+                            <Clock className="w-3.5 h-3.5 text-[#f59e0b] shrink-0" />
+                            <span className="truncate text-xs sm:text-sm text-white">{entry.query}</span>
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Remove "${entry.query}" from recent searches`}
+                            title="Remove from history"
+                            onMouseDown={(e) => { e.preventDefault(); removeSearch(entry.id); }}
+                            className="p-2 mr-1 rounded-md text-emerald-300/60 hover:text-white hover:bg-emerald-500/20 cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {searchInputValue.trim().length >= 3 && (
                     <div
                       id="nav-search-dropdown"

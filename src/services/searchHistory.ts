@@ -13,7 +13,12 @@ export type SearchHistoryEntry = {
 };
 
 const STORAGE_KEY = 'biblioteca.reader.search-history.v1';
-const MAX_ENTRIES = 20;
+/** The searches kept, newest first: in the account's preferences when signed in, else this browser. */
+export const MAX_SEARCH_HISTORY = 50;
+const MAX_ENTRIES = MAX_SEARCH_HISTORY;
+/** Longer queries (a pasted paragraph) are kept but never re-run by themselves
+ *  when the search box opens - one such query once made every page fail. */
+export const MAX_AUTO_RUN_QUERY_LENGTH = 200;
 let entries: SearchHistoryEntry[] = [];
 let loaded = false;
 let remoteStore: PreferencesStore | null = null;
@@ -52,6 +57,30 @@ export function subscribeSearchHistory(listener: () => void): () => void {
 export function getSearchHistory(): SearchHistoryEntry[] {
   ensureLoaded();
   return entries.slice();
+}
+
+/** The query of the very last search, if any: what the navbar search box opens with. */
+export function lastSearchQuery(): string {
+  ensureLoaded();
+  return entries[0]?.query ?? '';
+}
+
+/** Whether opening the search box may run `query` again by itself. */
+export function mayAutoRun(query: string): boolean {
+  const trimmed = query.trim();
+  return trimmed.length >= 3 && trimmed.length <= MAX_AUTO_RUN_QUERY_LENGTH;
+}
+
+/** The distinct past queries, newest first: the empty search box's drop-down. */
+export function recentSearchQueries(limit = MAX_SEARCH_HISTORY): SearchHistoryEntry[] {
+  ensureLoaded();
+  const seen = new Set<string>();
+  return entries.filter(entry => {
+    const key = entry.query.trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, limit);
 }
 
 export function recordSearch(input: Omit<SearchHistoryEntry, 'id' | 'createdAt' | 'updatedAt'>): SearchHistoryEntry {

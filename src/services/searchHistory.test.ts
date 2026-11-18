@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { attachSearchHistoryAccount, getSearchHistory, recordSearch, resetSearchHistoryForTests } from './searchHistory';
+import { attachSearchHistoryAccount, getSearchHistory, lastSearchQuery, recentSearchQueries, recordSearch, resetSearchHistoryForTests } from './searchHistory';
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -40,5 +40,23 @@ test('signed-in history is loaded from and written to the account preference sto
   recordSearch({ query: 'Plato', mode: 'all', scope: 'library', options: {} });
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.deepEqual(document.searchHistory.map((item: any) => item.query), ['Plato', 'Cicero']);
+  resetSearchHistoryForTests();
+});
+
+test('signed-in history keeps the latest 50 searches in the account preferences', async () => {
+  resetSearchHistoryForTests();
+  let document: any = { searchHistory: [] };
+  const store = { async get() { return document; }, async set(patch: any) { document = { ...document, ...patch }; } };
+  await attachSearchHistoryAccount(store, true);
+  for (let i = 0; i < 55; i++) recordSearch({ query: `q${i}`, mode: 'all', scope: 'library', options: {} });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(document.searchHistory.length, 50);
+  assert.equal(document.searchHistory[0].query, 'q54');
+  assert.equal(lastSearchQuery(), 'q54');
+  // signing in again on another device restores them
+  resetSearchHistoryForTests();
+  await attachSearchHistoryAccount(store, true);
+  assert.equal(lastSearchQuery(), 'q54');
+  assert.deepEqual(recentSearchQueries(3).map(entry => entry.query), ['q54', 'q53', 'q52']);
   resetSearchHistoryForTests();
 });
