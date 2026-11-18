@@ -355,7 +355,7 @@ export const SearchView: React.FC<SearchViewProps> = ({
             <div className="backface-hidden">
               <div className="mb-4">
                 <h1 className="font-display-title text-2xl sm:text-3xl font-bold text-white mb-1">
-                  5 Distinct Search Engines
+                  Search
                 </h1>
                 <p className="text-xs sm:text-sm text-white">
                   Author, title, head, Lucene, and vector search.
