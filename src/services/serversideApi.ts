@@ -581,7 +581,6 @@ export async function realSearch(mode: SearchMode, q: string, limit: number, wor
       language: mapServerLanguage(String(data.lang || data.language || '')) === 'eng'
         ? (work?.detectedLanguage || 'eng')
         : mapServerLanguage(String(data.lang || data.language)),
-      matchDetails: `Live textbase-server ${mode} result`
     };
     return { result, wordSize: Number(data.wordSize) || 0, isTitlePrefixMatch: workTitle.trim().toLowerCase().startsWith(normalizedQuery) };
   });
