@@ -330,15 +330,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
     void persistWorkspaceState().catch(error => console.warn('[workspace] active search result save failed', error));
   };
 
-  const adminStatus = readerService.getAdminStatus();
-  const vectorAvailable = adminStatus.vectorSearchStatus.available;
-
-  const handleToggleVectorService = () => {
-    readerService.setVectorSearchAvailability(!vectorAvailable);
-    // Force re-render with page reset
-    setPage(1);
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header + mode selector card - flips to reveal the full pretty
@@ -577,24 +568,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
               </>
             )}
 
-            {/* Vector Mode Status & Simulator */}
-            {!combinedMode && activeMode === 'vector' && (
-              <div className="flex items-center space-x-3">
-                <span className="font-mono text-[11px] text-white/80">
-                  Model: textbase-vector-3072
-                </span>
-                <button
-                  onClick={handleToggleVectorService}
-                  title="Simulate vector service availability for degradation testing"
-                  className="flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 border border-white/25 text-[11px] font-medium text-white cursor-pointer backdrop-blur-md transition-all"
-                >
-                  <span>Simulate Service:</span>
-                  <span className={`font-bold ${vectorAvailable ? 'text-emerald-300' : 'text-rose-300'}`}>
-                    {vectorAvailable ? 'ONLINE' : 'OFFLINE'}
-                  </span>
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Search Metrics and Language Selector */}
@@ -645,12 +618,6 @@ export const SearchView: React.FC<SearchViewProps> = ({
                 className="px-3 py-1.5 bg-[#0f3d30] hover:bg-emerald-700/50 text-white rounded-lg text-xs font-semibold uppercase tracking-wider border border-emerald-500/30 cursor-pointer"
               >
                 Switch to Full-Text (Lucene)
-              </button>
-              <button
-                onClick={handleToggleVectorService}
-                className="px-3 py-1.5 bg-[#f59e0b] hover:bg-amber-400 text-black rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer"
-              >
-                Reconnect Vector Sidecar
               </button>
             </div>
           </div>
