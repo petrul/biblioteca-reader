@@ -117,7 +117,7 @@ const testUserOf = async (req: express.Request): Promise<ChatUser | null> => {
 
 async function withChat(options: { now?: () => number; answer?: (res: express.Response) => void }, run: (origin: string) => Promise<void>) {
   const app = express();
-  app.post('/api/rag/chat', chatRateLimit({ userOf: testUserOf, now: options.now }),
+  app.post('/api/mcp/chat', chatRateLimit({ userOf: testUserOf, now: options.now }),
     (_req, res) => options.answer ? options.answer(res) : res.json({ answer: 'ok', as: currentInitiator() }));
   const server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -132,12 +132,12 @@ async function withChat(options: { now?: () => number; answer?: (res: express.Re
 
 /** A signed-in user who chats. */
 const chatter = (origin: string, username: string) =>
-  () => fetch(`${origin}/api/rag/chat`, { method: 'POST', headers: { Cookie: `session=${username}` } });
+  () => fetch(`${origin}/api/mcp/chat`, { method: 'POST', headers: { Cookie: `session=${username}` } });
 
 test('anyone not signed in - a guest, a script - gets no chat at all', async () => {
   await withChat({}, async origin => {
     for (const headers of [{}, { Cookie: 'bib_guest=guest_formidable_dictator' }]) {
-      const refused = await fetch(`${origin}/api/rag/chat`, { method: 'POST', headers });
+      const refused = await fetch(`${origin}/api/mcp/chat`, { method: 'POST', headers });
       assert.equal(refused.status, 401);
       assert.equal((await refused.json()).error, 'chat_requires_sign_in');
     }

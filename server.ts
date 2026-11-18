@@ -1061,11 +1061,11 @@ app.post('/api/vectorizing/:action(start|pause|resume)', unlessReadOnly(asyncRou
   res.status(202).json({ accepted: true });
 })));
 
-// Public reader RAG bridge. Keep the browser on the reader origin while
-// forwarding the explicit RAG contract to biblioteca-nestjs selected by the
+// Public reader search/chat bridge. Keep the browser on the reader origin while
+// forwarding the explicit contracts to biblioteca-nestjs selected by the
 // active profile. The typed client is regenerated from Nest's live Swagger
 // document; no wildcard forwarding or browser-visible upstream URL exists.
-async function relayRagPost(path: '/api/rag/search' | '/api/rag/ask' | '/api/rag/chat', req: Request, res: Response) {
+async function relayNestPost(path: '/api/rag/search' | '/api/rag/ask' | '/api/mcp/chat', req: Request, res: Response) {
   try {
     const { data, error, response } = await nestjsApi.POST(path, {
       body: req.body,
@@ -1096,9 +1096,9 @@ async function chatUserOf(req: Request): Promise<ChatUser | null> {
 
 const ragRateLimit = chatRateLimit({ userOf: chatUserOf });
 
-app.post('/api/rag/search', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/search', req, res)));
-app.post('/api/rag/ask', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/ask', req, res)));
-app.post('/api/rag/chat', ragRateLimit, asyncRoute((req: Request, res: Response) => relayRagPost('/api/rag/chat', req, res)));
+app.post('/api/rag/search', ragRateLimit, asyncRoute((req: Request, res: Response) => relayNestPost('/api/rag/search', req, res)));
+app.post('/api/rag/ask', ragRateLimit, asyncRoute((req: Request, res: Response) => relayNestPost('/api/rag/ask', req, res)));
+app.post('/api/mcp/chat', ragRateLimit, asyncRoute((req: Request, res: Response) => relayNestPost('/api/mcp/chat', req, res)));
 
 // Streaming answers stay a raw NDJSON response; openapi-fetch is intentionally
 // not used because it would eagerly parse the stream as one JSON document.

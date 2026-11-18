@@ -3,7 +3,7 @@ import { runAs } from './initiator';
 import { RESOURCE_LIMITS } from './resourceLimits';
 
 // The chat limit, for every route that runs the chat model or the embedder on
-// the shared GPU (/api/rag/chat, /ask, /ask/stream, /search). The limits are in
+// the shared GPU (/api/mcp/chat, /api/rag/chat, /api/rag/ask, /api/rag/ask/stream, /api/rag/search). The limits are in
 // resourceLimits.ts, and resourceLimits.test.ts states them:
 //
 // - only signed-in users may chat: anyone else is refused (401);

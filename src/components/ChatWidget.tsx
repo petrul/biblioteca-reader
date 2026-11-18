@@ -232,7 +232,7 @@ export function ChatWidget({ placement = 'floating', open: openProp, onOpenChang
       const scopeKey = opusPath ?? '__library__';
       const scope = opusPath ? { opusPaths: [opusPath] } : undefined;
       const continuedConversationId = conversationIdsRef.current[scopeKey];
-      const response = await sameOriginFetch('/api/rag/chat', {
+      const response = await sameOriginFetch('/api/mcp/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, ...(continuedConversationId ? { conversationId: continuedConversationId } : {}), ...(scope ? { scope } : {}) }),

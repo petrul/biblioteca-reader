@@ -501,8 +501,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** The next turn of a conversation over the scope: follow-ups are rewritten from the conversation before searching */
+        /** Legacy ragtime conversation over retrieved passages */
         post: operations["RagController_chat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mcp/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The next grounded turn of a Biblioteca conversation, using the MCP-to-Ollama adaptor */
+        post: operations["ChatController_chat"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1182,6 +1199,27 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ChatController_chat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RagChatDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
