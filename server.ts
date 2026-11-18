@@ -710,8 +710,11 @@ function relayBodyToBiblioteca(method: 'POST' | 'PATCH' | 'DELETE') {
   };
 }
 app.post('/api/collections/mine/searches', unlessReadOnly(relayBodyToBiblioteca('POST')));
+app.post('/api/collections/mine', unlessReadOnly(relayBodyToBiblioteca('POST')));
+app.post('/api/collections/mine/:id/items', unlessReadOnly(relayBodyToBiblioteca('POST')));
 app.patch('/api/collections/mine/:id', unlessReadOnly(relayBodyToBiblioteca('PATCH')));
 app.delete('/api/collections/mine/:id', unlessReadOnly(relayBodyToBiblioteca('DELETE')));
+app.delete('/api/collections/mine/:id/items/:itemId', unlessReadOnly(relayBodyToBiblioteca('DELETE')));
 app.put('/api/collections/mine/:id/order', unlessReadOnly(relayPutToBiblioteca));
 // Same-origin proxy for biblioteca-nestjs's own unauthenticated status
 // endpoint - the admin page's indexing-progress card (IndexingProgressCard)
