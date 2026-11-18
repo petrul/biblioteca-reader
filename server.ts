@@ -41,6 +41,7 @@ import { GUEST_COOKIE, INITIATOR_HEADER, isGuestName, isUserLabel, prefixProcess
 import { createSessionInitiators, guestNameOf } from './src/services/readerInitiator';
 import { DEFAULT_COVER_LAYOUTS, DEFAULT_COVER_PALETTES, stableCoverTheme } from './src/services/stableCoverTheme';
 import { withoutLegacyCoverArtUrl } from './src/services/coverRequest';
+import { registerCollectionWriteRoutes } from './src/services/collectionWriteGateway';
 
 // Every line this process writes starts with its initiator - see initiator.ts.
 prefixProcessOutput();
@@ -709,12 +710,7 @@ function relayBodyToBiblioteca(method: 'POST' | 'PATCH' | 'DELETE') {
     }
   };
 }
-app.post('/api/collections/mine/searches', unlessReadOnly(relayBodyToBiblioteca('POST')));
-app.post('/api/collections/mine', unlessReadOnly(relayBodyToBiblioteca('POST')));
-app.post('/api/collections/mine/:id/items', unlessReadOnly(relayBodyToBiblioteca('POST')));
-app.patch('/api/collections/mine/:id', unlessReadOnly(relayBodyToBiblioteca('PATCH')));
-app.delete('/api/collections/mine/:id', unlessReadOnly(relayBodyToBiblioteca('DELETE')));
-app.delete('/api/collections/mine/:id/items/:itemId', unlessReadOnly(relayBodyToBiblioteca('DELETE')));
+registerCollectionWriteRoutes(app, relayBodyToBiblioteca, unlessReadOnly);
 app.put('/api/collections/mine/:id/order', unlessReadOnly(relayPutToBiblioteca));
 // Same-origin proxy for biblioteca-nestjs's own unauthenticated status
 // endpoint - the admin page's indexing-progress card (IndexingProgressCard)
