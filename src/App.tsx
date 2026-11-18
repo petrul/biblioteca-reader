@@ -36,7 +36,7 @@ import { NotFoundCard } from './components/NotFoundCard';
 import { GoogleOneTapAuto, googleIdentityPresentation } from './components/GoogleOneTap';
 import { fetchWhoAmI, submitGoogleCredential, refreshGoogleProfile, cachedGoogleAvatar, restoreStoredGoogleCredential, signOut, bookmarkStoreFor, preferencesStoreFor, WhoAmI } from './services/identity';
 import { AddToCollectionModal, AddToCollectionPayload } from './components/AddToCollectionModal';
-import { ChatWidget } from './components/ChatWidget';
+import { ChatWidget, type ChatReference } from './components/ChatWidget';
 import { setLogReaderIdentity } from './services/logRelay';
 import { loadWorkspaceState, persistWorkspaceState, getLastSearch, getWorkspace, setWorkspace, subscribeWorkspace, type ReaderLastSearch, setLastSearch } from './services/workspaceStore';
 import { attachSearchHistoryAccount, type SearchHistoryEntry } from './services/searchHistory';
@@ -578,6 +578,38 @@ export default function App() {
     } catch (error) { setCollectionLinkError((error as Error).message); }
   };
 
+  const chatReferencePayload = (reference: ChatReference): AddToCollectionPayload | null => {
+    const path = decodeURIComponent(reference.href.replace(/^\/+/, ''));
+    const parts = path.split('/').filter(Boolean);
+    if (parts.length < 2) return null;
+    const workId = parts.slice(0, 2).join('/');
+    const isChapter = parts.length > 2;
+    return {
+      type: isChapter ? 'chapter' : 'work',
+      referenceId: path,
+      workId,
+      workTitle: reference.label,
+      authorName: parts[0],
+      ...(isChapter ? { chapterId: path, chapterTitle: reference.label } : {}),
+    };
+  };
+
+  const saveChatReference = (reference: ChatReference) => {
+    const payload = chatReferencePayload(reference);
+    if (payload) void handleOpenAddToCollection(payload);
+  };
+
+  const saveChatReferences = async (references: ChatReference[]) => {
+    const userId = currentUser?.id || ANONYMOUS_USER_ID;
+    const collection = readerService.getCollections(userId).find(item => item.name === 'Surse din Biblioteca chat')
+      ?? readerService.createCollection(userId, 'Surse din Biblioteca chat', 'Referințe adunate din conversațiile cu Biblioteca.');
+    references.forEach(reference => {
+      const payload = chatReferencePayload(reference);
+      if (payload) readerService.addItemToCollection(userId, collection.id, payload);
+    });
+    await readerService.flushCollections(userId);
+  };
+
   const handleRandomDiscovery = async () => {
     setSelectedFragment(undefined);
     const discovery = await readerService.getRandomDiscovery();
@@ -955,6 +987,8 @@ export default function App() {
         onDragActiveChange={(active, overTarget) => setChatDrag({ active, overNav: overTarget })}
         signedIn={reallySignedIn}
         onSignIn={() => setIsAuthModalOpen(true)}
+        onSaveReference={saveChatReference}
+        onSaveReferences={saveChatReferences}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Check, MessageCircle, Palette, RotateCcw, Send, X } from 'lucide-react';
 import { parseAppPath } from '../router';
 import { useLongPressDrag } from '../hooks/useLongPressDrag';
@@ -11,13 +11,78 @@ type ChatMessage = {
   id: number;
   role: 'user' | 'assistant';
   text: string;
+  references?: ChatReference[];
 };
+
+export type ChatReference = {
+  href: string;
+  label: string;
+  title?: string;
+};
+
+const BIBLIOTECA_PATH = /(?<![\w./-])(?:[a-z0-9][a-z0-9_.-]*\/)+[a-z0-9_][a-z0-9_.-]*/i;
+
+/** Turn a server passage URL (including an internal localhost URL) into the
+ * reader's same-origin stable path. External hosts are deliberately not
+ * carried into the chat, because a source in the corpus is opened by its
+ * canonical author/opus/div path. */
+export function bibliotecaPathHref(value: string): string | null {
+  let path = value.trim();
+  if (/^https?:\/\//i.test(path)) {
+    try { path = new URL(path).pathname; } catch { return null; }
+  }
+  path = path.replace(/^\/+/, '').split(/[?#]/, 1)[0];
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length < 2 || parts.some(part => !/^[\p{L}\p{N}_.-]+$/u.test(part))) return null;
+  return `/${parts.map(encodeURIComponent).join('/')}`;
+}
+
+/** Normalize the passages returned by /api/mcp/chat into stable links. */
+export function chatReferencesFromPassages(passages: unknown): ChatReference[] {
+  if (!Array.isArray(passages)) return [];
+  const references: ChatReference[] = [];
+  const seen = new Set<string>();
+  passages.forEach(value => {
+    if (!value || typeof value !== 'object') return;
+    const passage = value as Record<string, unknown>;
+    const rawUrl = typeof passage.url === 'string' ? passage.url : '';
+    const rawPath = typeof passage.opusPath === 'string' ? passage.opusPath : '';
+    const href = bibliotecaPathHref(rawUrl) ?? bibliotecaPathHref(rawPath);
+    if (!href || seen.has(href)) return;
+    seen.add(href);
+    const label = typeof passage.title === 'string' && passage.title.trim()
+      ? passage.title.trim()
+      : href.slice(1).split('/').join(' › ');
+    references.push({
+      href,
+      label,
+      ...(rawPath || href ? { title: rawPath || href.slice(1) } : {}),
+    });
+  });
+  return references;
+}
+
+/** Recover stable paths when the model cites one in prose but the adaptor's
+ * structured passage list is empty or incomplete. */
+export function chatReferencesFromText(text: string): ChatReference[] {
+  const references: ChatReference[] = [];
+  const seen = new Set<string>();
+  const token = /(?<![\w./-])(?:[a-z0-9][a-z0-9_.-]*\/)+[a-z0-9_][a-z0-9_.-]*/gi;
+  for (const match of text.matchAll(token)) {
+    const candidate = match[0].replace(/[.,;:!?]+$/, '');
+    const href = bibliotecaPathHref(candidate);
+    if (!href || seen.has(href)) continue;
+    seen.add(href);
+    references.push({ href, label: candidate, title: candidate });
+  }
+  return references;
+}
 
 // The assistant returns prose with a small, predictable Markdown subset. Keep
 // this renderer deliberately dependency-free and never inject HTML: common
 // emphasis, code, links, and list markers become safe React elements.
-export function markdownInline(text: string): ReactNode[] {
-  const token = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\)|(?<!\*)\*[^*]+\*(?!\*))/g;
+export function markdownInline(text: string, references: ChatReference[] = []): ReactNode[] {
+  const token = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\[[^\]]+\]\((?:https?:\/\/|\/)[^)\s]+\)|\[\d+\]|(?<!\*)\*[^*]+\*(?!\*)|(?<![\w./-])(?:[a-z0-9][a-z0-9_.-]*\/)+[a-z0-9_][a-z0-9_.-]*)/gi;
   const nodes: ReactNode[] = [];
   let cursor = 0;
   let match: RegExpExecArray | null;
@@ -27,9 +92,22 @@ export function markdownInline(text: string): ReactNode[] {
     if (value.startsWith('**') || value.startsWith('__')) nodes.push(<strong key={`${match.index}-strong`}>{value.slice(2, -2)}</strong>);
     else if (value.startsWith('`')) nodes.push(<code key={`${match.index}-code`} className="rounded bg-black/25 px-1 py-0.5">{value.slice(1, -1)}</code>);
     else if (value.startsWith('[')) {
-      const link = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(value);
-      if (link) nodes.push(<a key={`${match.index}-link`} href={link[2]} target="_blank" rel="noreferrer" className="underline decoration-white/40 underline-offset-2">{link[1]}</a>);
+      const citation = /^\[(\d+)\]$/.exec(value);
+      const reference = citation ? references[Number(citation[1]) - 1] : undefined;
+      const link = /^\[([^\]]+)\]\(((?:https?:\/\/|\/)[^)\s]+)\)$/.exec(value);
+      if (reference) nodes.push(<a key={`${match.index}-citation`} data-biblioteca-reference="true" href={reference.href} title={reference.title} className="underline decoration-emerald-300/70 underline-offset-2">{value}</a>);
+      else if (link) nodes.push(<a key={`${match.index}-link`} href={link[2]} target={link[2].startsWith('http') ? '_blank' : undefined} rel={link[2].startsWith('http') ? 'noreferrer' : undefined} className="underline decoration-white/40 underline-offset-2">{link[1]}</a>);
       else nodes.push(value);
+    } else if (BIBLIOTECA_PATH.test(value)) {
+      // A citation is often followed by sentence punctuation; keep that
+      // punctuation outside the anchor so the canonical path stays valid.
+      const citation = value.replace(/[.,;:!?]+$/, '');
+      const trailing = value.slice(citation.length);
+      const href = bibliotecaPathHref(citation);
+      nodes.push(href
+        ? <Fragment key={`${match.index}-biblioteca`}><a data-biblioteca-reference="true" href={href} className="underline decoration-emerald-300/70 underline-offset-2 hover:text-emerald-200">{citation}</a>{trailing}</Fragment>
+        : value);
+      BIBLIOTECA_PATH.lastIndex = 0;
     } else nodes.push(<em key={`${match.index}-em`}>{value.slice(1, -1)}</em>);
     cursor = match.index + value.length;
   }
@@ -37,14 +115,54 @@ export function markdownInline(text: string): ReactNode[] {
   return nodes;
 }
 
-function MarkdownMessage({ text }: { text: string }) {
+export function ChatReferences({ references, onSaveReference, onSaveReferences }: {
+  references: ChatReference[];
+  onSaveReference?: (reference: ChatReference) => void;
+  onSaveReferences?: (references: ChatReference[]) => void | Promise<void>;
+}) {
+  const [savedList, setSavedList] = useState(false);
+  const [saveListError, setSaveListError] = useState(false);
+  const saveAll = async () => {
+    if (!onSaveReferences) return;
+    try {
+      await onSaveReferences(references);
+      setSavedList(true);
+      setSaveListError(false);
+    } catch {
+      setSaveListError(true);
+    }
+  };
+  return (
+    <aside data-testid="chat-references" className="mt-3 border-t border-white/10 pt-2.5">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-white/55">✦ Referințe pentru explorare</p>
+        {references.length > 0 && onSaveReferences && (
+          savedList
+            ? <span className="text-[10px] text-emerald-200">✓ Listă salvată</span>
+            : <button type="button" onClick={() => { void saveAll(); }} className="rounded-md border border-white/15 px-1.5 py-0.5 text-[10px] text-white/70 hover:border-white/35 hover:text-white" aria-label="Salvează toate referințele">{saveListError ? 'Încearcă din nou' : 'Salvează lista'}</button>
+        )}
+      </div>
+      {references.length > 0 ? <ol className="space-y-1 text-[11px] text-white/75">
+        {references.map(reference => (
+          <li key={reference.href} className="flex items-center gap-1.5">
+            <span className="text-white/35">↗</span>
+            <a href={reference.href} title={reference.title} className="min-w-0 flex-1 underline decoration-white/30 underline-offset-2 hover:text-white">{reference.label}</a>
+            {onSaveReference && <button type="button" onClick={() => onSaveReference(reference)} className="shrink-0 text-[10px] text-emerald-200/75 hover:text-emerald-100" aria-label={`Salvează ${reference.label}`}>＋</button>}
+          </li>
+        ))}
+      </ol> : <p className="text-[11px] italic text-white/45">Nu am găsit o trimitere stabilă pentru acest răspuns.</p>}
+    </aside>
+  );
+}
+
+function MarkdownMessage({ text, references = [] }: { text: string; references?: ChatReference[] }) {
   const lines = text.split('\n');
   const content: ReactNode[] = [];
   let list: { ordered: boolean; items: string[] } | undefined;
   const flushList = () => {
     if (!list) return;
     const Tag = list.ordered ? 'ol' : 'ul';
-    content.push(<Tag key={`list-${content.length}`} className="my-1 list-inside space-y-0.5">{list.items.map((item, index) => <li key={index}>{markdownInline(item)}</li>)}</Tag>);
+    content.push(<Tag key={`list-${content.length}`} className="my-1 list-inside space-y-0.5">{list.items.map((item, index) => <li key={index}>{markdownInline(item, references)}</li>)}</Tag>);
     list = undefined;
   };
   lines.forEach((line, index) => {
@@ -55,11 +173,11 @@ function MarkdownMessage({ text }: { text: string }) {
       list.items.push(marker[2]);
     } else {
       flushList();
-      if (line.trim()) content.push(<p key={`line-${index}`} className="my-1 first:mt-0 last:mb-0">{markdownInline(line)}</p>);
+      if (line.trim()) content.push(<p key={`line-${index}`} className="my-1 first:mt-0 last:mb-0">{markdownInline(line, references)}</p>);
     }
   });
   flushList();
-  return <>{content}</>;
+    return <>{content}</>;
 }
 
 const THEMES: Record<ChatTheme, {
@@ -155,9 +273,11 @@ interface ChatWidgetProps {
       offers sign-in instead of the message box; null while not yet known. */
   signedIn?: boolean | null;
   onSignIn?: () => void;
+  onSaveReference?: (reference: ChatReference) => void;
+  onSaveReferences?: (references: ChatReference[]) => void | Promise<void>;
 }
 
-export function ChatWidget({ placement = 'floating', open: openProp, onOpenChange, onDock, onDragActiveChange, signedIn = null, onSignIn }: ChatWidgetProps = {}) {
+export function ChatWidget({ placement = 'floating', open: openProp, onOpenChange, onDock, onDragActiveChange, signedIn = null, onSignIn, onSaveReference, onSaveReferences }: ChatWidgetProps = {}) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = openProp ?? internalOpen;
   const setOpen = (value: boolean) => {
@@ -248,7 +368,17 @@ export function ChatWidget({ placement = 'floating', open: openProp, onOpenChang
         conversationIdsRef.current[scopeKey] = payload.conversationId;
         setConversationId(payload.conversationId);
       }
-      setMessages(previous => [...previous, { id: Date.now() + 1, role: 'assistant', text: payload.answer }]);
+      const references = [...chatReferencesFromPassages(payload.passages)];
+      const seenReferences = new Set(references.map(reference => reference.href));
+      chatReferencesFromText(payload.answer).forEach(reference => {
+        if (!seenReferences.has(reference.href)) { seenReferences.add(reference.href); references.push(reference); }
+      });
+      setMessages(previous => [...previous, {
+        id: Date.now() + 1,
+        role: 'assistant',
+        text: payload.answer,
+        references,
+      }]);
     } catch {
       setMessages(previous => [...previous, {
         id: Date.now() + 1,
@@ -301,7 +431,8 @@ export function ChatWidget({ placement = 'floating', open: openProp, onOpenChang
             {messages.map(message => (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className="max-w-[86%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap" style={message.role === 'user' ? { background: currentTheme.user } : { background: 'rgba(0,0,0,.25)', border: `1px solid ${currentTheme.accentSoft}` }}>
-                  {message.role === 'assistant' ? <MarkdownMessage text={message.text} /> : message.text}
+                  {message.role === 'assistant' ? <MarkdownMessage text={message.text} references={message.references} /> : message.text}
+                  {message.role === 'assistant' && message.references && <ChatReferences references={message.references} onSaveReference={onSaveReference} onSaveReferences={onSaveReferences} />}
                 </div>
               </div>
             ))}
